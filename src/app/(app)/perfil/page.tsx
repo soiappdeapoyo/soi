@@ -29,7 +29,7 @@ export default async function PerfilPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-5 py-8">
-      <h1 className="text-3xl font-bold">Mi perfil</h1>
+      <h1 className="text-3xl font-semibold">Mi perfil</h1>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
@@ -39,12 +39,12 @@ export default async function PerfilPage() {
           { k: 'Evidencias', v: evidences ?? 0 },
         ].map((s) => (
           <Card key={s.k} className="p-4 text-center">
-            <p className="flex items-center justify-center gap-1 text-2xl font-bold">{s.icon}{s.v}</p>
-            <p className="text-xs text-black/60">{s.k}</p>
+            <p className="flex items-center justify-center gap-1 text-2xl font-semibold nums">{s.icon}{s.v}</p>
+            <p className="text-xs text-soi-muted">{s.k}</p>
           </Card>
         ))}
       </div>
-      {nextMilestone && <p className="text-sm text-black/60">Próximo hito de racha: {nextMilestone} días · Racha más larga: {profile.streak_longest}</p>}
+      {nextMilestone && <p className="text-sm text-soi-muted">Próximo hito de racha: {nextMilestone} días · Racha más larga: {profile.streak_longest}</p>}
 
       <Card>
         <CardTitle>Tu mapa SOI</CardTitle>
@@ -58,10 +58,10 @@ export default async function PerfilPage() {
         </ol>
         {weak && <p className="mt-3 text-sm">SOI te acompaña con <strong>{AGENTS[ESLABON_TO_AGENT[weak]].label}</strong>.</p>}
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-          <div><dt className="text-black/60">Fase</dt><dd className="font-medium">{phase.label} — {phase.desc}</dd></div>
-          <div><dt className="text-black/60">Arquetipo</dt><dd className="font-medium">{profile.archetype ?? 'Por descubrir'}</dd></div>
-          <div><dt className="text-black/60">Emoción dominante</dt><dd className="font-medium">{profile.dominant_emotion ?? '—'}</dd></div>
-          <div><dt className="text-black/60">Temas recurrentes</dt><dd className="font-medium">{profile.recurring_themes?.join(', ') || '—'}</dd></div>
+          <div><dt className="text-soi-muted">Fase</dt><dd className="font-medium">{phase.label} — {phase.desc}</dd></div>
+          <div><dt className="text-soi-muted">Arquetipo</dt><dd className="font-medium">{profile.archetype ?? 'Por descubrir'}</dd></div>
+          <div><dt className="text-soi-muted">Emoción dominante</dt><dd className="font-medium">{profile.dominant_emotion ?? '—'}</dd></div>
+          <div><dt className="text-soi-muted">Temas recurrentes</dt><dd className="font-medium">{profile.recurring_themes?.join(', ') || '—'}</dd></div>
         </dl>
       </Card>
 
