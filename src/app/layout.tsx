@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Analytics } from '@vercel/analytics/next';
+import { Toaster } from 'sonner';
 import { AnalyticsProvider } from '@/components/providers/analytics';
 import { ServiceWorkerRegister } from '@/components/providers/sw-register';
 import './globals.css';
@@ -17,13 +18,19 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: 'SOI', statusBarStyle: 'black-translucent' },
 };
 
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#1A1A2E' };
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#FFFFFF' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
       <body className="min-h-dvh antialiased">
         {children}
+        {/* Sonner: apilado con escala progresiva, entrada desde el borde, salida por swipe. */}
+        <Toaster
+          position="bottom-center"
+          duration={3500}
+          toastOptions={{ className: 'rounded-xl! shadow-raised! border-0! font-sans! text-soi-ink!' }}
+        />
         <AnalyticsProvider />
         <ServiceWorkerRegister />
         <Analytics />
