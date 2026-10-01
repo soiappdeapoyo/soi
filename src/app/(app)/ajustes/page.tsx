@@ -14,8 +14,8 @@ export default async function AjustesPage() {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
-      <h1 className="text-3xl font-bold">Ajustes</h1>
-      <p className="mb-6 text-black/70">Plan actual: <strong>{plan === 'soi_plus' ? 'SOI+' : plan === 'trial' ? 'Prueba gratis' : 'Free'}</strong> · {user.email}</p>
+      <h1 className="text-3xl font-semibold">Ajustes</h1>
+      <p className="mb-6 text-soi-muted">Plan actual: <strong>{plan === 'soi_plus' ? 'SOI+' : plan === 'trial' ? 'Prueba gratis' : 'Free'}</strong> · {user.email}</p>
       <SettingsForm
         ttsEnabled={profile?.tts_enabled ?? true}
         voice={profile?.voice_preference ?? null}
