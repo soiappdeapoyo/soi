@@ -1,46 +1,68 @@
 'use client';
-import { VoiPi } from 'voipi';
 
-let instance: VoiPi | null = null;
+/**
+ * TTS con Web Speech API (sin dependencias).
+ * En Microsoft Edge expone voces neuronales (ej. "Microsoft Dalia Online (Natural)").
+ * En otros navegadores usa la mejor voz en español disponible.
+ * TTS solo trial/SOI+: el llamador verifica acceso ('tts').
+ */
 
-export function getVoice() {
-  if (!instance) {
-    instance = new VoiPi({
-      providers: ['edge-tts', 'browser-tts'],
-      defaultVoice: 'es-MX-DaliaNeural',
-    });
-  }
-  return instance;
+export const VOICES = [
+  { id: 'es-MX-DaliaNeural', label: 'Dalia (México)', match: 'Dalia', lang: 'es-MX' },
+  { id: 'es-MX-JorgeNeural', label: 'Jorge (México)', match: 'Jorge', lang: 'es-MX' },
+  { id: 'es-CO-SalomeNeural', label: 'Salomé (Colombia)', match: 'Salome', lang: 'es-CO' },
+  { id: 'es-AR-ElenaNeural', label: 'Elena (Argentina)', match: 'Elena', lang: 'es-AR' },
+  { id: 'es-ES-ElviraNeural', label: 'Elvira (España)', match: 'Elvira', lang: 'es-ES' },
+  { id: 'es-US-PalomaNeural', label: 'Paloma (EE. UU.)', match: 'Paloma', lang: 'es-US' },
+] as const;
+
+const DEFAULT_VOICE = 'es-MX-DaliaNeural';
+
+function supported() {
+  return typeof window !== 'undefined' && 'speechSynthesis' in window;
 }
 
-/** TTS solo trial/SOI+: el llamador verifica acceso ('tts'). */
+/** Las voces cargan de forma asíncrona en algunos navegadores. */
+function loadVoices(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    const list = window.speechSynthesis.getVoices();
+    if (list.length) return resolve(list);
+    const done = () => resolve(window.speechSynthesis.getVoices());
+    window.speechSynthesis.addEventListener('voiceschanged', done, { once: true });
+    setTimeout(done, 1500);
+  });
+}
+
+function pickVoice(all: SpeechSynthesisVoice[], id: string) {
+  const cfg = VOICES.find((v) => v.id === id) ?? VOICES[0];
+  const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return (
+    all.find((v) => norm(v.name).includes(norm(cfg.match))) ??
+    all.find((v) => v.lang === cfg.lang) ??
+    all.find((v) => v.lang.toLowerCase().startsWith('es')) ??
+    null
+  );
+}
+
 export async function speak(text: string, opts?: { voice?: string; rate?: number }) {
+  if (!supported()) return;
   const plain = text.replace(/[*_#>`\[\]()]/g, '').slice(0, 1500);
-  try {
-    await getVoice().speak(plain, {
-      voice: opts?.voice ?? 'es-MX-DaliaNeural',
-      rate: opts?.rate ?? 1.0,
-    });
-  } catch {
-    // Fallback nativo del navegador
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      const u = new SpeechSynthesisUtterance(plain);
-      u.lang = 'es-MX';
-      u.rate = opts?.rate ?? 1;
-      window.speechSynthesis.speak(u);
-    }
-  }
+  const synth = window.speechSynthesis;
+  synth.cancel();
+
+  const voice = pickVoice(await loadVoices(), opts?.voice ?? DEFAULT_VOICE);
+  const u = new SpeechSynthesisUtterance(plain);
+  u.lang = voice?.lang ?? 'es-MX';
+  if (voice) u.voice = voice;
+  u.rate = opts?.rate ?? 1;
+
+  await new Promise<void>((resolve) => {
+    u.onend = () => resolve();
+    u.onerror = () => resolve();
+    synth.speak(u);
+  });
 }
 
 export function stopSpeaking() {
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  if (supported()) window.speechSynthesis.cancel();
 }
-
-export const VOICES = [
-  { id: 'es-MX-DaliaNeural', label: 'Dalia (México)' },
-  { id: 'es-MX-JorgeNeural', label: 'Jorge (México)' },
-  { id: 'es-CO-SalomeNeural', label: 'Salomé (Colombia)' },
-  { id: 'es-AR-ElenaNeural', label: 'Elena (Argentina)' },
-  { id: 'es-ES-ElviraNeural', label: 'Elvira (España)' },
-  { id: 'es-US-PalomaNeural', label: 'Paloma (EE. UU.)' },
-] as const;
