@@ -18,8 +18,8 @@ export default async function NuevaEvidenciaPage({ searchParams }: { searchParam
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
-      <h1 className="mb-1 text-3xl font-bold">Nueva evidencia</h1>
-      <p className="mb-6 text-black/70">Los resultados son la prueba de tu nueva identidad.</p>
+      <h1 className="mb-1 text-3xl font-semibold">Nueva evidencia</h1>
+      <p className="mb-6 text-soi-muted">Los resultados son la prueba de tu nueva identidad.</p>
       {access.allowed
         ? <EvidenceForm defaultTitle={defaultTitle} />
         : <LockedFeature title="Guardar evidencias" description="El Muro de Evidencias es parte de SOI+." />}

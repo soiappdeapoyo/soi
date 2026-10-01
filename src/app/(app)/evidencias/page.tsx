@@ -25,7 +25,7 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
   if (!access.evidence_save) {
     return (
       <div className="mx-auto max-w-2xl px-5 py-8">
-        <h1 className="mb-4 text-3xl font-bold">Muro de Evidencias</h1>
+        <h1 className="mb-4 text-3xl font-semibold">Muro de Evidencias</h1>
         <LockedFeature
           title="Tu Muro de Evidencias"
           description="Registra cada señal y logro. Las evidencias son el eslabón de Resultados: la prueba de tu nueva identidad."
@@ -51,8 +51,8 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
     <div className="mx-auto max-w-2xl px-5 py-8">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Muro de Evidencias</h1>
-          <p className="text-black/70">{total} evidencias{nextMilestone ? ` · próximo hito: ${nextMilestone}` : ''}</p>
+          <h1 className="text-3xl font-semibold">Muro de Evidencias</h1>
+          <p className="text-soi-muted">{total} evidencias{nextMilestone ? ` · próximo hito: ${nextMilestone}` : ''}</p>
         </div>
         <div className="flex gap-2">
           {access.pdf_export && (
@@ -69,7 +69,7 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
           const active = (eslabon ?? 'todas') === f;
           return (
             <Link key={f} href={f === 'todas' ? '/evidencias' : `/evidencias?eslabon=${f}`} aria-current={active ? 'page' : undefined}
-              className={cn('rounded-full border px-3 py-1 text-sm', active ? 'border-soi-ink bg-soi-ink text-white' : 'border-black/15 bg-white')}>
+              className={cn('press tap-target inline-flex h-9 items-center rounded-lg px-3 text-sm', active ? 'bg-soi-ink text-white' : 'bg-white shadow-ring hover:shadow-soft')}>
               {f === 'todas' ? 'Todas' : ESLABON_LABEL[f]}
             </Link>
           );
@@ -77,25 +77,25 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
       </nav>
 
       {rows?.length ? (
-        <ol className="relative mt-6 space-y-4 border-l-2 border-soi-gold/40 pl-5">
+        <ol className="relative mt-6 space-y-4 border-l-2 border-black/[0.08] pl-5">
           {rows.map((r) => {
             const e = (r.metadata as { eslabon_soi?: Eslabon })?.eslabon_soi;
             return (
-              <li key={r.id} className="relative rounded-3xl border border-black/10 bg-white p-4">
-                <span className="absolute -left-[29px] top-5 h-4 w-4 rounded-full border-2 border-white bg-soi-gold" aria-hidden="true" />
-                <div className="flex flex-wrap items-center gap-2 text-xs text-black/60">
+              <li key={r.id} className="relative rounded-3xl bg-white shadow-soft p-4">
+                <span className="absolute -left-[29px] top-5 h-4 w-4 rounded-full bg-soi-accent shadow-[0_0_0_3px_white]" aria-hidden="true" />
+                <div className="flex flex-wrap items-center gap-2 text-xs text-soi-muted">
                   <time dateTime={r.created_at as string}>{new Date(r.created_at as string).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}</time>
                   {e && <Badge>{ESLABON_LABEL[e]}</Badge>}
                   {(r.tags as string[] | null)?.map((t) => <Badge key={t} className="bg-soi-gold/15">#{t}</Badge>)}
                 </div>
                 <h2 className="mt-1 font-semibold">{r.title as string}</h2>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-black/80">{r.content as string}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-soi-ink/90">{r.content as string}</p>
               </li>
             );
           })}
         </ol>
       ) : (
-        <p className="mt-10 text-center text-black/60">Tu primera evidencia está a una acción de distancia. ✨</p>
+        <p className="mt-10 text-center text-soi-muted">Tu primera evidencia está a una acción de distancia. ✨</p>
       )}
     </div>
   );
