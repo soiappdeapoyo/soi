@@ -1,0 +1,22 @@
+ALTER TABLE public.agent_knowledge ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.daily_routines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ritual_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_reactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "ak_all_own" ON public.agent_knowledge FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "conv_all_own" ON public.conversations FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "msg_all_own" ON public.messages FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "up_select_own" ON public.user_profiles FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "up_update_own" ON public.user_profiles FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "dr_all_own" ON public.daily_routines FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "rl_all_own" ON public.ritual_logs FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "cp_select_public" ON public.community_posts FOR SELECT USING (is_public = TRUE OR auth.uid() = user_id);
+CREATE POLICY "cp_insert_own" ON public.community_posts FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "cp_update_own" ON public.community_posts FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "cr_select_all" ON public.community_reactions FOR SELECT USING (TRUE);
+CREATE POLICY "cr_insert_own" ON public.community_reactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "cr_delete_own" ON public.community_reactions FOR DELETE USING (auth.uid() = user_id);
