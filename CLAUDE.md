@@ -204,6 +204,7 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 ---
 
 ## 🎨 UI/UX
+- Guía visual y de movimiento: **DESIGN.md** (obligatoria).
 - Desktop ≥1024: sidebar 280px · Tablet 768-1023: sidebar de 72px con iconos · Mobile <768: drawer + header con logo.
 - Sidebar: Nueva conversación · PRÁCTICAS (7 agentes) · MI ESPACIO (Ritual, Evidencias, Comunidad, Perfil) · Recientes · Racha + escudos · Ajustes · Avatar · "Pasar a SOI+" si no es SOI+.
 - **Onboarding:** 8 espejos emocionales → minutos disponibles → validación, reformulación SOI, micro-acción de 24 h y rutina sugerida.
@@ -283,3 +284,19 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 ## 🎯 Objetivo Final
 SOI interviene en el eslabón roto: **Pensamientos → Emociones → Acciones → Resultados.**
 El éxito se mide en rutinas completadas, evidencias registradas y usuarios que pasan de Free a SOI+ porque sienten que la app les cambió la vida. Construye con eso en mente.
+
+---
+
+## 🖌️ Diseño UI
+
+**Antes de escribir cualquier componente visual, lee [`DESIGN.md`](./DESIGN.md)** (guía de UI e interacción estilo Emil Kowalski). Gobierna cómo se ve y se siente la UI; si algo choca con este documento, gana `CLAUDE.md`.
+
+Resumen operativo:
+- Tokens en `src/app/globals.css`: `--ease-out-strong`, `--ease-in-out-strong`, `--ease-drawer`, `--dur-press…--dur-slow`, colores `soi-ink / soi-muted / soi-accent / soi-accent-soft / soi-tray / soi-sidebar / soi-gold`, sombras `shadow-ring / shadow-soft / shadow-raised`.
+- Utilidades: `press` (scale 0.97), `press-deep` (0.9), `tap-target` (44 px), `nums` (tabular), `skeleton`, `popover-motion`.
+- `hover:` ya está limitado a `(hover: hover) and (pointer: fine)`.
+- Solo `transform` y `opacity`; nada de `transition: all`, `ease`, `ease-in` ni `scale(0)`.
+- Expresividad solo en el halo de respiración del `RitualTimer` y la celebración final.
+- Toasts con `sonner`, drawers con `vaul`, diálogos con `components/ui/dialog.tsx`.
+- Revisiones de UI en formato **Antes / Después / Por qué** (`UI-REVIEW.md`).
+

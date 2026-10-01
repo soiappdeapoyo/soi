@@ -3,7 +3,7 @@
 App de bienestar personal con IA agéntica basada en una sola ley:
 **Pensamientos → Emociones → Acciones → Resultados.**
 
-> Instrucciones completas para Claude Code: [`CLAUDE.md`](./CLAUDE.md) · Plan de esta versión: [`PLAN.md`](./PLAN.md)
+> Instrucciones completas para Claude Code: [`CLAUDE.md`](./CLAUDE.md) · Guía de UI: [`DESIGN.md`](./DESIGN.md) · Plan de esta versión: [`PLAN.md`](./PLAN.md)
 
 ## Stack
 Next.js 15 (App Router) · React 19 · TypeScript estricto · Tailwind 4 · Supabase (Postgres + pgvector + Auth Google) · Vercel AI SDK (Gemini → Groq → DeepSeek) · Stripe (suscripciones) · VoiPi (TTS) · PostHog · Vercel Analytics.
