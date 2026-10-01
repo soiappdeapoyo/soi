@@ -16,7 +16,7 @@ export default async function ComunidadPage() {
   if (!access.allowed) {
     return (
       <div className="mx-auto max-w-2xl px-5 py-8">
-        <h1 className="mb-4 text-3xl font-bold">Comunidad</h1>
+        <h1 className="mb-4 text-3xl font-semibold">Comunidad</h1>
         <LockedFeature title="Comunidad SOI" description="Comparte evidencias, pide fuerza y celebra con personas que también están transformando su identidad." />
       </div>
     );
@@ -32,8 +32,8 @@ export default async function ComunidadPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-8">
-      <h1 className="text-3xl font-bold">Comunidad</h1>
-      <p className="mb-5 text-black/70">Un espacio seguro para compartir evidencias, peticiones y preguntas.</p>
+      <h1 className="text-3xl font-semibold">Comunidad</h1>
+      <p className="mb-5 text-soi-muted">Un espacio seguro para compartir evidencias, peticiones y preguntas.</p>
       <CommunityFeed
         initialPosts={(posts ?? []) as CommunityPost[]}
         myReactions={(mine ?? []).map((r) => `${r.post_id}:${r.reaction}`)}
