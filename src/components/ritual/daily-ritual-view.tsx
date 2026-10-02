@@ -44,23 +44,27 @@ export function DailyRitualView({ ritual, alreadyDone, ttsAllowed }: { ritual: R
   return (
     <section className="flex flex-col gap-4">
       <header>
-        <p className="text-xs font-semibold tracking-widest text-black/50">FASE · {phase.label.toUpperCase()} ({phase.desc})</p>
-        <h1 className="text-3xl font-bold">Tu ritual de hoy</h1>
-        <p className="text-sm text-black/60">Inspirado en: <em>{ritual.source}</em></p>
+        <p className="text-xs text-soi-muted">Fase · {phase.label} ({phase.desc})</p>
+        <h1 className="text-3xl font-semibold">Tu ritual de hoy</h1>
+        <p className="text-sm text-soi-muted">Inspirado en: <em>{ritual.source}</em></p>
       </header>
 
-      <ol className="flex flex-col gap-3">
+      <ol className="flex flex-col gap-2 rounded-[32px] bg-soi-tray p-2">
         {PARTS.map((p, i) => (
-          <li key={p.key} className={cn('rounded-3xl border bg-white p-5', checked.includes(p.key) ? 'border-soi-gold' : 'border-black/10')}>
+          <li key={p.key} style={{ animationDelay: `${i * 40}ms` }}
+            className={cn('animate-enter rounded-3xl bg-white p-5 transition-[box-shadow] duration-(--dur-fast) ease-out-strong',
+              checked.includes(p.key) ? 'shadow-[0_0_0_2px_var(--color-soi-accent)]' : 'shadow-soft')}>
             <div className="flex items-start gap-3">
-              <button onClick={() => toggle(p.key)} aria-pressed={checked.includes(p.key)} aria-label={`Marcar ${p.label}`}
-                className={cn('mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border', checked.includes(p.key) ? 'border-soi-gold bg-soi-gold' : 'border-black/25')}>
-                {checked.includes(p.key) && <Check className="h-4 w-4" aria-hidden="true" />}
+              <button type="button" onClick={() => toggle(p.key)} aria-pressed={checked.includes(p.key)} aria-label={`Marcar ${p.label}`}
+                className={cn('press tap-target mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
+                  checked.includes(p.key) ? 'bg-soi-accent text-white' : 'bg-white shadow-[0_0_0_1.5px_rgb(0_0_0/0.3)]')}>
+                <Check className={cn('h-4 w-4 transition-[opacity,transform] duration-(--dur-fast) ease-out-strong',
+                  checked.includes(p.key) ? 'scale-100 opacity-100' : 'scale-[0.8] opacity-0')} aria-hidden="true" />
               </button>
               <div className="flex-1">
-                <p className="text-xs font-semibold tracking-widest text-black/50">{i + 1}. {p.label.toUpperCase()} → {p.eslabon}</p>
+                <p className="text-xs text-soi-muted"><span className="nums">{i + 1}.</span> {p.label} → {p.eslabon}</p>
                 <p className={cn('mt-1', p.key === 'affirmation' && 'text-lg font-semibold italic')}>{ritual[p.key]}</p>
-                {ttsAllowed && <button onClick={() => listen(ritual[p.key])} className="mt-2 text-xs underline">Escuchar</button>}
+                {ttsAllowed && <button type="button" onClick={() => listen(ritual[p.key])} className="press tap-target mt-2 rounded-md text-xs text-soi-muted underline hover:text-soi-ink">Escuchar</button>}
               </div>
             </div>
           </li>
@@ -68,9 +72,13 @@ export function DailyRitualView({ ritual, alreadyDone, ttsAllowed }: { ritual: R
       </ol>
 
       {result ? (
-        <div className="rounded-3xl bg-soi-ink p-5 text-center text-white" aria-live="polite">
-          <p className="inline-flex items-center gap-2 text-xl font-bold"><Flame className="h-6 w-6 text-orange-400" aria-hidden="true" /> {result.streak} días</p>
-          {result.milestone && <p className="mt-1">¡Alcanzaste el hito de {result.milestone} días! Ganaste un Escudo de Racha 🛡️</p>}
+        <div className="animate-enter rounded-3xl bg-soi-ink p-5 text-center text-white" aria-live="polite">
+          <p className="nums inline-flex items-center gap-2 text-xl font-semibold">
+            {/* Hito 7/21/40/90: un solo pulso 1 → 1.06 → 1 (300 ms). Sin animación negativa al perder un día. */}
+            <span className={cn('inline-flex', result.milestone && 'animate-milestone')}><Flame className="h-6 w-6 text-orange-400" aria-hidden="true" /></span>
+            {result.streak} días
+          </p>
+          {result.milestone && <p className="mt-1">Alcanzaste el hito de {result.milestone} días. Ganaste un Escudo de Racha.</p>}
           <Link href="/evidencias/nueva?from=ritual" className={buttonClass('gold', 'sm', 'mt-4')}>Registrar una evidencia</Link>
         </div>
       ) : (

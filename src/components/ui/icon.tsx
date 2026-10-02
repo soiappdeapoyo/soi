@@ -8,7 +8,8 @@ const MAP: Record<string, LucideIcon> = {
   Users, User, Sunrise, Settings, Flame, MessageCircle, Lock,
 };
 
+/** Íconos lucide a 1.5 de trazo, tamaños coherentes 16/20/24 (por defecto 20). */
 export function Icon({ name, className }: { name: string; className?: string }) {
   const C = MAP[name] ?? Sparkles;
-  return <C aria-hidden="true" className={className ?? 'h-5 w-5'} />;
+  return <C aria-hidden="true" strokeWidth={1.5} className={className ?? 'h-5 w-5'} />;
 }

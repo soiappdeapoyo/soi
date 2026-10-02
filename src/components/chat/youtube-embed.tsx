@@ -9,7 +9,7 @@ type Video = { id: string; title: string; channel: string; thumbnail: string };
 export function YouTubeEmbed({ video }: { video: Video }) {
   const [play, setPlay] = useState(false);
   return (
-    <figure className="overflow-hidden rounded-2xl border border-black/10 bg-black">
+    <figure className="overflow-hidden rounded-2xl bg-black shadow-ring">
       <div className="relative aspect-video">
         {play ? (
           <iframe
@@ -20,10 +20,10 @@ export function YouTubeEmbed({ video }: { video: Video }) {
             allowFullScreen
           />
         ) : (
-          <button onClick={() => setPlay(true)} className="group absolute inset-0" aria-label={`Reproducir: ${video.title}`}>
+          <button type="button" onClick={() => setPlay(true)} className="press group absolute inset-0" aria-label={`Reproducir: ${video.title}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={video.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover opacity-90" />
-            <span className="absolute inset-0 m-auto flex h-14 w-14 items-center justify-center rounded-full bg-white/90 group-hover:bg-white">
+            <span className="absolute inset-0 m-auto flex h-14 w-14 items-center justify-center rounded-full bg-white/90 shadow-soft transition-[background-color] duration-(--dur-fast) ease-out-strong group-hover:bg-white">
               <Play className="h-6 w-6 text-soi-ink" aria-hidden="true" />
             </span>
           </button>

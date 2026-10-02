@@ -28,10 +28,10 @@ export function AnalyzeButton() {
       {error && <p role="alert" className="text-sm text-soi-danger">{error}</p>}
       {data && (
         <div className="rounded-2xl bg-soi-gold/10 p-4" aria-live="polite">
-          <p className="text-lg font-bold">{data.archetype}</p>
+          <p className="text-lg font-semibold">{data.archetype}</p>
           <p className="mt-1 text-sm">{data.summary}</p>
           <p className="mt-2 text-sm"><strong>Siguiente paso:</strong> {data.nextStep}</p>
-          <p className="mt-2 text-xs text-black/60">Lectura orientativa, no es un diagnóstico clínico.</p>
+          <p className="mt-2 text-xs text-soi-muted">Lectura orientativa, no es un diagnóstico clínico.</p>
         </div>
       )}
     </div>

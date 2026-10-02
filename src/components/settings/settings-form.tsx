@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Label, Select } from '@/components/ui/input';
 import { VOICES } from '@/lib/voice/tts';
@@ -17,11 +18,12 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
   const [tts, setTts] = useState(ttsEnabled);
   const [v, setV] = useState(voice ?? 'es-MX-DaliaNeural');
   const [push, setPush] = useState(pushEnabled);
-  const [msg, setMsg] = useState<string | null>(null);
+  // Toasts (Sonner): copy corto, sin signos de exclamación.
+  const setMsg = (m: string) => toast(m);
 
   async function save() {
     const res = await fetch('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tts_enabled: tts, voice_preference: v }) });
-    setMsg(res.ok ? 'Ajustes guardados ✓' : 'No se pudieron guardar.');
+    setMsg(res.ok ? 'Ajustes guardados' : 'No se pudieron guardar los ajustes');
   }
 
   async function test() {
@@ -36,9 +38,9 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
       return;
     }
     const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!key || !('serviceWorker' in navigator) || !('PushManager' in window)) { setMsg('Tu navegador no soporta notificaciones.'); return; }
+    if (!key || !('serviceWorker' in navigator) || !('PushManager' in window)) { setMsg('Tu navegador no soporta notificaciones'); return; }
     const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { setMsg('Permiso de notificaciones denegado.'); return; }
+    if (perm !== 'granted') { setMsg('Permiso de notificaciones denegado'); return; }
     const reg = await navigator.serviceWorker.register('/sw.js');
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
     const res = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) });
@@ -52,11 +54,11 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-3xl border border-black/10 bg-white p-5">
+      <section className="rounded-3xl bg-white shadow-soft p-5">
         <h2 className="text-lg font-semibold">Voz</h2>
-        {!ttsAllowed && <p className="mt-1 text-sm text-black/60">La guía por voz es parte de SOI+.</p>}
+        {!ttsAllowed && <p className="mt-1 text-sm text-soi-muted">La guía por voz es parte de SOI+.</p>}
         <label className="mt-3 flex items-center gap-2">
-          <input type="checkbox" checked={tts} onChange={(e) => setTts(e.target.checked)} disabled={!ttsAllowed} className="h-4 w-4 accent-soi-gold" />
+          <input type="checkbox" checked={tts} onChange={(e) => setTts(e.target.checked)} disabled={!ttsAllowed} className="h-4 w-4 accent-soi-accent" />
           Leer en voz alta respuestas y rutinas
         </label>
         <div className="mt-3">
@@ -71,13 +73,13 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
         </div>
       </section>
 
-      <section className="rounded-3xl border border-black/10 bg-white p-5">
+      <section className="rounded-3xl bg-white shadow-soft p-5">
         <h2 className="text-lg font-semibold">Notificaciones</h2>
-        <p className="mt-1 text-sm text-black/60">Recibe tu ritual diario cada mañana (SOI+).</p>
+        <p className="mt-1 text-sm text-soi-muted">Recibe tu ritual diario cada mañana (SOI+).</p>
         <Button onClick={togglePush} size="sm" variant="outline" className="mt-3">{push ? 'Desactivar notificaciones' : 'Activar notificaciones'}</Button>
       </section>
 
-      <section className="rounded-3xl border border-black/10 bg-white p-5">
+      <section className="rounded-3xl bg-white shadow-soft p-5">
         <h2 className="text-lg font-semibold">Suscripción</h2>
         {hasSubscription
           ? <Button onClick={portal} size="sm" variant="outline" className="mt-3">Administrar suscripción</Button>
@@ -87,7 +89,6 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
       <form action="/auth/signout" method="post">
         <Button type="submit" variant="ghost">Cerrar sesión</Button>
       </form>
-      {msg && <p role="status" className="text-sm">{msg}</p>}
     </div>
   );
 }

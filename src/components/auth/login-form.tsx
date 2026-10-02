@@ -49,7 +49,7 @@ export function LoginForm() {
       <Button onClick={google} variant="outline" size="lg" disabled={loading !== null} className="w-full">
         <GoogleLogo /> {loading === 'google' ? 'Conectando…' : 'Continuar con Google'}
       </Button>
-      <div className="flex items-center gap-3 text-xs text-black/50"><span className="h-px flex-1 bg-black/10" />o con tu correo<span className="h-px flex-1 bg-black/10" /></div>
+      <div className="flex items-center gap-3 text-xs text-soi-muted"><span className="h-px flex-1 bg-black/10" />o con tu correo<span className="h-px flex-1 bg-black/10" /></div>
       {sent ? (
         <p role="status" className="rounded-2xl bg-soi-gold/10 p-4 text-center">Te enviamos un enlace a <strong>{email}</strong>. Revisa tu bandeja ✨</p>
       ) : (

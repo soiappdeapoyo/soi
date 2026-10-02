@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Lock, Pause, Play, SkipForward, X, Volume2, VolumeX, Star, Flame } from 'lucide-react';
+import { Lock, Pause, Play, X, Volume2, VolumeX, Star, Flame, Check } from 'lucide-react';
 import { ROUTINES, stepSeconds, type RoutineId } from '@/config/routines';
 import { buttonClass } from '@/components/ui/button';
+import { UpgradeSheet } from '@/components/paywall/upgrade-sheet';
 import { track } from '@/components/providers/analytics';
 import { cn } from '@/lib/utils';
 
 type Props = { routineId: RoutineId; locked?: boolean; ttsAllowed?: boolean; voice?: string | null };
 type StreakInfo = { streak: number; milestone: number | null; used_shield: boolean } | null;
 
-const R = 88;
+const SIZE = 200;
+const R = 96;
 const C = 2 * Math.PI * R;
 const MOODS = ['😞', '😕', '😐', '🙂', '😄'];
 
@@ -20,23 +22,37 @@ function fmt(s: number) {
   return `${m}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/**
+ * RitualTimer (DESIGN.md §5).
+ * - Anillo SVG con stroke-dashoffset LINEAL (tiempo real), muestra el tiempo restante del paso.
+ * - Halo de respiración (única animación expresiva): 4 s inhalar / 6 s exhalar, scale 1 → 1.12 + opacity; se pausa con el temporizador.
+ * - Cambio de paso: sale -4px/120 ms, luego entra desde 6px/200 ms (nunca cruzados).
+ * - Play ↔ pausa: cruce de íconos con opacity + scale(0.8 → 1) + blur leve, 150 ms.
+ * - Al completar: un solo anillo que se expande y desvanece (800 ms) y luego el CTA al Muro.
+ */
 export function RitualTimer({ routineId, locked = false, ttsAllowed = false, voice }: Props) {
   const routine = ROUTINES[routineId];
   const steps = routine.steps;
   const [index, setIndex] = useState(0);
   const [remaining, setRemaining] = useState(stepSeconds(steps[0]!));
   const [running, setRunning] = useState(false);
+  const [started, setStarted] = useState(false);
   const [done, setDone] = useState(false);
   const [voiceOn, setVoiceOn] = useState(ttsAllowed);
   const [moodBefore, setMoodBefore] = useState<number | null>(null);
   const [moodAfter, setMoodAfter] = useState<number | null>(null);
   const [streak, setStreak] = useState<StreakInfo>(null);
+  const [sheet, setSheet] = useState(false);
+  // Transición de texto del paso: primero sale, luego entra.
+  const [shownIndex, setShownIndex] = useState(0);
+  const [stepPhase, setStepPhase] = useState<'in' | 'out'>('in');
   const startedAt = useRef<number | null>(null);
   const completed = useRef<string[]>([]);
 
   const step = steps[index]!;
+  const shownStep = steps[shownIndex]!;
   const total = stepSeconds(step);
-  const progress = useMemo(() => (total ? 1 - remaining / total : 0), [remaining, total]);
+  const remainingFrac = useMemo(() => (total ? remaining / total : 0), [remaining, total]);
 
   const say = useCallback(async (text: string) => {
     if (!voiceOn || !ttsAllowed) return;
@@ -66,6 +82,13 @@ export function RitualTimer({ routineId, locked = false, ttsAllowed = false, voi
   }, [running, remaining, next]);
 
   useEffect(() => {
+    if (index === shownIndex) return;
+    setStepPhase('out');
+    const t = setTimeout(() => { setShownIndex(index); setStepPhase('in'); }, 120);
+    return () => clearTimeout(t);
+  }, [index, shownIndex]);
+
+  useEffect(() => {
     if (running) void say(step.label);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
@@ -83,119 +106,164 @@ export function RitualTimer({ routineId, locked = false, ttsAllowed = false, voi
   }
 
   const toggle = () => {
-    if (!startedAt.current) { startedAt.current = Date.now(); void say(step.label); track('routine_started', { routineId }); }
+    if (locked) { setSheet(true); return; }
+    if (!startedAt.current) {
+      startedAt.current = Date.now();
+      setStarted(true);
+      void say(step.label);
+      track('routine_started', { routineId });
+    }
     setRunning((r) => !r);
   };
 
-  const header = (
-    <header className="text-center">
-      <h1 id="ritual-title" className="text-2xl font-bold">{routine.label}</h1>
-      <p className="text-sm text-black/60">{routine.author} · <em>{routine.source}</em></p>
-    </header>
+  const playLabel = running ? 'Pausar' : started ? 'Reanudar' : 'Comenzar';
+  const caption = (
+    <p className="mt-1.5 text-sm italic text-soi-muted">
+      {routine.label} · {routine.author}
+      <span className="sr-only"> — fuente: {routine.source}</span>
+    </p>
   );
 
-  if (locked) {
+  /* ---------------- Completado ---------------- */
+  if (done) {
     return (
-      <section aria-labelledby="ritual-title" className="rounded-3xl border border-black/10 bg-white p-6 text-center">
-        {header}
-        <div className="relative mt-6 rounded-2xl bg-black/5 p-6">
-          <p className="select-none text-lg blur-sm" aria-hidden="true">{steps[0]!.label}</p>
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <Lock aria-hidden="true" className="h-8 w-8" />
-            <p className="font-medium">La ejecución guiada es parte de SOI+</p>
+      <section aria-labelledby="ritual-title" className="rounded-[32px] bg-soi-tray p-2">
+        <div className="flex flex-col items-center rounded-3xl bg-white px-4 py-8 text-center shadow-soft" aria-live="polite">
+          <div className="relative flex h-24 w-24 items-center justify-center">
+            <span aria-hidden="true" className="absolute inset-0 animate-celebrate rounded-full ring-2 ring-soi-accent" />
+            <span className="flex h-20 w-20 items-center justify-center rounded-full bg-soi-accent-soft text-soi-accent">
+              <Check className="h-9 w-9" aria-hidden="true" />
+            </span>
           </div>
+          <h1 id="ritual-title" className="mt-4 text-2xl font-semibold">Ritual completado</h1>
+          <p className="mt-1 text-soi-muted">Cada acción es una evidencia de tu nueva identidad.</p>
+
+          {moodAfter === null ? (
+            <fieldset className="mt-6 animate-enter [animation-delay:300ms]">
+              <legend className="text-sm font-medium">¿Cómo te sientes ahora?</legend>
+              <div className="mt-2 flex justify-center gap-1">
+                {MOODS.map((m, i) => (
+                  <button key={m} type="button" onClick={() => finish(i + 1)} aria-label={`Ánimo ${i + 1} de 5`}
+                    className="press flex h-12 w-12 items-center justify-center rounded-full text-3xl hover:bg-black/[0.04]">{m}</button>
+                ))}
+              </div>
+            </fieldset>
+          ) : (
+            <div className="mt-6 flex animate-enter flex-col items-center gap-3">
+              {streak && (
+                <p className="nums inline-flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-sm font-medium text-orange-800">
+                  <span className={cn('inline-flex', streak.milestone && 'animate-milestone')}><Flame className="h-5 w-5" aria-hidden="true" /></span>
+                  Racha: {streak.streak} días
+                  {streak.milestone && <span>· Hito de {streak.milestone}: +1 escudo</span>}
+                </p>
+              )}
+              {streak?.used_shield && <p className="text-sm text-soi-muted">Tu Escudo de Racha protegió tu progreso.</p>}
+              <div className="mt-2 grid w-full max-w-sm grid-cols-1 gap-2 sm:grid-cols-2">
+                <Link href={`/evidencias/nueva?from=${routineId}`} className={buttonClass('primary')}>
+                  <Star className="h-4 w-4" aria-hidden="true" /> Guardar en Muro de Evidencias
+                </Link>
+                <Link href="/rutinas" className={buttonClass('outline')}>Volver</Link>
+              </div>
+            </div>
+          )}
         </div>
-        <ol className="mt-6 space-y-2 text-left text-sm text-black/70">
-          {steps.map((s, i) => <li key={s.id}>{i + 1}. {s.label}</li>)}
-        </ol>
-        <Link href="/planes" className={buttonClass('gold', 'md', 'mt-6')}>Pasar a SOI+</Link>
       </section>
     );
   }
 
-  if (done) {
-    return (
-      <section className="rounded-3xl border border-black/10 bg-white p-8 text-center" aria-live="polite">
-        <p className="text-5xl motion-safe:animate-bounce" aria-hidden="true">🎉</p>
-        <h2 className="mt-3 text-2xl font-bold">¡Ritual completado!</h2>
-        <p className="mt-1 text-black/70">Cada acción es una evidencia de tu nueva identidad.</p>
-        {moodAfter === null ? (
-          <fieldset className="mt-5">
-            <legend className="text-sm font-medium">¿Cómo te sientes ahora?</legend>
-            <div className="mt-2 flex justify-center gap-2">
+  /* ---------------- Temporizador ---------------- */
+  return (
+    <section aria-labelledby="ritual-title" className="rounded-[32px] bg-soi-tray p-2">
+      <h1 id="ritual-title" className="sr-only">{routine.label} — {routine.author}</h1>
+      {/* Tarjeta 24 px con p-4 y botones de 8 px → radios concéntricos */}
+      <div className="flex flex-col items-center rounded-3xl bg-white p-4 shadow-soft">
+        <div className="flex w-full items-center justify-between">
+          <p className="nums pl-1 text-xs text-soi-muted">Paso {index + 1} de {steps.length}</p>
+          <div className="flex items-center">
+            {ttsAllowed && !locked && (
+              <button type="button" onClick={() => setVoiceOn((v) => !v)} aria-pressed={voiceOn} aria-label={voiceOn ? 'Silenciar voz' : 'Activar voz'}
+                className="press flex h-11 w-11 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink">
+                {voiceOn ? <Volume2 className="h-5 w-5" aria-hidden="true" /> : <VolumeX className="h-5 w-5" aria-hidden="true" />}
+              </button>
+            )}
+            <Link href="/rutinas" aria-label="Salir" className="press flex h-11 w-11 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink">
+              <X className="h-5 w-5" aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+
+        {!started && !locked && (
+          <fieldset className="mt-1 text-center">
+            <legend className="text-sm text-soi-muted">¿Cómo llegas hoy?</legend>
+            <div className="mt-1 flex gap-1">
               {MOODS.map((m, i) => (
-                <button key={m} onClick={() => finish(i + 1)} className="rounded-full p-2 text-3xl hover:bg-black/5" aria-label={`Ánimo ${i + 1} de 5`}>{m}</button>
+                <button key={m} type="button" onClick={() => setMoodBefore(i + 1)} aria-pressed={moodBefore === i + 1} aria-label={`Ánimo ${i + 1} de 5`}
+                  className={cn('press flex h-11 w-11 items-center justify-center rounded-full text-2xl', moodBefore === i + 1 ? 'bg-soi-accent-soft shadow-[0_0_0_1px_var(--color-soi-accent)]' : 'hover:bg-black/[0.04]')}>{m}</button>
               ))}
             </div>
           </fieldset>
-        ) : (
-          <>
-            {streak && (
-              <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-orange-50 px-4 py-2 font-semibold text-orange-700">
-                <Flame className="h-5 w-5" aria-hidden="true" /> Racha: {streak.streak} días
-                {streak.milestone && <span>· ¡Hito de {streak.milestone}! +1 escudo</span>}
-              </p>
-            )}
-            {streak?.used_shield && <p className="mt-2 text-sm text-black/60">Tu Escudo de Racha protegió tu progreso. 🛡️</p>}
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              <Link href={`/evidencias/nueva?from=${routineId}`} className={buttonClass('primary')}>
-                <Star aria-hidden="true" className="h-4 w-4" /> Guardar en Muro de Evidencias
-              </Link>
-              <Link href="/rutinas" className={buttonClass('outline')}>Volver</Link>
-            </div>
-          </>
         )}
-      </section>
-    );
-  }
 
-  return (
-    <section aria-labelledby="ritual-title" className="flex flex-col items-center gap-6 rounded-3xl border border-black/10 bg-white p-6">
-      {header}
-      <p className="-mt-4 text-xs text-black/50">Paso {index + 1} de {steps.length}</p>
+        {/* Círculo + halo de respiración */}
+        <div className="relative my-6 flex items-center justify-center" style={{ width: SIZE, height: SIZE }} role="timer" aria-label={`Tiempo restante ${fmt(remaining)}`}>
+          <span
+            aria-hidden="true"
+            data-breath-halo
+            className={cn('absolute inset-0 rounded-full bg-soi-accent-soft', started && !locked ? 'animate-breathe' : 'opacity-35')}
+            style={{ animationPlayState: running ? 'running' : 'paused' }}
+          />
+          <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="relative h-full w-full -rotate-90" aria-hidden="true">
+            <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="var(--color-soi-accent-soft)" stroke="rgb(0 0 0 / 0.08)" strokeWidth="2.5" />
+            <circle
+              key={index}
+              cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none"
+              stroke="var(--color-soi-accent)" strokeWidth="2.5" strokeLinecap="round"
+              strokeDasharray={C} strokeDashoffset={C * (1 - remainingFrac)}
+              className="transition-[stroke-dashoffset] duration-1000 ease-linear"
+            />
+          </svg>
+          <span className={cn('nums absolute inset-0 flex items-center justify-center text-5xl font-normal tracking-tight', locked && 'blur-sm')}>{fmt(remaining)}</span>
+        </div>
 
-      {!startedAt.current && (
-        <fieldset className="text-center">
-          <legend className="text-sm font-medium">¿Cómo llegas hoy?</legend>
-          <div className="mt-1 flex gap-1">
-            {MOODS.map((m, i) => (
-              <button key={m} onClick={() => setMoodBefore(i + 1)} aria-pressed={moodBefore === i + 1}
-                className={cn('rounded-full p-1.5 text-2xl', moodBefore === i + 1 ? 'bg-soi-gold/30' : 'hover:bg-black/5')} aria-label={`Ánimo ${i + 1} de 5`}>{m}</button>
-            ))}
-          </div>
-        </fieldset>
+        {/* Texto del paso: sale (-4px, 120 ms) y luego entra (6px, 200 ms) */}
+        <div className="min-h-[3.5rem] w-full px-2 text-center" aria-live="polite">
+          <p key={shownIndex} className={cn('text-lg leading-snug', stepPhase === 'out' ? 'animate-step-out' : 'animate-step-in', locked && 'select-none blur-sm')}>
+            {shownStep.label}
+          </p>
+          {caption}
+        </div>
+
+        <div className="mt-5 grid w-full grid-cols-2 gap-3">
+          <button type="button" onClick={toggle} aria-label={locked ? 'Comenzar (requiere SOI+)' : playLabel}
+            className={buttonClass(locked ? 'gold' : 'secondary', 'lg', 'text-base font-normal')}>
+            <span className="relative h-5 w-5" aria-hidden="true">
+              <Play className={cn('absolute inset-0 h-5 w-5 transition-[opacity,transform,filter] duration-(--dur-fast) ease-out-strong',
+                running ? 'scale-[0.8] opacity-0 blur-[1px]' : 'scale-100 opacity-100 blur-[0px]', locked && 'opacity-0')} />
+              <Pause className={cn('absolute inset-0 h-5 w-5 transition-[opacity,transform,filter] duration-(--dur-fast) ease-out-strong',
+                running ? 'scale-100 opacity-100 blur-[0px]' : 'scale-[0.8] opacity-0 blur-[1px]')} />
+              {locked && <Lock className="absolute inset-0 h-5 w-5" />}
+            </span>
+            {playLabel}
+          </button>
+          <button type="button" onClick={locked ? () => setSheet(true) : next}
+            className={buttonClass('secondary', 'lg', 'text-base font-normal')}>
+            Saltar paso
+          </button>
+        </div>
+      </div>
+
+      {locked && (
+        <ol className="mt-2 flex flex-col gap-1 px-4 py-3 text-sm text-soi-muted">
+          {steps.map((s, i) => <li key={s.id}><span className="nums">{i + 1}.</span> {s.label}</li>)}
+        </ol>
       )}
 
-      <div className="relative h-52 w-52" role="timer" aria-label={`Tiempo restante ${fmt(remaining)}`}>
-        <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90" aria-hidden="true">
-          <circle cx="100" cy="100" r={R} fill="none" stroke="#0000000f" strokeWidth="10" />
-          <circle cx="100" cy="100" r={R} fill="none" stroke="#D4AF37" strokeWidth="10" strokeLinecap="round"
-            strokeDasharray={C} strokeDashoffset={C * (1 - progress)} className="transition-[stroke-dashoffset] duration-1000 ease-linear" />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-4xl font-semibold tabular-nums">{fmt(remaining)}</span>
-      </div>
-
-      <div className="text-center" aria-live="polite">
-        <p className="text-xl font-medium leading-snug">{step.label}</p>
-        {'quote' in step && step.quote && <p className="mt-2 italic text-black/70">“{step.quote}” — {routine.author}</p>}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <button onClick={toggle} aria-label={running ? 'Pausar' : startedAt.current ? 'Reanudar' : 'Comenzar'} className="rounded-full bg-soi-ink p-4 text-white">
-          {running ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
-        </button>
-        <button onClick={next} aria-label="Saltar paso" className="rounded-full border border-black/15 p-4">
-          <SkipForward className="h-6 w-6" />
-        </button>
-        {ttsAllowed && (
-          <button onClick={() => setVoiceOn((v) => !v)} aria-pressed={voiceOn} aria-label={voiceOn ? 'Silenciar voz' : 'Activar voz'} className="rounded-full border border-black/15 p-4">
-            {voiceOn ? <Volume2 className="h-6 w-6" /> : <VolumeX className="h-6 w-6" />}
-          </button>
-        )}
-        <Link href="/rutinas" aria-label="Salir" className="rounded-full border border-black/15 p-4">
-          <X className="h-6 w-6" />
-        </Link>
-      </div>
+      <UpgradeSheet
+        open={sheet}
+        onOpenChange={setSheet}
+        title="La ejecución guiada es parte de SOI+"
+        description={`Puedes leer los pasos de ${routine.label}. Para practicarla con temporizador, respiración y voz, pasa a SOI+.`}
+      />
     </section>
   );
 }

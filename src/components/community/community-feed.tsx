@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,10 @@ export function CommunityFeed({ initialPosts, myReactions }: Props) {
   const [posting, setPosting] = useState(false);
   const [filter, setFilter] = useState<'all' | CommunityPost['type']>('all');
   const [loadingMore, setLoadingMore] = useState(false);
+  // Solo el primer lote entra con fade rápido; el scroll infinito no anima cada tarjeta.
+  const [initialIds] = useState(() => new Set(initialPosts.map((p) => p.id)));
+  // Reacción recién confirmada → "pop" a 1.15 una sola vez.
+  const [popped, setPopped] = useState<string | null>(null);
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -46,13 +51,15 @@ export function CommunityFeed({ initialPosts, myReactions }: Props) {
     if (!res.ok) { setMsg(json.message ?? 'No se pudo publicar.'); return; }
     setPosts((p) => [json.post as CommunityPost, ...p]);
     setContent('');
+    toast('Publicado en la comunidad');
     track('community_post', { type, anon });
   }
 
   async function react(postId: string, reaction: string) {
     const key = `${postId}:${reaction}`;
     const had = mine.has(key);
-    setMine((s) => { const n = new Set(s); had ? n.delete(key) : n.add(key); return n; });
+    setMine((s) => { const n = new Set(s); if (had) n.delete(key); else n.add(key); return n; });
+    if (!had) setPopped(key);
     const res = await fetch('/api/community/react', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ postId, reaction }),
     });
@@ -78,7 +85,7 @@ export function CommunityFeed({ initialPosts, myReactions }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
-      <form onSubmit={publish} className="rounded-3xl border border-black/10 bg-white p-4">
+      <form onSubmit={publish} className="rounded-3xl bg-white p-4 shadow-soft">
         <Label htmlFor="cp-content" className="sr-only">Comparte con la comunidad</Label>
         <Textarea id="cp-content" value={content} onChange={(e) => setContent(e.target.value)} minLength={5} maxLength={1000} required
           placeholder="Comparte una evidencia, una petición o una pregunta…" />
@@ -91,18 +98,18 @@ export function CommunityFeed({ initialPosts, myReactions }: Props) {
             <option value="pregunta">Pregunta</option>
           </Select>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} className="h-4 w-4 accent-soi-gold" /> Publicar de forma anónima
+            <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} className="h-4 w-4 accent-soi-accent" /> Publicar de forma anónima
           </label>
           <Button type="submit" variant="gold" size="sm" className="ml-auto" disabled={posting || content.length < 5}>{posting ? 'Publicando…' : 'Publicar'}</Button>
         </div>
-        <p className="mt-2 text-xs text-black/50">Sin ventas, enlaces externos ni consejos médicos.</p>
+        <p className="mt-2 text-xs text-soi-muted">Sin ventas, enlaces externos ni consejos médicos.</p>
         {msg && <p role="alert" className="mt-2 text-sm text-soi-danger">{msg}</p>}
       </form>
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar publicaciones">
         {(['all', 'evidencia', 'testimonio', 'peticion', 'pregunta'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} aria-pressed={filter === f}
-            className={cn('rounded-full border px-3 py-1 text-sm', filter === f ? 'border-soi-ink bg-soi-ink text-white' : 'border-black/15 bg-white')}>
+          <button key={f} type="button" onClick={() => setFilter(f)} aria-pressed={filter === f}
+            className={cn('press tap-target h-9 rounded-lg px-3 text-sm', filter === f ? 'bg-soi-ink text-white' : 'bg-white shadow-ring hover:shadow-soft')}>
             {f === 'all' ? 'Todo' : TYPE_LABEL[f]}
           </button>
         ))}
@@ -110,11 +117,11 @@ export function CommunityFeed({ initialPosts, myReactions }: Props) {
 
       <ul className="flex flex-col gap-3">
         {visible.map((p) => (
-          <li key={p.id} className="rounded-3xl border border-black/10 bg-white p-4">
+          <li key={p.id} className={cn('rounded-3xl bg-white p-4 shadow-soft', initialIds.has(p.id) && 'animate-enter-fade')}>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-semibold">{p.is_anonymous ? 'Alma anónima' : (p.author_name ?? 'Alguien de SOI')}</span>
               <Badge>{TYPE_LABEL[p.type]}</Badge>
-              <time className="ml-auto text-xs text-black/50" dateTime={p.created_at}>
+              <time className="ml-auto text-xs text-soi-muted" dateTime={p.created_at}>
                 {formatDistanceToNow(new Date(p.created_at), { addSuffix: true, locale: es })}
               </time>
             </div>
@@ -123,9 +130,12 @@ export function CommunityFeed({ initialPosts, myReactions }: Props) {
               {REACTIONS.map((r) => {
                 const active = mine.has(`${p.id}:${r.key}`);
                 return (
-                  <button key={r.key} onClick={() => react(p.id, r.key)} aria-pressed={active} aria-label={`${r.label} (${p.reactions[r.key] ?? 0})`}
-                    className={cn('rounded-full border px-3 py-1 text-sm', active ? 'border-soi-gold bg-soi-gold/15' : 'border-black/10 hover:bg-black/5')}>
-                    <span aria-hidden="true">{r.emoji}</span> {p.reactions[r.key] ?? 0}
+                  <button key={r.key} type="button" onClick={() => react(p.id, r.key)} aria-pressed={active} aria-label={`${r.label} (${p.reactions[r.key] ?? 0})`}
+                    onAnimationEnd={() => setPopped(null)}
+                    className={cn('press-deep tap-target inline-flex h-9 items-center gap-1 rounded-lg px-3 text-sm',
+                      active ? 'bg-soi-accent-soft shadow-[0_0_0_1px_rgb(31_78_140/0.35)]' : 'bg-white shadow-ring hover:bg-soi-tray',
+                      popped === `${p.id}:${r.key}` && 'animate-pop')}>
+                    <span aria-hidden="true">{r.emoji}</span> <span className="nums min-w-[2ch] text-left">{p.reactions[r.key] ?? 0}</span>
                   </button>
                 );
               })}
@@ -134,7 +144,7 @@ export function CommunityFeed({ initialPosts, myReactions }: Props) {
         ))}
       </ul>
       {posts.length >= 20 && (
-        <Button variant="outline" onClick={loadMore} disabled={loadingMore}>{loadingMore ? 'Cargando…' : 'Ver más'}</Button>
+        <Button variant="secondary" onClick={loadMore} disabled={loadingMore}>{loadingMore ? 'Cargando…' : 'Ver más'}</Button>
       )}
     </div>
   );

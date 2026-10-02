@@ -10,15 +10,19 @@ import { cn } from '@/lib/utils';
 
 type Props = { message: Message; ttsAllowed: boolean; onSpeak: (t: string) => void };
 
+/**
+ * Chat (DESIGN.md §4): el mensaje del usuario aparece al instante (sin animación de entrada);
+ * el streaming del asistente no anima tokens: solo crece el texto.
+ */
 export function MessageBubble({ message, ttsAllowed, onSpeak }: Props) {
   const mine = message.role === 'user';
   return (
     <li className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
-      <div className={cn('max-w-[88%] rounded-3xl px-4 py-3 sm:max-w-[75%]', mine ? 'bg-soi-ink text-white' : 'border border-black/10 bg-white')}>
+      <div className={cn('max-w-[88%] sm:max-w-[75%]', mine ? 'rounded-2xl bg-soi-tray px-4 py-2.5' : 'px-1 py-1')}>
         {mine ? (
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (
-          <div className="prose prose-sm max-w-none prose-a:text-soi-ink prose-a:underline">
+          <div className="prose prose-sm max-w-none text-soi-ink prose-a:text-soi-accent prose-a:underline">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
         )}
@@ -28,7 +32,7 @@ export function MessageBubble({ message, ttsAllowed, onSpeak }: Props) {
           if (t.toolName === 'youtubeSearch') {
             const r = t.result as { locked: boolean; videos: { id: string; title: string; channel: string; thumbnail: string }[] };
             if (r.locked) return (
-              <p key={t.toolCallId} className="mt-2 flex items-center gap-2 text-sm text-black/60">
+              <p key={t.toolCallId} className="mt-2 flex items-center gap-2 text-sm text-soi-muted">
                 <Lock className="h-4 w-4" aria-hidden="true" /> Videos disponibles en <Link href="/planes" className="underline">SOI+</Link>
               </p>
             );
@@ -47,7 +51,7 @@ export function MessageBubble({ message, ttsAllowed, onSpeak }: Props) {
         })}
 
         {!mine && ttsAllowed && message.content && (
-          <button onClick={() => onSpeak(message.content)} className="mt-2 inline-flex items-center gap-1 text-xs text-black/60 hover:text-black" aria-label="Escuchar respuesta">
+          <button type="button" onClick={() => onSpeak(message.content)} className="press tap-target mt-2 inline-flex items-center gap-1 rounded-md text-xs text-soi-muted hover:text-soi-ink" aria-label="Escuchar respuesta">
             <Volume2 className="h-4 w-4" aria-hidden="true" /> Escuchar
           </button>
         )}

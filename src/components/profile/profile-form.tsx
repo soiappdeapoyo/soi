@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea, Label, Select } from '@/components/ui/input';
@@ -35,6 +36,7 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
       }),
     });
     setStatus(res.ok ? 'saved' : 'error');
+    toast(res.ok ? 'Perfil actualizado' : 'No se pudo guardar el perfil');
     router.refresh();
   }
 
@@ -60,7 +62,6 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
         <div><Label htmlFor="pf-evening">Hora de noche</Label><Input id="pf-evening" type="time" value={evening} onChange={(e) => setEvening(e.target.value)} /></div>
       </div>
       <Button type="submit" variant="primary" disabled={status === 'saving'}>{status === 'saving' ? 'Guardando…' : 'Guardar perfil'}</Button>
-      <p role="status" className="text-sm text-black/60">{status === 'saved' ? 'Perfil actualizado ✓' : status === 'error' ? 'No se pudo guardar.' : ''}</p>
     </form>
   );
 }
