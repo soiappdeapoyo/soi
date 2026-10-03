@@ -4,11 +4,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { searchYouTube } from '@/lib/integrations/youtube';
 import { webSearch } from '@/lib/integrations/web-search';
 import { remember } from './rag';
+import { ROUTINES, ROUTINE_IDS } from '@/config/routines';
 
 type Ctx = {
   supabase: SupabaseClient;
   userId: string;
-  access: { youtube: boolean; evidence: boolean };
+  access: { youtube: boolean; evidence: boolean; routines?: boolean; ritual?: boolean };
 };
 
 export function buildTools({ supabase, userId, access }: Ctx) {
@@ -56,6 +57,8 @@ export function buildTools({ supabase, userId, access }: Ctx) {
         dominant_emotion: z.string().max(40).optional(),
         archetype: z.string().max(60).optional(),
         weakest_link: z.enum(['pensamiento', 'emocion', 'accion', 'resultado']).optional(),
+        available_minutes: z.number().int().min(1).max(180).optional(),
+        onboarding_completed: z.boolean().optional().describe('true cuando ya conoces una meta o emoción y su eslabón más débil'),
       }),
       execute: async (patch) => {
         const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
@@ -80,6 +83,25 @@ export function buildTools({ supabase, userId, access }: Ctx) {
           withEmbedding: false,
         });
         return { ok: Boolean(id), when };
+      },
+    }),
+
+    suggestPractice: tool({
+      description: 'Ofrece a la persona un botón para empezar ahora una práctica de SOI (rutina guiada, ritual diario o registrar una evidencia).',
+      parameters: z.object({
+        kind: z.enum(['routine', 'ritual', 'evidence']),
+        routineId: z.enum(ROUTINE_IDS).optional().describe('Obligatorio si kind = routine'),
+        reason: z.string().max(140).describe('Por qué ayuda ahora, en una frase cálida'),
+      }),
+      execute: async ({ kind, routineId, reason }) => {
+        if (kind === 'routine') {
+          const r = ROUTINES[routineId ?? 'brian_tracy_5min'];
+          return { kind, href: `/rutinas/${r.id}`, label: r.label, detail: `${r.author} · ${r.totalMinutes} min`, reason, locked: access.routines === false };
+        }
+        if (kind === 'ritual') {
+          return { kind, href: '/ritual', label: 'Ritual de hoy', detail: 'Afirmación · visualización · acción · señal', reason, locked: access.ritual === false };
+        }
+        return { kind, href: '/evidencias/nueva', label: 'Guardar una evidencia', detail: 'Muro de Evidencias', reason, locked: !access.evidence };
       },
     }),
 

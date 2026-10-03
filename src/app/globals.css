@@ -8,18 +8,19 @@
    ===================================================================== */
 
 @theme {
-  /* Color */
-  --color-soi-ink: #1C1C1E;          /* texto principal — 16.8:1 sobre blanco */
-  --color-soi-muted: #5F5F63;        /* texto secundario — 6.4:1 sobre blanco (AA) */
-  --color-soi-subtle: #8A8A8E;       /* solo decorativo/íconos, nunca texto esencial */
-  --color-soi-canvas: #FFFFFF;
-  --color-soi-sidebar: #FAFAF8;
-  --color-soi-tray: #F6F6F4;         /* bandejas que contienen tarjetas/segmentos */
-  --color-soi-cream: #FAFAF8;        /* alias legado */
-  --color-soi-accent: #1F4E8C;       /* azul profundo — 8.6:1 sobre blanco */
-  --color-soi-accent-soft: #E8EFF9;  /* relleno del círculo del ritual */
+  /* Color — grises cálidos y azul sereno (referencia: soi_ui_emil_kowalski_style.html) */
+  --color-soi-ink: #0B0B0B;          /* texto principal — 20:1 sobre blanco */
+  --color-soi-muted: #52514E;        /* texto secundario — 8:1 sobre blanco (AA) */
+  --color-soi-subtle: #898781;       /* solo decorativo/íconos, nunca texto esencial */
+  --color-soi-canvas: #FFFFFF;       /* superficie principal */
+  --color-soi-sidebar: #F9F9F7;      /* superficie 1: sidebar y bandejas */
+  --color-soi-tray: #F3F3F0;         /* bandejas que contienen tarjetas/segmentos */
+  --color-soi-cream: #F9F9F7;        /* alias legado */
+  --color-soi-accent: #184F95;       /* azul — 8.4:1 sobre blanco (texto, anillo de progreso) */
+  --color-soi-accent-fill: #2A78D6;  /* relleno de acento (foco, selección) */
+  --color-soi-accent-soft: #E2EEFA;  /* halo de respiración, fondos suaves */
   --color-soi-gold: #D4AF37;         /* SOI+ y celebraciones */
-  --color-soi-danger: #B83A2B;       /* AA sobre blanco */
+  --color-soi-danger: #B93535;       /* AA sobre blanco */
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
@@ -37,17 +38,17 @@
   --dur-slow: 350ms;
 
   /* Radios concéntricos: exterior = interior + padding
-     control 8 · tarjeta (p-4) 24 · bandeja (p-2) 32 · segmento 12 + bandeja p-1 = 16 */
+     control 8 · tarjeta (p-3) 20 · bandeja de segmentos (p-1.5) 14 · bandeja (p-2) 28 */
   --radius-control: 8px;
-  --radius-segment: 12px;
-  --radius-segment-tray: 16px;
-  --radius-card: 24px;
-  --radius-tray: 32px;
+  --radius-segment: 8px;
+  --radius-segment-tray: 14px;
+  --radius-card: 20px;
+  --radius-tray: 28px;
 
   /* Sombras en vez de bordes duros (anillo 1px + 3 capas suaves) */
-  --shadow-ring: 0 0 0 1px rgb(0 0 0 / 0.08);
-  --shadow-soft: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 6px rgb(0 0 0 / 0.03), 0 8px 24px rgb(0 0 0 / 0.03);
-  --shadow-raised: 0 0 0 1px rgb(0 0 0 / 0.09), 0 1px 2px rgb(0 0 0 / 0.07), 0 3px 8px rgb(0 0 0 / 0.05), 0 12px 28px rgb(0 0 0 / 0.04);
+  --shadow-ring: 0 0 0 1px rgb(11 11 11 / 0.10);
+  --shadow-soft: 0 0 0 1px rgb(11 11 11 / 0.08), 0 1px 2px rgb(11 11 11 / 0.04), 0 2px 8px rgb(11 11 11 / 0.04);
+  --shadow-raised: 0 0 0 1px rgb(11 11 11 / 0.08), 0 2px 4px rgb(11 11 11 / 0.06), 0 6px 16px rgb(11 11 11 / 0.06);
 
   /* Animaciones que corren solas (keyframes). La UI interactiva usa transiciones.
      Las entradas usan fill-mode `backwards`: al terminar no retienen transform/opacity
@@ -86,7 +87,7 @@ body { background: var(--color-soi-canvas); color: var(--color-soi-ink); }
 h1, h2, h3 { text-wrap: balance; }
 p, li, figcaption { text-wrap: pretty; }
 
-:focus-visible { outline: 2px solid var(--color-soi-accent); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--color-soi-accent-fill); outline-offset: 2px; }
 
 button, [role="button"], a[href], summary, label[for], select { cursor: pointer; }
 button:disabled, [aria-disabled="true"] { cursor: not-allowed; }

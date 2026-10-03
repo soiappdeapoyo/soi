@@ -40,20 +40,20 @@ export function MirrorCards({ name }: { name: string }) {
     return (
       <section className="flex flex-col gap-3" aria-live="polite">
         {/* La respuesta de la IA aparece una sola vez: fade + translateY(6px), stagger 40 ms */}
-        <div className="animate-enter rounded-3xl bg-white p-5 shadow-soft">
+        <div className="animate-enter rounded-[20px] bg-white p-5 shadow-soft">
           <p className="text-xs font-medium text-soi-muted">Te escucho</p>
           <p className="mt-1">{result.validation}</p>
         </div>
-        <div className="animate-enter rounded-3xl bg-soi-accent-soft p-5 [animation-delay:40ms]">
+        <div className="animate-enter rounded-[20px] bg-soi-accent-soft p-5 [animation-delay:40ms]">
           <p className="text-xs font-medium text-soi-accent">Principio SOI</p>
           <p className="mt-1 italic">“{SOI_PRINCIPLE_LINE}”</p>
           <p className="mt-2">{result.reframe}</p>
         </div>
-        <div className="animate-enter rounded-3xl bg-white p-5 shadow-soft [animation-delay:80ms]">
+        <div className="animate-enter rounded-[20px] bg-white p-5 shadow-soft [animation-delay:80ms]">
           <p className="text-xs font-medium text-soi-muted">Tu micro-acción (24 h)</p>
           <p className="mt-1 font-medium">{result.microAction}</p>
         </div>
-        <div className="animate-enter rounded-3xl bg-soi-ink p-5 text-white [animation-delay:120ms]">
+        <div className="animate-enter rounded-[20px] bg-soi-ink p-5 text-white [animation-delay:120ms]">
           <p className="text-xs font-medium text-white/70">Rutina sugerida</p>
           <p className="mt-1 text-lg font-semibold">{result.routine.label} · {result.routine.minutes} min</p>
           <p className="text-sm text-white/75">{result.routine.author} — <em>{result.routine.source}</em></p>
@@ -88,7 +88,7 @@ export function MirrorCards({ name }: { name: string }) {
                 // Stagger sutil de 40 ms (máx. 6 con retraso); press scale(0.97); las no elegidas bajan a 0.5.
                 style={{ animationDelay: `${Math.min(i, 5) * 40}ms` }}
                 className={cn(
-                  'press flex animate-enter flex-col items-start gap-1 rounded-3xl bg-white p-4 text-left transition-[transform,opacity,box-shadow] duration-(--dur-base) ease-out-strong',
+                  'press flex animate-enter flex-col items-start gap-1 rounded-[20px] bg-white p-4 text-left transition-[transform,opacity,box-shadow] duration-(--dur-base) ease-out-strong',
                   selected ? 'shadow-[0_0_0_2px_var(--color-soi-accent),0_8px_24px_rgb(0_0_0/0.06)]' : 'shadow-soft hover:shadow-raised',
                   dimmed && 'opacity-50 hover:opacity-80',
                 )}

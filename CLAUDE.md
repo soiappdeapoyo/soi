@@ -129,6 +129,7 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 | `0003_rls_policies.sql` | RLS |
 | `0004_billing_functions.sql` | `decrement_free_query`, `expire_trials` |
 | `0005_streaks_community_push.sql` | Escudo de racha, `register_ritual_day`, `toggle_reaction`, país, avatar, push, autor/demo en posts, **permisos por columna en `user_profiles` (anti-bypass del paywall)**, endurecimiento de `decrement_free_query`/`expire_trials` |
+| `0006_atomic_free_queries.sql` | `consume_chat_query` (comprueba y descuenta atómicamente), `refund_chat_query` (si fallan todos los proveedores), `purge_crisis_logs` (retención 90 días) |
 
 **Uso de categorías:** `evidencia` (Muro), `ritual_diario` (ritual generado), `perfil_usuario` (onboarding, análisis), `conversacion` (memoria RAG), `accion` + tag `recordatorio` (scheduleReminder), `video_cache`, `aprendizaje_web`, `crisis_log`.
 
@@ -146,9 +147,9 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 
 **Regla dura:** las migraciones aplicadas no se editan; todo cambio va en una migración nueva.
 
-**Implementación:** `src/lib/billing/access-rules.ts` (`evaluateAccess`, puro y testeado) + `check-access.ts` (`canAccess`, `getAccessMap`, `decrementFreeQuery`). Un trial vencido se trata como Free aunque el cron no haya corrido.
+**Implementación:** `src/lib/billing/access-rules.ts` (`evaluateAccess`, puro y testeado) + `check-access.ts` (`canAccess`, `getAccessMap`, `consumeChatQuery`, `refundChatQuery`). Un trial vencido se trata como Free aunque el cron no haya corrido.
 
-**UX:** al agotar las 20 consultas aparece el banner "Alcanzaste el límite del plan Free. Pasa a SOI+ para seguir." y el botón Enviar se desactiva — **excepto si el texto es una crisis**. Las secciones bloqueadas usan `<LockedFeature>`.
+**UX:** sin banners de plan en el chat (el estado del plan vive en el sidebar). Al agotar las 20 consultas aparece el banner "Alcanzaste el límite del plan Free. Pasa a SOI+ para seguir." y el botón Enviar se desactiva — **excepto si el texto es una crisis**. Las secciones bloqueadas usan `<LockedFeature>`.
 
 | Modalidad | Precio | Variable |
 |---|---|---|
@@ -162,7 +163,7 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 ## 🔐 Autenticación (Google)
 
 - `/login`: **Continuar con Google** (`signInWithOAuth`) + enlace mágico.
-- `/auth/callback`: intercambia el código; sin onboarding → `/onboarding`, si no → `next` o `/chat`.
+- `/auth/callback`: intercambia el código → `next` o `/chat`. **Sin onboarding obligatorio**: el agente descubre el perfil conversando (bloque DESCUBRIMIENTO del prompt) y marca `onboarding_completed` con `updateProfile`. `/onboarding` (8 espejos) queda como opcional.
 - `/auth/signout` (POST).
 - `src/lib/supabase/middleware.ts` protege `PROTECTED_PREFIXES` y redirige a `/login?next=`.
 - El trigger `handle_new_user` toma `full_name`/`name` y `avatar_url` de Google.
@@ -178,9 +179,11 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 
 Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del router. **Sin migración.**
 
-**Router** (`router.ts`): crisis por regex primero; luego Gemini clasifica agente + eslabón. El agente elegido en el sidebar se respeta salvo crisis.
+**Router** (`router.ts`): crisis por regex primero; luego clasifica agente + eslabón con `objectWithFallback` (cascada de proveedores). El agente elegido en el sidebar se respeta salvo crisis.
 
-**Fallback** (`fallback.ts`): health check de 1 token con caché de 5 min (reemplazar por Upstash/KV en producción); cada mensaje guarda `provider`. `objectWithFallback` para salidas estructuradas.
+**Fallback** (`fallback.ts`): health check de 1 token con caché de 5 min (reemplazar por Upstash/KV en producción); antes de responder lee la primera parte del stream y, si es un error, pasa al siguiente proveedor. Cada mensaje guarda `provider`. `objectWithFallback` para salidas estructuradas.
+
+**Chat agéntico y sin fricción:** `/chat` no muestra bloques: SOI abre la conversación con un saludo determinista (`src/lib/opener.ts`: hora, nombre, racha sin castigo, ritual pendiente, última conversación, eslabón débil), que puede traer una acción de un toque. El saludo se guarda como primer mensaje y llega al modelo como contexto del system prompt (el historial siempre empieza por el usuario).
 
 ---
 
@@ -190,6 +193,7 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 3. `updateProfile` — metas, bloqueos, emoción, arquetipo, eslabón.
 4. `scheduleReminder` — `agent_knowledge` categoría `accion`, tag `recordatorio`.
 5. `webSearch` — Tavily.
+6. `suggestPractice` — botón dentro del mensaje para empezar una rutina, el ritual o registrar una evidencia (`PracticeCard`; candado en Free).
 
 ---
 
@@ -207,12 +211,12 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 - Guía visual y de movimiento: **DESIGN.md** (obligatoria).
 - Desktop ≥1024: sidebar 280px · Tablet 768-1023: sidebar de 72px con iconos · Mobile <768: drawer + header con logo.
 - Sidebar: Nueva conversación · PRÁCTICAS (7 agentes) · MI ESPACIO (Ritual, Evidencias, Comunidad, Perfil) · Recientes · Racha + escudos · Ajustes · Avatar · "Pasar a SOI+" si no es SOI+.
-- **Onboarding:** 8 espejos emocionales → minutos disponibles → validación, reformulación SOI, micro-acción de 24 h y rutina sugerida.
+- **Onboarding:** conversacional dentro del chat. Opcional: `/onboarding` con 8 espejos emocionales → minutos disponibles → validación, reformulación SOI, micro-acción de 24 h y rutina sugerida.
 
 ---
 
 ## 🔥 Crisis
-`src/lib/ai/crisis.ts` + `src/config/crisis-resources.ts`. Se evalúa **antes** del paywall, nunca descuenta consultas, se registra en `crisis_log` y usa el país del perfil para mostrar las líneas de ayuda. En la comunidad, un post con señales de crisis se bloquea y se redirige al chat.
+`src/lib/ai/crisis.ts` (texto normalizado, ideación/carga percibida/autolesión/inglés, excluye coloquialismos; `detectDistress` para señales suaves que se confirman con el clasificador antes del paywall; si el clasificador falla se asume crisis) + `src/config/crisis-resources.ts`. Se evalúa **antes** del paywall, nunca descuenta consultas, se registra en `crisis_log` y usa el país del perfil para mostrar las líneas de ayuda. En la comunidad, un post con señales de crisis se bloquea y se redirige al chat.
 
 ## 📔 Evidencias · 👥 Comunidad
 - Evidencias: línea de tiempo, filtro por eslabón, hitos 10/50/100 con celebración, PDF (`/api/evidence/pdf`).

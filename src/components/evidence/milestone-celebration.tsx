@@ -12,7 +12,7 @@ export function MilestoneCelebration({ milestone }: { milestone: number }) {
   useEffect(() => { const t = setTimeout(() => setShow(false), 6000); return () => clearTimeout(t); }, []);
   if (!show) return null;
   return (
-    <div role="status" className="flex animate-enter items-center gap-4 rounded-3xl bg-soi-gold/15 p-5 shadow-[0_0_0_1px_rgb(212_175_55/0.4)]">
+    <div role="status" className="flex animate-enter items-center gap-4 rounded-[20px] bg-soi-gold/15 p-5 shadow-[0_0_0_1px_rgb(212_175_55/0.4)]">
       <span className="relative flex h-14 w-14 shrink-0 items-center justify-center">
         <span aria-hidden="true" className="absolute inset-0 animate-celebrate rounded-full ring-2 ring-soi-gold" />
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-soi-gold text-soi-ink">

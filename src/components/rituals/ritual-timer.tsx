@@ -127,8 +127,8 @@ export function RitualTimer({ routineId, locked = false, ttsAllowed = false, voi
   /* ---------------- Completado ---------------- */
   if (done) {
     return (
-      <section aria-labelledby="ritual-title" className="rounded-[32px] bg-soi-tray p-2">
-        <div className="flex flex-col items-center rounded-3xl bg-white px-4 py-8 text-center shadow-soft" aria-live="polite">
+      <section aria-labelledby="ritual-title" className="rounded-[28px] bg-soi-tray p-2">
+        <div className="flex flex-col items-center rounded-[20px] bg-white px-4 py-8 text-center shadow-soft" aria-live="polite">
           <div className="relative flex h-24 w-24 items-center justify-center">
             <span aria-hidden="true" className="absolute inset-0 animate-celebrate rounded-full ring-2 ring-soi-accent" />
             <span className="flex h-20 w-20 items-center justify-center rounded-full bg-soi-accent-soft text-soi-accent">
@@ -173,10 +173,10 @@ export function RitualTimer({ routineId, locked = false, ttsAllowed = false, voi
 
   /* ---------------- Temporizador ---------------- */
   return (
-    <section aria-labelledby="ritual-title" className="rounded-[32px] bg-soi-tray p-2">
+    <section aria-labelledby="ritual-title" className="rounded-[28px] bg-soi-tray p-2">
       <h1 id="ritual-title" className="sr-only">{routine.label} — {routine.author}</h1>
       {/* Tarjeta 24 px con p-4 y botones de 8 px → radios concéntricos */}
-      <div className="flex flex-col items-center rounded-3xl bg-white p-4 shadow-soft">
+      <div className="flex flex-col items-center rounded-[20px] bg-white p-4 shadow-soft">
         <div className="flex w-full items-center justify-between">
           <p className="nums pl-1 text-xs text-soi-muted">Paso {index + 1} de {steps.length}</p>
           <div className="flex items-center">

@@ -38,7 +38,7 @@ export default function LandingPage() {
           </p>
           <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {ESLABONES.map((e) => (
-              <li key={e.k} className="rounded-3xl bg-white/5 p-5 ring-1 ring-white/10">
+              <li key={e.k} className="rounded-[20px] bg-white/5 p-5 ring-1 ring-white/10">
                 <span className="text-sm text-soi-gold">0{e.n}</span>
                 <p className="mt-1 text-xl font-semibold">{e.k}</p>
                 <p className="text-sm italic text-white/70">{e.q}</p>
@@ -53,7 +53,7 @@ export default function LandingPage() {
         <h2 className="text-3xl font-semibold">Rutinas con fuente, no inventos</h2>
         <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.values(ROUTINES).map((r) => (
-            <li key={r.id} className="rounded-3xl bg-white shadow-soft p-5">
+            <li key={r.id} className="rounded-[20px] bg-white shadow-soft p-5">
               <p className="font-semibold">{r.label}</p>
               <p className="text-sm text-soi-muted">{r.author} · <em>{r.source}</em></p>
               <p className="mt-2 text-sm">{r.totalMinutes} minutos</p>

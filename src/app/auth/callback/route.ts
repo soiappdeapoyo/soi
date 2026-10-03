@@ -12,10 +12,8 @@ export async function GET(request: Request) {
     const supabase = await createServerClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
-      const { data: profile } = await supabase
-        .from('user_profiles').select('onboarding_completed').eq('user_id', data.user.id).single();
-      const dest = profile?.onboarding_completed ? (safeNext ?? '/chat') : '/onboarding';
-      return NextResponse.redirect(`${origin}${dest}`);
+      // Sin formulario previo: SOI conoce a la persona conversando desde el primer mensaje.
+      return NextResponse.redirect(`${origin}${safeNext ?? '/chat'}`);
     }
   }
   return NextResponse.redirect(`${origin}/login?error=auth`);

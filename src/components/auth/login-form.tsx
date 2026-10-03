@@ -51,7 +51,7 @@ export function LoginForm() {
       </Button>
       <div className="flex items-center gap-3 text-xs text-soi-muted"><span className="h-px flex-1 bg-black/10" />o con tu correo<span className="h-px flex-1 bg-black/10" /></div>
       {sent ? (
-        <p role="status" className="rounded-2xl bg-soi-gold/10 p-4 text-center">Te enviamos un enlace a <strong>{email}</strong>. Revisa tu bandeja ✨</p>
+        <p role="status" className="rounded-[14px] bg-soi-gold/10 p-4 text-center">Te enviamos un enlace a <strong>{email}</strong>. Revisa tu bandeja ✨</p>
       ) : (
         <form onSubmit={magic} className="flex flex-col gap-3">
           <div>

@@ -37,7 +37,7 @@ export const ROUTINES = {
     id: 'dispenza_protocol', label: 'Protocolo Dispenza', author: 'Joe Dispenza',
     totalMinutes: 35, source: 'Breaking the Habit of Being Yourself', eslabon: 'emocion',
     steps: [
-      { id: 'morning', label: 'Mañana: mano al corazón, repite tu declaración.', minutes: 15, quote: 'Hoy es el día en que me libero de mi pasado...' },
+      { id: 'morning', label: 'Mañana: mano al corazón; declara con tus palabras que hoy eliges soltar tu pasado.', minutes: 15 },
       { id: 'afternoon', label: 'Tarde: 5 min con movimiento, reconecta.', minutes: 5 },
       { id: 'evening', label: 'Noche: gratitud y revisión.', minutes: 15 },
     ],

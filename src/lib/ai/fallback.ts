@@ -48,6 +48,29 @@ function isRetryable(error: unknown) {
   return !status || RETRYABLE.includes(status);
 }
 
+type StreamResult = ReturnType<typeof streamText>;
+
+/**
+ * `streamText` no lanza excepciones: los errores del proveedor llegan como partes `error` del stream.
+ * Leemos (sobre una copia del stream) hasta la primera parte con contenido: si es un error, probamos
+ * el siguiente proveedor antes de responder al cliente.
+ */
+async function firstPartIsError(result: StreamResult): Promise<unknown | null> {
+  const reader = result.fullStream.getReader();
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return null;
+      if (value.type === 'step-start') continue;
+      return value.type === 'error' ? value.error ?? new Error('stream error') : null;
+    }
+  } catch (error) {
+    return error;
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+}
+
 export async function streamWithFallback(
   system: string,
   messages: CoreMessage[],
@@ -70,6 +93,12 @@ export async function streamWithFallback(
         onFinish: async ({ text, usage, toolCalls, toolResults }) =>
           onFinish?.({ text, provider: provider.name, tokens: usage?.totalTokens, toolCalls, toolResults }),
       });
+      const error = await firstPartIsError(result);
+      if (error) {
+        lastError = error;
+        if (cachedProvider?.name === provider.name) cachedProvider = null;
+        continue;
+      }
       return { result, provider: provider.name };
     } catch (error: unknown) {
       lastError = error;
@@ -82,12 +111,15 @@ export async function streamWithFallback(
 
 /** Generación estructurada con cascada (onboarding, ritual, análisis, moderación). */
 export async function objectWithFallback<T extends z.ZodTypeAny>(opts: {
-  schema: T; system: string; prompt: string;
+  schema: T; system: string; prompt: string; timeoutMs?: number;
 }): Promise<{ object: z.infer<T>; provider: ProviderName }> {
   let lastError: unknown;
   for (const provider of await orderedProviders()) {
     try {
-      const { object } = await generateObject({ model: provider.model(), schema: opts.schema, system: opts.system, prompt: opts.prompt });
+      const { object } = await generateObject({
+        model: provider.model(), schema: opts.schema, system: opts.system, prompt: opts.prompt,
+        abortSignal: opts.timeoutMs ? AbortSignal.timeout(opts.timeoutMs) : undefined,
+      });
       return { object: object as z.infer<T>, provider: provider.name };
     } catch (error) {
       lastError = error;

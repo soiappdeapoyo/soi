@@ -9,7 +9,7 @@ type Video = { id: string; title: string; channel: string; thumbnail: string };
 export function YouTubeEmbed({ video }: { video: Video }) {
   const [play, setPlay] = useState(false);
   return (
-    <figure className="overflow-hidden rounded-2xl bg-black shadow-ring">
+    <figure className="overflow-hidden rounded-[14px] bg-black shadow-ring">
       <div className="relative aspect-video">
         {play ? (
           <iframe

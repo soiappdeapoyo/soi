@@ -16,12 +16,14 @@ Esta guía no reemplaza el "Principio SOI" ni las reglas de `CLAUDE.md`. Solo go
 
 | Elemento | Regla | Implementación |
 |---|---|---|
-| Lienzo | Blanco; sidebar cálido muy claro | `bg-soi-canvas` · `bg-soi-sidebar` (`#FAFAF8`) |
-| Texto | Casi negro + gris atenuado AA | `text-soi-ink` (`#1C1C1E`) · `text-soi-muted` (`#5F5F63`, 6.4:1) |
-| Acento | Azul profundo para progreso/selección | `soi-accent` (`#1F4E8C`) · `soi-accent-soft` (`#E8EFF9`) |
+| Lienzo | Blanco; sidebar y bandejas en gris cálido | `bg-soi-canvas` · `bg-soi-sidebar` (`#F9F9F7`) · `bg-soi-tray` (`#F3F3F0`) |
+| Texto | Casi negro + gris cálido AA | `text-soi-ink` (`#0B0B0B`) · `text-soi-muted` (`#52514E`, 8:1) · `text-soi-subtle` (`#898781`, solo decorativo) |
+| Acento | Azul sereno para progreso/selección/foco | `soi-accent` (`#184F95`, texto) · `soi-accent-fill` (`#2A78D6`, foco) · `soi-accent-soft` (`#E2EEFA`) |
 | Oro | Solo SOI+ y celebraciones de hitos | `soi-gold` |
 | Logo | `SOI.` en tinta, sin color | — |
-| Sidebar | Íconos monocromos de trazo 1.5; secciones "Prácticas" / "Mi espacio" en tono atenuado; "Nueva conversación" como tarjeta blanca con sombra | `components/layout/sidebar-content.tsx` |
+| Sidebar | Ítems de 14 px con íconos de 16 px y trazo 1.5; el activo es blanco con anillo de 1 px; secciones en 11 px atenuado | `components/layout/sidebar-content.tsx` |
+| Chat | Sin bloques al inicio: saludo de SOI + compositor tipo tarjeta (radio 20 = botón 8 + p-2), acción de un toque (`PracticeCard`, radio 14) | `components/chat/*` |
+| Radios | control 8 · bandeja de segmentos 14 · tarjeta 20 · bandeja 28 | tokens `--radius-*` |
 | Principio SOI | Encabezado discreto + menú `⋯`; control segmentado Pensamientos/Emociones/Acciones/Resultados; chips con los agentes del eslabón | `layout/page-header.tsx` · `principio/principio-nav.tsx` |
 | Tarjeta del ritual | Bandeja gris (p-2, 32 px) → tarjeta blanca (p-4, 24 px) → botones (8 px) | `rituals/ritual-timer.tsx` |
 | Círculo | Relleno azul claro, anillo azul de 2.5 px, número grande tabular | idem |

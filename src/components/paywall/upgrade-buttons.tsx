@@ -25,7 +25,7 @@ export function UpgradeButtons() {
         const p = PLANS[k];
         const yearly = p.interval === 'year';
         return (
-          <div key={k} className={`relative rounded-3xl bg-white p-5 ${yearly ? 'shadow-[0_0_0_2px_var(--color-soi-gold),0_8px_24px_rgb(0_0_0/0.05)]' : 'shadow-soft'}`}>
+          <div key={k} className={`relative rounded-[20px] bg-white p-5 ${yearly ? 'shadow-[0_0_0_2px_var(--color-soi-gold),0_8px_24px_rgb(0_0_0/0.05)]' : 'shadow-soft'}`}>
             {'badge' in p && <span className="absolute -top-3 right-4 rounded-md bg-soi-gold px-2.5 py-1 text-xs font-semibold text-soi-ink">{p.badge}</span>}
             <p className="font-semibold">{p.label}</p>
             <p className="nums mt-1 text-3xl font-semibold">${p.price}<span className="text-base font-normal text-soi-muted"> USD/{yearly ? 'año' : 'mes'}</span></p>

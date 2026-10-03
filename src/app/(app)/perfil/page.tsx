@@ -51,7 +51,7 @@ export default async function PerfilPage() {
         <CardDescription>Pensamientos → Emociones → Acciones → Resultados</CardDescription>
         <ol className="mt-4 grid grid-cols-4 gap-2 text-center text-xs">
           {(['pensamiento', 'emocion', 'accion', 'resultado'] as const).map((e) => (
-            <li key={e} className={`rounded-2xl p-3 ${weak === e ? 'bg-soi-danger/10 font-semibold text-soi-danger ring-1 ring-soi-danger/40' : 'bg-black/5'}`}>
+            <li key={e} className={`rounded-[14px] p-3 ${weak === e ? 'bg-soi-danger/10 font-semibold text-soi-danger ring-1 ring-soi-danger/40' : 'bg-black/5'}`}>
               {ESLABON_LABEL[e]}{weak === e && <span className="block">eslabón a fortalecer</span>}
             </li>
           ))}

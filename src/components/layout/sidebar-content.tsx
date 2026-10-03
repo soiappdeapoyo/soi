@@ -25,24 +25,24 @@ export type SidebarData = {
 export function SidebarContent({ data, compact = false }: { data: SidebarData; compact?: boolean }) {
   const hide = compact ? 'sr-only' : '';
   const item = cn(
-    'press flex min-h-11 items-center gap-3 rounded-lg px-3 text-[15px] text-soi-ink/85 hover:bg-black/[0.04] hover:text-soi-ink',
+    'press flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink',
     compact && 'justify-center px-0',
   );
-  const active = 'bg-black/[0.05] font-medium text-soi-ink';
-  const section = cn('px-3 pb-1 pt-4 text-xs text-soi-muted', hide);
+  const active = 'bg-white text-soi-ink shadow-ring hover:bg-white';
+  const section = cn('px-2.5 pb-1 pt-4 text-[11px] font-medium text-soi-subtle', hide);
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 text-soi-ink">
-      <Link href="/chat" className={cn('press px-1 pt-1 text-2xl font-semibold tracking-tight', compact && 'text-center text-xl')} aria-label="SOI, inicio">
+      <Link href="/chat" className={cn('press px-2.5 pt-1 text-lg font-medium tracking-tight', compact && 'px-0 text-center')} aria-label="SOI, inicio">
         SOI.
       </Link>
 
       <Link
         href="/chat"
-        className={buttonClass('secondary', compact ? 'icon' : 'md', cn('rounded-xl', compact ? 'mx-auto' : 'h-auto min-h-12 w-full justify-start py-2.5 text-left'))}
+        className={buttonClass('outline', compact ? 'icon' : 'md', cn(compact ? 'mx-auto' : 'h-10 w-full justify-start px-2.5 text-sm font-normal'))}
         aria-label="Nueva conversación"
       >
-        <Plus className="h-5 w-5 shrink-0" aria-hidden="true" /> <span className={hide}>Nueva conversación</span>
+        <Plus className="h-4 w-4 shrink-0" aria-hidden="true" /> <span className={hide}>Nueva conversación</span>
       </Link>
 
       <nav aria-label="Navegación principal" className="-mx-1 flex-1 overflow-y-auto px-1">
@@ -55,7 +55,7 @@ export function SidebarContent({ data, compact = false }: { data: SidebarData; c
               return (
                 <li key={id}>
                   <NavLink href={href} className={item} activeClassName={active} title={a.label}>
-                    <Icon name={a.icon} className="h-5 w-5 shrink-0" />
+                    <Icon name={a.icon} className="h-4 w-4 shrink-0" />
                     <span className={hide}>{a.label}</span>
                   </NavLink>
                 </li>
@@ -68,7 +68,7 @@ export function SidebarContent({ data, compact = false }: { data: SidebarData; c
             {MY_SPACE.map((s) => (
               <li key={s.href}>
                 <NavLink href={s.href} className={item} activeClassName={active} title={s.label}>
-                  <Icon name={s.icon} className="h-5 w-5 shrink-0" /> <span className={hide}>{s.label}</span>
+                  <Icon name={s.icon} className="h-4 w-4 shrink-0" /> <span className={hide}>{s.label}</span>
                 </NavLink>
               </li>
             ))}
@@ -80,7 +80,7 @@ export function SidebarContent({ data, compact = false }: { data: SidebarData; c
               <ul className="flex flex-col gap-0.5">
                 {data.conversations.map((c) => (
                   <li key={c.id}>
-                    <NavLink href={`/chat/${c.id}`} className="press block truncate rounded-lg px-3 py-2 text-sm text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink" activeClassName={active}>
+                    <NavLink href={`/chat/${c.id}`} className="press block truncate rounded-lg px-2.5 py-2 text-[13px] text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink" activeClassName={active}>
                       {c.title}
                     </NavLink>
                   </li>
@@ -91,9 +91,9 @@ export function SidebarContent({ data, compact = false }: { data: SidebarData; c
         </Suspense>
       </nav>
 
-      <div className="flex flex-col gap-0.5 border-t border-black/[0.06] pt-3">
-        <p className={cn('flex min-h-9 items-center gap-3 px-3 text-sm', compact && 'justify-center px-0')} title={`Racha: ${data.streak} días`}>
-          <Flame className="h-5 w-5 shrink-0 text-orange-600" aria-hidden="true" />
+      <div className="flex flex-col gap-0.5 pt-3 shadow-[0_-1px_0_rgb(11_11_11/0.06)]">
+        <p className={cn('flex min-h-9 items-center gap-2.5 px-2.5 text-sm text-soi-muted', compact && 'justify-center px-0')} title={`Racha: ${data.streak} días`}>
+          <Flame className="h-4 w-4 shrink-0 text-orange-600" aria-hidden="true" />
           <span className={cn('nums', hide)}>Racha: {data.streak} {data.streak === 1 ? 'día' : 'días'}</span>
           {!compact && data.shields > 0 && (
             <span className="nums ml-auto inline-flex items-center gap-1 text-xs text-soi-muted" title="Escudos de racha">
@@ -103,14 +103,14 @@ export function SidebarContent({ data, compact = false }: { data: SidebarData; c
         </p>
         <Suspense>
           <NavLink href="/ajustes" className={item} activeClassName={active} title="Ajustes">
-            <Settings className="h-5 w-5 shrink-0" aria-hidden="true" /><span className={hide}>Ajustes</span>
+            <Settings className="h-4 w-4 shrink-0" aria-hidden="true" /><span className={hide}>Ajustes</span>
           </NavLink>
           <NavLink href="/perfil" className={item} activeClassName={active} title="Mi perfil">
             {data.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={data.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full" />
+              <img src={data.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full" />
             ) : (
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-soi-ink text-xs font-semibold text-white" aria-hidden="true">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-soi-ink text-[11px] font-medium text-white" aria-hidden="true">
                 {data.name.charAt(0).toUpperCase()}
               </span>
             )}

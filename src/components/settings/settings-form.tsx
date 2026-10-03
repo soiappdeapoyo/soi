@@ -54,7 +54,7 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-3xl bg-white shadow-soft p-5">
+      <section className="rounded-[20px] bg-white shadow-soft p-5">
         <h2 className="text-lg font-semibold">Voz</h2>
         {!ttsAllowed && <p className="mt-1 text-sm text-soi-muted">La guía por voz es parte de SOI+.</p>}
         <label className="mt-3 flex items-center gap-2">
@@ -73,13 +73,13 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
         </div>
       </section>
 
-      <section className="rounded-3xl bg-white shadow-soft p-5">
+      <section className="rounded-[20px] bg-white shadow-soft p-5">
         <h2 className="text-lg font-semibold">Notificaciones</h2>
         <p className="mt-1 text-sm text-soi-muted">Recibe tu ritual diario cada mañana (SOI+).</p>
         <Button onClick={togglePush} size="sm" variant="outline" className="mt-3">{push ? 'Desactivar notificaciones' : 'Activar notificaciones'}</Button>
       </section>
 
-      <section className="rounded-3xl bg-white shadow-soft p-5">
+      <section className="rounded-[20px] bg-white shadow-soft p-5">
         <h2 className="text-lg font-semibold">Suscripción</h2>
         {hasSubscription
           ? <Button onClick={portal} size="sm" variant="outline" className="mt-3">Administrar suscripción</Button>

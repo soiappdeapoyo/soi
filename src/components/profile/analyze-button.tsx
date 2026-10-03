@@ -27,7 +27,7 @@ export function AnalyzeButton() {
       <Button variant="gold" onClick={run} disabled={loading}>{loading ? 'Analizando tus patrones…' : 'Generar análisis profundo'}</Button>
       {error && <p role="alert" className="text-sm text-soi-danger">{error}</p>}
       {data && (
-        <div className="rounded-2xl bg-soi-gold/10 p-4" aria-live="polite">
+        <div className="rounded-[14px] bg-soi-gold/10 p-4" aria-live="polite">
           <p className="text-lg font-semibold">{data.archetype}</p>
           <p className="mt-1 text-sm">{data.summary}</p>
           <p className="mt-2 text-sm"><strong>Siguiente paso:</strong> {data.nextStep}</p>

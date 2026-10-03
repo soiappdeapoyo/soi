@@ -1,7 +1,6 @@
-import { generateObject } from 'ai';
-import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { detectCrisis } from './crisis';
+import { objectWithFallback } from './fallback';
 
 export const RouterSchema = z.object({
   agent: z.enum([
@@ -27,8 +26,7 @@ export async function classifyIntent(message: string, history: string[] = []): P
     return { agent: 'crisis', confidence: 1, emotionalTone: 'crisis', suggestedRoutine: 'none' };
   }
   try {
-    const { object } = await generateObject({
-      model: google('gemini-2.0-flash'),
+    const { object } = await objectWithFallback({
       schema: RouterSchema,
       system: `Clasificas mensajes en SOI, una app de manifestación y rutinas.
 Aplicas el principio: pensamientos → emociones → acciones → resultados.
@@ -37,7 +35,7 @@ pensamiento→afirmacion/manifestacion, emocion→meditacion/suenos, accion→ru
 Si el usuario pide validación sin acción o se contradice, usa anti_sycophant.
 Si hay ideación suicida, autolesión o violencia: agent='crisis' sin excepción.`,
       prompt: `Historial reciente:\n${history.slice(-4).join('\n')}\n\nMensaje: ${message}`,
-      abortSignal: AbortSignal.timeout(6000),
+      timeoutMs: 6000,
     });
     return object;
   } catch {

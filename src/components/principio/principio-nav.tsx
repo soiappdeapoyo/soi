@@ -29,7 +29,7 @@ export function PrincipioNav({ initial = 'pensamiento', className }: { initial?:
 
   return (
     <nav aria-label="Principio SOI" className={cn('flex flex-col gap-3', className)}>
-      <div role="tablist" aria-label="Eslabón" className="grid grid-cols-2 gap-1 rounded-2xl bg-soi-tray p-1 sm:grid-cols-4">
+      <div role="tablist" aria-label="Eslabón" className="grid grid-cols-2 gap-1 rounded-[14px] bg-soi-tray p-1 sm:grid-cols-4">
         {ESLABONES.map((e) => {
           const selected = e === eslabon;
           return (

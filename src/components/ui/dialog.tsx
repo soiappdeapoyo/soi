@@ -81,7 +81,7 @@ export function Dialog({ open, onOpenChange, title, description, children, class
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         className={cn(
-          'relative w-full max-w-md rounded-3xl bg-white p-5 shadow-raised transition-[transform,opacity] ease-out-strong',
+          'relative w-full max-w-md rounded-[20px] bg-white p-5 shadow-raised transition-[transform,opacity] ease-out-strong',
           visible ? 'scale-100 opacity-100 duration-(--dur-base)' : 'scale-[0.96] opacity-0 duration-(--dur-fast)',
           className,
         )}

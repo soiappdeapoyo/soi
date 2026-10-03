@@ -85,7 +85,7 @@ export function CommunityFeed({ initialPosts, myReactions }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
-      <form onSubmit={publish} className="rounded-3xl bg-white p-4 shadow-soft">
+      <form onSubmit={publish} className="rounded-[20px] bg-white p-4 shadow-soft">
         <Label htmlFor="cp-content" className="sr-only">Comparte con la comunidad</Label>
         <Textarea id="cp-content" value={content} onChange={(e) => setContent(e.target.value)} minLength={5} maxLength={1000} required
           placeholder="Comparte una evidencia, una petición o una pregunta…" />
@@ -117,7 +117,7 @@ export function CommunityFeed({ initialPosts, myReactions }: Props) {
 
       <ul className="flex flex-col gap-3">
         {visible.map((p) => (
-          <li key={p.id} className={cn('rounded-3xl bg-white p-4 shadow-soft', initialIds.has(p.id) && 'animate-enter-fade')}>
+          <li key={p.id} className={cn('rounded-[20px] bg-white p-4 shadow-soft', initialIds.has(p.id) && 'animate-enter-fade')}>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-semibold">{p.is_anonymous ? 'Alma anónima' : (p.author_name ?? 'Alguien de SOI')}</span>
               <Badge>{TYPE_LABEL[p.type]}</Badge>

@@ -25,10 +25,10 @@ export default async function RutinasPage() {
         <p className="mt-1 text-soi-muted">Cada rutina cita su fuente original. Elige según tu tiempo disponible.</p>
       </header>
       {/* Bandeja p-2 (32 px) → tarjetas 24 px → bloque de minutos 12 px con p-3 (concéntrico) */}
-      <ul className="flex flex-col gap-2 rounded-[32px] bg-soi-tray p-2">
+      <ul className="flex flex-col gap-2 rounded-[28px] bg-soi-tray p-2">
         {Object.values(ROUTINES).map((r, i) => (
           <li key={r.id} className="animate-enter" style={{ animationDelay: `${Math.min(i, 5) * 40}ms` }}>
-            <Link href={`/rutinas/${r.id}`} className="press flex items-center gap-4 rounded-3xl bg-white p-3 shadow-soft hover:shadow-raised">
+            <Link href={`/rutinas/${r.id}`} className="press flex items-center gap-4 rounded-[20px] bg-white p-3 shadow-soft hover:shadow-raised">
               <span className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-soi-accent-soft text-soi-accent">
                 <span className="nums text-lg font-semibold leading-none">{r.totalMinutes}</span><span className="text-[11px]">min</span>
               </span>

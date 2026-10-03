@@ -29,7 +29,7 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
         <LockedFeature
           title="Tu Muro de Evidencias"
           description="Registra cada señal y logro. Las evidencias son el eslabón de Resultados: la prueba de tu nueva identidad."
-          preview={<ul className="space-y-2 p-4 text-left">{['Terminé mi primera semana', 'Hablé con calma en la reunión', 'Ahorré el 10%'].map((t) => <li key={t} className="rounded-2xl bg-black/5 p-3">⭐ {t}</li>)}</ul>}
+          preview={<ul className="space-y-2 p-4 text-left">{['Terminé mi primera semana', 'Hablé con calma en la reunión', 'Ahorré el 10%'].map((t) => <li key={t} className="rounded-[14px] bg-black/5 p-3">⭐ {t}</li>)}</ul>}
         />
       </div>
     );
@@ -81,7 +81,7 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
           {rows.map((r) => {
             const e = (r.metadata as { eslabon_soi?: Eslabon })?.eslabon_soi;
             return (
-              <li key={r.id} className="relative rounded-3xl bg-white shadow-soft p-4">
+              <li key={r.id} className="relative rounded-[20px] bg-white shadow-soft p-4">
                 <span className="absolute -left-[29px] top-5 h-4 w-4 rounded-full bg-soi-accent shadow-[0_0_0_3px_white]" aria-hidden="true" />
                 <div className="flex flex-wrap items-center gap-2 text-xs text-soi-muted">
                   <time dateTime={r.created_at as string}>{new Date(r.created_at as string).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}</time>

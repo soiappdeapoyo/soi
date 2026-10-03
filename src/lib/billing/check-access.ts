@@ -27,15 +27,21 @@ export async function getAccessMap(userId: string) {
   return { profile, plan: profile ? effectivePlan(profile) : 'free', access: map };
 }
 
-/** Descuenta una consulta solo si el plan efectivo es Free. */
-export async function decrementFreeQuery(userId: string) {
-  const profile = await getProfile(userId);
-  if (!profile || effectivePlan(profile) !== 'free') return;
+export type ConsumeResult = 'unlimited' | 'consumed' | 'exhausted';
+
+/** Comprueba y descuenta en una sola operación atómica (RPC con bloqueo de fila). */
+export async function consumeChatQuery(): Promise<ConsumeResult> {
   const supabase = await createServerClient();
-  if (profile.plan === 'trial') {
-    // Transición perezosa si el cron no ha corrido: inicia el pool Free.
-    await supabase.rpc('start_free_plan_if_trial_expired');
-    return;
+  const { data, error } = await supabase.rpc('consume_chat_query');
+  if (error) {
+    console.error('[billing] consume_chat_query', error.message);
+    return 'exhausted';
   }
-  await supabase.rpc('decrement_free_query', { p_user_id: userId });
+  return data as ConsumeResult;
+}
+
+/** Devuelve la consulta si la generación falló por completo. */
+export async function refundChatQuery() {
+  const supabase = await createServerClient();
+  await supabase.rpc('refund_chat_query');
 }

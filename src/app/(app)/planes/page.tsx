@@ -30,13 +30,13 @@ export default async function PlanesPage() {
       <p className="mt-1 text-soi-muted">Suscripción mensual o anual. Cancela cuando quieras. Sin pagos únicos.</p>
 
       {plan === 'soi_plus' ? (
-        <p className="mt-6 rounded-3xl bg-soi-gold/15 p-5 font-medium">Ya eres SOI+ ✨ Gracias por ser parte.</p>
+        <p className="mt-6 rounded-[20px] bg-soi-gold/15 p-5 font-medium">Ya eres SOI+ ✨ Gracias por ser parte.</p>
       ) : (
         <div className="mt-6"><UpgradeButtons /></div>
       )}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
-        <section className="rounded-3xl bg-white shadow-soft p-5">
+        <section className="rounded-[20px] bg-white shadow-soft p-5">
           <h2 className="font-semibold">Free</h2>
           <ul className="mt-3 space-y-2 text-sm">
             {FREE.map((f) => (
@@ -46,7 +46,7 @@ export default async function PlanesPage() {
             ))}
           </ul>
         </section>
-        <section className="rounded-3xl bg-white p-5 shadow-[0_0_0_2px_var(--color-soi-gold),0_8px_24px_rgb(0_0_0/0.05)]">
+        <section className="rounded-[20px] bg-white p-5 shadow-[0_0_0_2px_var(--color-soi-gold),0_8px_24px_rgb(0_0_0/0.05)]">
           <h2 className="font-semibold">SOI+</h2>
           <ul className="mt-3 space-y-2 text-sm">
             {SOI_PLUS_BENEFITS.map((b) => <li key={b} className="flex gap-2"><Check className="h-4 w-4 text-green-700" aria-label="Incluido" />{b}</li>)}
