@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
       // Sin formulario previo: SOI conoce a la persona conversando desde el primer mensaje.
-      return NextResponse.redirect(`${origin}${safeNext ?? '/chat'}`);
+      return NextResponse.redirect(`${origin}${safeNext ?? '/hoy'}`);
     }
   }
   return NextResponse.redirect(`${origin}/login?error=auth`);

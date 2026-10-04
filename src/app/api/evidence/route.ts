@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess } from '@/lib/billing/check-access';
 import { remember } from '@/lib/ai/rag';

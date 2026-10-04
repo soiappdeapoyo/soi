@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { Plus, Settings, Flame, Shield } from 'lucide-react';
 import { AGENTS, PRACTICE_AGENTS } from '@/config/agents';
-import { MY_SPACE } from '@/config/navigation';
+import { MY_SPACE, PRIMARY_TABS } from '@/config/navigation';
 import { Icon } from '@/components/ui/icon';
 import { buttonClass } from '@/components/ui/button';
 import { NavLink } from './nav-link';
@@ -22,7 +22,7 @@ export type SidebarData = {
  * Contenido compartido entre sidebar desktop/tablet y drawer móvil. `compact` = tablet colapsado (72 px).
  * Estilo: fondo cálido claro, íconos monocromos de trazo 1.5, etiquetas de sección en tono atenuado.
  */
-export function SidebarContent({ data, compact = false }: { data: SidebarData; compact?: boolean }) {
+export function SidebarContent({ data, compact = false, hidePrimary = false }: { data: SidebarData; compact?: boolean; hidePrimary?: boolean }) {
   const hide = compact ? 'sr-only' : '';
   const item = cn(
     'press flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink',
@@ -33,7 +33,7 @@ export function SidebarContent({ data, compact = false }: { data: SidebarData; c
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 text-soi-ink">
-      <Link href="/chat" className={cn('press px-2.5 pt-1 text-lg font-medium tracking-tight', compact && 'px-0 text-center')} aria-label="SOI, inicio">
+      <Link href="/hoy" className={cn('press px-2.5 pt-1 text-lg font-medium tracking-tight', compact && 'px-0 text-center')} aria-label="SOI, inicio">
         SOI.
       </Link>
 
@@ -47,6 +47,18 @@ export function SidebarContent({ data, compact = false }: { data: SidebarData; c
 
       <nav aria-label="Navegación principal" className="-mx-1 flex-1 overflow-y-auto px-1">
         <Suspense>
+          {!hidePrimary && (
+            <ul className="flex flex-col gap-0.5 pb-1">
+              {PRIMARY_TABS.map((t) => (
+                <li key={t.id}>
+                  <NavLink href={t.href} match={t.match} className={item} activeClassName={active} title={t.label}>
+                    <Icon name={t.icon} className="h-4 w-4 shrink-0" />
+                    <span className={hide}>{t.label}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          )}
           <p className={cn(section, 'pt-2')}>Prácticas</p>
           <ul className="flex flex-col gap-0.5">
             {PRACTICE_AGENTS.map((id) => {

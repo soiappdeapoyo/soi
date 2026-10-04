@@ -3,19 +3,24 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { isTabActive } from '@/config/navigation';
 
 /**
  * Ítem del sidebar. Cambio de sección = instantáneo (alta frecuencia, DESIGN.md §1.2):
  * solo color/fondo en 120 ms y :active scale(0.97).
  */
-export function NavLink({ href, className, activeClassName, children, title, ariaLabel }: {
+export function NavLink({ href, className, activeClassName, children, title, ariaLabel, match }: {
   href: string; className?: string; activeClassName?: string; children: React.ReactNode; title?: string; ariaLabel?: string;
+  /** Prefijos que cuentan como activos (pestañas principales). */
+  match?: readonly string[];
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const [path, query] = href.split('?');
   const agent = query ? new URLSearchParams(query).get('agent') : null;
-  const active = agent
+  const active = match
+    ? isTabActive(pathname, { match })
+    : agent
     ? pathname === path && params.get('agent') === agent
     : pathname === path || (path !== '/chat' && pathname.startsWith(`${path}/`));
 

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { ActionCardSchema, EslabonSchema } from '@/lib/action-card';
 import { BLUEPRINT_PRICE_MAX_CENTS, BLUEPRINT_PRICE_MIN_CENTS } from '@/config/creators';
 

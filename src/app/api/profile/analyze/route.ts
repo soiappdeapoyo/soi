@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess } from '@/lib/billing/check-access';
 import { objectWithFallback } from '@/lib/ai/fallback';
@@ -26,7 +26,7 @@ export async function POST() {
 
   const { object } = await objectWithFallback({
     schema: Analysis,
-    system: `Analizas patrones de pensamiento-emoción-acción-resultado (principio SOI) a partir de mensajes de una persona.
+    instructions: `Analizas patrones de pensamiento-emoción-acción-resultado (principio SOI) a partir de mensajes de una persona.
 Lenguaje compasivo, español neutro. NO es diagnóstico clínico. No uses etiquetas de trastornos.`,
     prompt: msgs.map((m) => `- ${String(m.content).slice(0, 300)}`).join('\n'),
   });

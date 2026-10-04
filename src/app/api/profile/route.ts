@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { SUPPORTED_COUNTRIES } from '@/config/crisis-resources';
 import { ROUTINE_IDS } from '@/config/routines';

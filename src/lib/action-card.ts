@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const EslabonSchema = z.enum(['pensamiento', 'emocion', 'accion', 'resultado']);
 

@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'SOI — Diseña tu identidad',
     short_name: 'SOI',
     description: 'Sistema de transformación personal con IA.',
-    start_url: '/chat',
+    start_url: '/hoy',
     display: 'standalone',
     background_color: '#FAF7F0',
     theme_color: '#1A1A2E',

@@ -1,11 +1,16 @@
 import { embed } from 'ai';
-import { google } from '@ai-sdk/google';
+import { google, type GoogleEmbeddingModelOptions } from '@ai-sdk/google';
+import { EMBEDDING_DIMENSIONS, MODELS, hasKey } from './models';
 
-const model = google.textEmbeddingModel('text-embedding-004');
-
+/** Embeddings de 768 dimensiones (gemini-embedding-2 truncado con MRL) para la columna VECTOR(768). */
 export async function embedText(text: string): Promise<number[] | null> {
+  if (!hasKey('gemini')) return null;
   try {
-    const { embedding } = await embed({ model, value: text.slice(0, 8000) });
+    const { embedding } = await embed({
+      model: google.embedding(MODELS.embedding),
+      value: text.slice(0, 8000),
+      providerOptions: { google: { outputDimensionality: EMBEDDING_DIMENSIONS } satisfies GoogleEmbeddingModelOptions },
+    });
     return embedding;
   } catch (e) {
     console.error('[embed]', e);

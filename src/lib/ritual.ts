@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types/database';
 import { RITUAL_PHASES, type RitualPhase } from '@/config/navigation';
@@ -17,7 +17,7 @@ export async function generateRitual(profile: UserProfile, date: string): Promis
   const phase = (profile.ritual_phase ?? 'chispa') as RitualPhase;
   const { object } = await objectWithFallback({
     schema: RitualSchema,
-    system: `Generas el ritual diario de SOI en español neutro. 4 partes mapeadas al principio SOI:
+    instructions: `Generas el ritual diario de SOI en español neutro. 4 partes mapeadas al principio SOI:
 Pensamiento (afirmación) → Emoción (visualización) → Acción (acción concreta) → Resultado (señal a notar).
 Usa solo técnicas de Neville Goddard, Joe Dispenza, Napoleon Hill, Brian Tracy, Hal Elrod o Robin Sharma y cita la fuente.
 Sin promesas garantizadas ni consejos médicos.`,

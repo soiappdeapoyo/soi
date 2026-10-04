@@ -4,13 +4,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Link from 'next/link';
 import { Volume2, Star, Lock, BellRing, Layers } from 'lucide-react';
-import type { Message } from 'ai';
-import { YouTubeEmbed } from './youtube-embed';
+import type { UIMessage } from 'ai';
+import { SoiPlayer, type SoiVideo } from '@/components/media/soi-player';
 import { PracticeCard, type Practice } from './practice-card';
 import { ActionCardView, type ActionCardResult } from './action-card-view';
 import { cn } from '@/lib/utils';
 
-type Props = { message: Message; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null };
+type Reflect = (text: string, video: SoiVideo) => void;
+type Props = { message: UIMessage; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null; onReflected?: Reflect };
 
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -18,74 +19,84 @@ function formatWhen(iso: string) {
   return d.toLocaleString('es', { weekday: 'long', hour: 'numeric', minute: '2-digit' });
 }
 
+type ToolPart = { type: string; toolCallId: string; state: string; output?: unknown };
+
+/** Texto plano de un mensaje (v7: el contenido vive en `parts`). */
+export function messageText(message: UIMessage) {
+  return message.parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
+}
+
+function ToolResult({ part, onReflected }: { part: ToolPart; onReflected?: Reflect }) {
+  const name = part.type.slice('tool-'.length);
+  const out = part.output;
+  if (name === 'youtubeSearch') {
+    const r = out as { locked: boolean; videos: SoiVideo[] };
+    if (r.locked) return (
+      <p className="mt-2 flex items-center gap-2 text-sm text-soi-muted">
+        <Lock className="h-4 w-4" aria-hidden="true" /> Videos disponibles en <Link href="/planes" className="underline">SOI+</Link>
+      </p>
+    );
+    // Un solo video, elegido por la IA: inspiración sin menú de opciones ni distracciones.
+    const v = r.videos[0];
+    return v ? <div className="mt-3"><SoiPlayer video={v} onReflected={onReflected} /></div> : null;
+  }
+  if (name === 'suggestPractice') return <PracticeCard practice={out as Practice} />;
+  if (name === 'createActionCard') return <ActionCardView card={out as ActionCardResult} />;
+  if (name === 'captureMoment') {
+    const r = out as { ok: boolean; id?: string };
+    if (!r.ok || !r.id) return null;
+    return (
+      <p className="mt-2 flex items-center gap-2 text-sm text-soi-muted">
+        <Layers className="h-4 w-4 text-soi-accent" aria-hidden="true" /> Guardé este momento en tu <Link href={`/momentos/${r.id}`} className="underline underline-offset-4">biblioteca</Link>
+      </p>
+    );
+  }
+  if (name === 'scheduleReminder') {
+    const r = out as { ok: boolean; when: string };
+    if (!r.ok) return null;
+    return (
+      <p className="mt-2 flex items-center gap-2 text-sm text-soi-muted">
+        <BellRing className="h-4 w-4 text-soi-accent" aria-hidden="true" /> Recordatorio guardado{formatWhen(r.when) ? ` · ${formatWhen(r.when)}` : ''}
+      </p>
+    );
+  }
+  if (name === 'saveEvidence') {
+    const r = out as { locked: boolean };
+    return (
+      <p className="mt-2 flex items-center gap-2 text-sm">
+        <Star className="h-4 w-4 text-soi-gold" aria-hidden="true" />
+        {r.locked ? <>Guardar evidencias es parte de <Link href="/planes" className="underline">SOI+</Link></> : <>Guardado en tu <Link href="/evidencias" className="underline">Muro de Evidencias</Link></>}
+      </p>
+    );
+  }
+  return null;
+}
+
 /**
  * Chat (DESIGN.md §4): el mensaje del usuario aparece al instante (sin animación de entrada);
  * el streaming del asistente no anima tokens: solo crece el texto.
  */
-export function MessageBubble({ message, ttsAllowed, onSpeak, practice }: Props) {
+export function MessageBubble({ message, ttsAllowed, onSpeak, practice, onReflected }: Props) {
   const mine = message.role === 'user';
+  const text = messageText(message);
+  const tools = message.parts.filter((p) => p.type.startsWith('tool-') && (p as ToolPart).state === 'output-available') as ToolPart[];
   return (
     <li className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
-      <div className={cn('max-w-[88%] sm:max-w-[75%]', mine ? 'rounded-[14px] bg-soi-tray px-4 py-2.5' : 'px-1 py-1')}>
+      <div className={cn(mine ? 'max-w-[85%] rounded-[14px] bg-soi-tray px-3.5 py-2' : 'w-full max-w-full py-1')}>
         {mine ? (
-          <p className="whitespace-pre-wrap">{message.content}</p>
-        ) : (
+          <p className="whitespace-pre-wrap">{text}</p>
+        ) : text ? (
           <div className="prose max-w-none text-[15px] leading-relaxed text-soi-ink prose-p:my-2 prose-a:text-soi-accent prose-a:underline prose-strong:font-medium prose-strong:text-soi-ink">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
           </div>
-        )}
+        ) : null}
 
-        {message.toolInvocations?.map((t) => {
-          if (t.state !== 'result') return null;
-          if (t.toolName === 'youtubeSearch') {
-            const r = t.result as { locked: boolean; videos: { id: string; title: string; channel: string; thumbnail: string }[] };
-            if (r.locked) return (
-              <p key={t.toolCallId} className="mt-2 flex items-center gap-2 text-sm text-soi-muted">
-                <Lock className="h-4 w-4" aria-hidden="true" /> Videos disponibles en <Link href="/planes" className="underline">SOI+</Link>
-              </p>
-            );
-            return <div key={t.toolCallId} className="mt-3 grid gap-3">{r.videos.map((v) => <YouTubeEmbed key={v.id} video={v} />)}</div>;
-          }
-          if (t.toolName === 'suggestPractice') {
-            return <PracticeCard key={t.toolCallId} practice={t.result as Practice} />;
-          }
-          if (t.toolName === 'createActionCard') {
-            return <ActionCardView key={t.toolCallId} card={t.result as ActionCardResult} />;
-          }
-          if (t.toolName === 'captureMoment') {
-            const r = t.result as { ok: boolean; id?: string };
-            if (!r.ok || !r.id) return null;
-            return (
-              <p key={t.toolCallId} className="mt-2 flex items-center gap-2 text-sm text-soi-muted">
-                <Layers className="h-4 w-4 text-soi-accent" aria-hidden="true" /> Guardé este momento en tu <Link href={`/momentos/${r.id}`} className="underline underline-offset-4">biblioteca</Link>
-              </p>
-            );
-          }
-          if (t.toolName === 'scheduleReminder') {
-            const r = t.result as { ok: boolean; when: string };
-            if (!r.ok) return null;
-            return (
-              <p key={t.toolCallId} className="mt-2 flex items-center gap-2 text-sm text-soi-muted">
-                <BellRing className="h-4 w-4 text-soi-accent" aria-hidden="true" /> Recordatorio guardado{formatWhen(r.when) ? ` · ${formatWhen(r.when)}` : ''}
-              </p>
-            );
-          }
-          if (t.toolName === 'saveEvidence') {
-            const r = t.result as { locked: boolean };
-            return (
-              <p key={t.toolCallId} className="mt-2 flex items-center gap-2 text-sm">
-                <Star className="h-4 w-4 text-soi-gold" aria-hidden="true" />
-                {r.locked ? <>Guardar evidencias es parte de <Link href="/planes" className="underline">SOI+</Link></> : <>Guardado en tu <Link href="/evidencias" className="underline">Muro de Evidencias</Link></>}
-              </p>
-            );
-          }
-          return null;
-        })}
+        {tools.map((t) => <ToolResult key={t.toolCallId} part={t} onReflected={onReflected} />)}
 
         {practice && <PracticeCard practice={practice} />}
 
-        {!mine && ttsAllowed && message.content && (
-          <button type="button" onClick={() => onSpeak(message.content)} className="press tap-target mt-2 inline-flex items-center gap-1 rounded-md text-xs text-soi-muted hover:text-soi-ink" aria-label="Escuchar respuesta">
+        {!mine && ttsAllowed && text && (
+          <button type="button" onClick={() => onSpeak(text)} className="press tap-target mt-2 inline-flex items-center gap-1 rounded-md text-xs text-soi-muted hover:text-soi-ink" aria-label="Escuchar respuesta">
             <Volume2 className="h-4 w-4" aria-hidden="true" /> Escuchar
           </button>
         )}

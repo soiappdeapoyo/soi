@@ -105,11 +105,11 @@ Deseo, fe, autosugestión, decisión, persistencia.
 | Iconos | lucide-react |
 | Base de datos | Supabase (PostgreSQL + pgvector) |
 | Auth | Supabase Auth (`@supabase/ssr`) — **Google OAuth** + magic link |
-| LLM | Gemini `gemini-2.0-flash` → Groq `llama-3.3-70b-versatile` → DeepSeek `deepseek-chat` |
-| Orquestación | Vercel AI SDK (`ai`, `@ai-sdk/react`) |
+| LLM | Gemini `gemini-3.8-flash` → Groq `openai/gpt-oss-120b` → DeepSeek `deepseek-v4-flash` (opcional). IDs por env en `src/lib/ai/models.ts` (`AI_MODEL_*`); solo entran a la cascada los proveedores con clave |
+| Orquestación | Vercel AI SDK **v7** (`ai@7`, `@ai-sdk/react@4`): `UIMessage.parts`, `DefaultChatTransport`, `instructions`, `isStepCount`, `Output.object`. Guías en `node_modules/ai/docs/08-migration-guides` |
 | Voz | VoiPi (Edge TTS + Browser TTS) con fallback `speechSynthesis` |
 | Video | YouTube Data API v3 |
-| Embeddings | Google `text-embedding-004` (768) |
+| Embeddings | Google `gemini-embedding-2` truncado a 768 (`outputDimensionality`) |
 | Pagos | Stripe (solo suscripción mensual/anual) |
 | PDF | pdf-lib (servidor) |
 | Push | web-push (VAPID) + Service Worker |
@@ -130,6 +130,7 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 | `0004_billing_functions.sql` | `decrement_free_query`, `expire_trials` |
 | `0005_streaks_community_push.sql` | Escudo de racha, `register_ritual_day`, `toggle_reaction`, país, avatar, push, autor/demo en posts, **permisos por columna en `user_profiles` (anti-bypass del paywall)**, endurecimiento de `decrement_free_query`/`expire_trials` |
 | `0006_atomic_free_queries.sql` | `consume_chat_query` (comprueba y descuenta atómicamente), `refund_chat_query` (si fallan todos los proveedores), `purge_crisis_logs` (retención 90 días) |
+| `0008_momentum_signals.sql` | Amplía `momentum_events.kind` con `video_watched` y `checkin` |
 | `0007_moments_blueprints_momentum.sql` | `creator_profiles`, `soi_moments`, `soi_blueprints`, `blueprint_implementations`, `blueprint_purchases`, `moment_interactions`, `momentum_events`; RPC `toggle_moment_interaction`, `implement_blueprint`, `toggle_implementation_step`, `set_implementation_result`, `trending_blueprints`, `creator_stats`. Contadores y compras **solo vía RPC/webhook** (permisos por columna) |
 
 **Uso de categorías:** `evidencia` (Muro), `ritual_diario` (ritual generado), `perfil_usuario` (onboarding, análisis), `conversacion` (memoria RAG), `accion` + tag `recordatorio` (scheduleReminder), `video_cache`, `aprendizaje_web`, `crisis_log`.
@@ -182,7 +183,7 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 
 **Router** (`router.ts`): crisis por regex primero; luego clasifica agente + eslabón con `objectWithFallback` (cascada de proveedores). El agente elegido en el sidebar se respeta salvo crisis.
 
-**Fallback** (`fallback.ts`): health check de 1 token con caché de 5 min (reemplazar por Upstash/KV en producción); antes de responder lee la primera parte del stream y, si es un error, pasa al siguiente proveedor. Cada mensaje guarda `provider`. `objectWithFallback` para salidas estructuradas.
+**Fallback** (`fallback.ts`): health check con caché de 5 min (reemplazar por Upstash/KV en producción); antes de responder lee la primera parte del stream y, si es un error, pasa al siguiente proveedor (tests con `MockLanguageModelV4` en `tests/unit/fallback.test.ts`). Log `[ai] proveedor X falló: …`; si no hay claves, el chat responde un 503 con un mensaje claro. Cada mensaje guarda `provider`. `objectWithFallback` usa `generateText` + `Output.object`. **Los proveedores retiran modelos: si el chat falla, revisar primero los logs `[ai]` y la tabla de deprecaciones del proveedor.**
 
 **Chat agéntico y sin fricción:** `/chat` no muestra bloques: SOI abre la conversación con un saludo determinista (`src/lib/opener.ts`: hora, nombre, racha sin castigo, ritual pendiente, última conversación, eslabón débil), que puede traer una acción de un toque. El saludo se guarda como primer mensaje y llega al modelo como contexto del system prompt (el historial siempre empieza por el usuario).
 
@@ -212,7 +213,7 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 
 ## 🎨 UI/UX
 - Guía visual y de movimiento: **DESIGN.md** (obligatoria).
-- Desktop ≥1024: sidebar 280px · Tablet 768-1023: sidebar de 72px con iconos · Mobile <768: drawer + header con logo.
+- Desktop ≥1024: sidebar 280px · Tablet 768-1023: sidebar de 72px con iconos · Mobile <768: barra inferior de 5 pestañas + header con logo y menú (drawer a la derecha).
 - Sidebar: Nueva conversación · PRÁCTICAS (7 agentes) · MI ESPACIO (Momentos, Ritual, Evidencias, Comunidad, Estudio de creador, Perfil) · Recientes · Racha + escudos · Ajustes · Avatar · "Pasar a SOI+" si no es SOI+.
 - **Onboarding:** conversacional dentro del chat. Opcional: `/onboarding` con 8 espejos emocionales → minutos disponibles → validación, reformulación SOI, micro-acción de 24 h y rutina sugerida.
 
@@ -225,6 +226,23 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 - **Eventos** (`momentum_events`): `return`, `action_completed`, `ritual_completed`, `routine_completed`, `evidence_saved`, `reflection`, `goal_set`, `blueprint_implemented`, `blueprint_step`, `blueprint_completed`.
 - **Creator Intelligence** (`src/lib/ai/creator-method.ts`): con Blueprints activos, el método, principios y límites del creador entran al prompt como datos ("el método de X aplicado a mi vida").
 - El Muro de Evidencias muestra evolución (Momentum + cadena ideas → acciones → sistemas → evidencias), no historial.
+
+### Ciclo inspiración → reflexión → acción
+- **Video dentro de SOI** (`components/media/soi-player.tsx`): IFrame API de YouTube (`youtube-nocookie`, `rel=0`), sin salir de la app. Al terminar (`ENDED` o "Terminé") registra `video_watched` y SOI reaparece con **una** pregunta (`REFLECTION_QUESTION`).
+- La respuesta va a `/api/reflections`: Moment privado (fuente: el video) + insight en la memoria + momentum `reflection`. En el chat también se envía "Mi reflexión de «…»" y el agente la convierte en UNA Action Card de 3 minutos.
+- **Hoy** (`/hoy`, `decideToday()` en `src/lib/momentum.ts`, datos en `src/lib/today.ts`): check-in de un toque (`/api/momentum/checkin`) y una tarjeta principal. Prioridad: REGULATE > REFLECT > CLARIFY > CONTINUE/EXECUTE > INSPIRE. El check-in de hoy también guía al Director en el chat (la ansiedad que aparece en el mensaje manda).
+- Video recomendado por estado (`src/lib/social/recommend-video.ts`): solo autores del marco SOI; caché `video_cache` de 7 días; bloqueado en Free.
+
+## 🧭 Navegación: 5 pestañas
+| Pestaña | Ruta | Qué ocurre |
+|---|---|---|
+| Hoy | `/hoy` (inicio tras el login) | La IA decide qué necesitas ahora |
+| Impulso | `/impulso` | Feed híbrido: Moments, Blueprints, evidencias de la comunidad, recomendados para tu eslabón y tu siguiente Action Card. Tendencias. "Ver más", sin scroll infinito |
+| SOI | `/chat` | Conversación agéntica |
+| Mi Vida | `/mi-vida` | Grafo personal (`src/lib/life-graph.ts`): metas, riqueza, hábitos, rutinas, creencias, libros y videos, proyectos, progreso + Biblioteca |
+| Yo | `/yo` | Momentum, cadena de evolución, racha, logros (`src/lib/achievements.ts`), identidad y accesos |
+
+`PRIMARY_TABS` en `src/config/navigation.ts` (con prefijos `match`). Móvil: `BottomNav` + header con menú para lo secundario. Escritorio y tablet: las mismas 5 al inicio del sidebar. `/momentos` redirige a `/impulso` (la biblioteca va a `/mi-vida#biblioteca`).
 
 ## 🌱 SOI Moments, Evolution Feed y Creator Economy
 - **Moment** = evidencia de evolución (inspiración → insight → reflexión → acción). Privado por defecto; compartir requiere `community`. Moderado con las reglas de la comunidad.

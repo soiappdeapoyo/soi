@@ -1,5 +1,5 @@
 import { tool } from 'ai';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { searchYouTube } from '@/lib/integrations/youtube';
 import { webSearch } from '@/lib/integrations/web-search';
@@ -19,7 +19,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
   return {
     youtubeSearch: tool({
       description: 'Busca videos de YouTube en español (meditaciones guiadas, charlas de los autores de SOI).',
-      parameters: z.object({ query: z.string().min(3).max(120) }),
+      inputSchema: z.object({ query: z.string().min(3).max(120) }),
       execute: async ({ query }) => {
         if (!access.youtube) return { locked: true as const, videos: [] };
         const videos = await searchYouTube(query);
@@ -36,7 +36,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
 
     saveEvidence: tool({
       description: 'Guarda una evidencia (logro, señal, resultado) en el Muro de Evidencias del usuario.',
-      parameters: z.object({
+      inputSchema: z.object({
         title: z.string().min(3).max(120),
         content: z.string().min(3).max(2000),
         eslabon: z.enum(['pensamiento', 'emocion', 'accion', 'resultado']).default('resultado'),
@@ -55,7 +55,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
 
     updateProfile: tool({
       description: 'Actualiza el perfil psicológico del usuario cuando revele metas, bloqueos, emoción dominante o arquetipo.',
-      parameters: z.object({
+      inputSchema: z.object({
         goals: z.array(z.string().max(120)).max(10).optional(),
         blockers: z.array(z.string().max(120)).max(10).optional(),
         dominant_emotion: z.string().max(40).optional(),
@@ -75,7 +75,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
 
     scheduleReminder: tool({
       description: 'Programa un recordatorio para una micro-acción o rutina.',
-      parameters: z.object({
+      inputSchema: z.object({
         text: z.string().min(3).max(200),
         when: z.string().describe('Fecha/hora ISO 8601 en la zona del usuario'),
         routineId: z.string().optional(),
@@ -93,7 +93,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
 
     suggestPractice: tool({
       description: 'Ofrece a la persona un botón para empezar ahora una práctica de SOI (rutina guiada, ritual diario o registrar una evidencia).',
-      parameters: z.object({
+      inputSchema: z.object({
         kind: z.enum(['routine', 'ritual', 'evidence']),
         routineId: z.enum(ROUTINE_IDS).optional().describe('Obligatorio si kind = routine'),
         reason: z.string().max(140).describe('Por qué ayuda ahora, en una frase cálida'),
@@ -112,7 +112,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
 
     createActionCard: tool({
       description: 'Convierte un insight o una prioridad en una Action Card concreta que la persona puede marcar como hecha.',
-      parameters: ActionCardSchema.extend({
+      inputSchema: ActionCardSchema.extend({
         category: z.string().max(40).optional().describe('Área de vida, p. ej. "Money OS", "Salud", "Relaciones"'),
       }),
       execute: async ({ title, minutes, detail, eslabon, category }) => {
@@ -128,7 +128,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
 
     captureMoment: tool({
       description: 'Guarda un SOI Moment privado cuando la persona transforma una idea, emoción o aprendizaje en acción (inspiración → insight → reflexión → acción).',
-      parameters: z.object({
+      inputSchema: z.object({
         title: z.string().min(3).max(120),
         insight: z.string().min(3).max(1000).describe('La idea central, en palabras de la persona'),
         reflectionQuestion: z.string().max(300).optional(),
@@ -158,7 +158,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
 
     webSearch: tool({
       description: 'Busca información verificable en la web. No usar para inventar técnicas.',
-      parameters: z.object({ query: z.string().min(3).max(200) }),
+      inputSchema: z.object({ query: z.string().min(3).max(200) }),
       execute: async ({ query }) => {
         const results = await webSearch(query);
         if (results.length) {

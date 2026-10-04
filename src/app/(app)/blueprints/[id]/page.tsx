@@ -31,7 +31,7 @@ export default async function BlueprintPage({ params, searchParams }: { params: 
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-8">
-      <Link href="/momentos" className="press inline-flex items-center gap-1 text-sm text-soi-muted hover:text-soi-ink"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Momentos</Link>
+      <Link href="/impulso" className="press inline-flex items-center gap-1 text-sm text-soi-muted hover:text-soi-ink"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Impulso</Link>
       {compra === 'ok' && !purchase && (
         <p role="status" className="mt-4 rounded-[14px] bg-soi-accent-soft p-3 text-sm text-soi-accent">Estamos confirmando tu pago. Recarga en unos segundos.</p>
       )}

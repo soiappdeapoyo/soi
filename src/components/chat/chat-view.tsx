@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
-import type { Message } from 'ai';
+import { DefaultChatTransport, type UIMessage } from 'ai';
 import { ArrowUp, Lock, Square } from 'lucide-react';
 import { AGENTS, isAgentId, type AgentId } from '@/config/agents';
 import { PAYWALL_MESSAGE } from '@/config/plans';
@@ -15,7 +15,7 @@ import type { Opener } from '@/lib/opener';
 
 type Props = {
   conversationId?: string;
-  initialMessages?: Message[];
+  initialMessages?: UIMessage[];
   agent?: AgentId;
   opener?: Opener;
   paywalled: boolean;
@@ -40,15 +40,22 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
   // Auto-scroll solo si la persona ya estaba al final.
   const stickRef = useRef(true);
 
-  const seed = useMemo<Message[]>(
-    () => (initialMessages.length || !opener ? initialMessages : [{ id: OPENER_ID, role: 'assistant', content: opener.text }]),
+  const seed = useMemo<UIMessage[]>(
+    () => (initialMessages.length || !opener ? initialMessages : [{ id: OPENER_ID, role: 'assistant', parts: [{ type: 'text', text: opener.text }] }]),
     [initialMessages, opener],
   );
 
-  const { messages, input, handleInputChange, handleSubmit, status, error, stop } = useChat({
+  const [input, setInput] = useState('');
+
+  // El transporte se crea una vez. Un fetch envuelto lee los headers de SOI (conversación y agente).
+  // `conversationId` y `agent` viajan en el body de cada petición.
+  const [transport] = useState(() => new DefaultChatTransport({
     api: '/api/chat',
-    initialMessages: seed,
-    onResponse: (res) => {
+    prepareSendMessagesRequest: ({ messages: msgs, body }) => ({
+      body: { ...body, messages: msgs, conversationId: convRef.current, agent },
+    }),
+    fetch: async (url, init) => {
+      const res = await fetch(url, init);
       const id = res.headers.get('x-soi-conversation');
       if (id && !convRef.current) {
         convRef.current = id;
@@ -56,11 +63,28 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
       }
       const a = res.headers.get('x-soi-agent');
       if (isAgentId(a)) setActiveAgent(a);
+      return res;
     },
+  }));
+
+  const { messages, sendMessage, status, error, stop } = useChat({
+    messages: seed,
+    transport,
     onError: (e) => {
       if (e.message.includes(PAYWALL_MESSAGE) || e.message.includes('queries_exhausted')) setPaywalled(true);
     },
   });
+
+  /** El servidor responde JSON con `error` en fallos conocidos (503, 402): mostramos ese texto. */
+  const errorText = useMemo(() => {
+    if (!error) return null;
+    try {
+      const j = JSON.parse(error.message) as { error?: string; message?: string };
+      return j.error ?? j.message ?? null;
+    } catch {
+      return null;
+    }
+  }, [error]);
 
   // Foco directo en el campo (solo con puntero fino: en móvil no abrimos el teclado sin pedirlo).
   useEffect(() => {
@@ -97,7 +121,8 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
     if (!canSubmit) return;
     stickRef.current = true;
     track('chat_message_sent', { agent: agent ?? 'auto' });
-    handleSubmit(e, { body: { conversationId: convRef.current, agent } });
+    sendMessage({ text: input.trim() });
+    setInput('');
   }
 
   async function speakText(t: string) {
@@ -108,7 +133,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
   const a = activeAgent && activeAgent !== 'crisis' ? AGENTS[activeAgent] : null;
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-3.5rem)] max-w-2xl flex-col md:h-dvh">
+    <div className="mx-auto flex h-[calc(100dvh-7rem-env(safe-area-inset-bottom))] max-w-2xl flex-col md:h-dvh">
       {/* Quién te acompaña ahora: una línea discreta, no un bloque. */}
       <p className="nums flex h-10 shrink-0 items-center justify-center gap-1.5 text-xs text-soi-subtle" aria-live="polite">
         <span className="font-medium text-soi-muted">SOI</span>
@@ -124,6 +149,10 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
               ttsAllowed={ttsAllowed}
               onSpeak={speakText}
               practice={m.id === OPENER_ID ? opener?.practice : null}
+              onReflected={(text, video) => {
+                stickRef.current = true;
+                sendMessage({ text: `Mi reflexión de «${video.title}»: ${text}` });
+              }}
             />
           ))}
           {status === 'submitted' && (
@@ -132,7 +161,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
             </li>
           )}
         </ul>
-        {error && !paywalled && <p role="alert" className="mt-3 text-sm text-soi-danger">Algo falló. Intenta de nuevo en un momento.</p>}
+        {error && !paywalled && <p role="alert" className="mt-3 text-sm text-soi-danger">{errorText ?? 'Algo falló. Intenta de nuevo en un momento.'}</p>}
       </div>
 
       <div className="shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
@@ -153,7 +182,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
             ref={inputRef}
             id="chat-input"
             value={input}
-            onChange={handleInputChange}
+            onChange={e => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }}
             placeholder={paywalled ? 'Pasa a SOI+ para seguir conversando' : 'Escríbele a SOI…'}
             rows={1}

@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import type { Message } from 'ai';
+import type { UIMessage } from 'ai';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import { ChatView } from '@/components/chat/chat-view';
@@ -19,11 +19,10 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     getAccessMap(user.id),
   ]);
 
-  const initialMessages: Message[] = (rows ?? []).map((r) => ({
+  const initialMessages: UIMessage[] = (rows ?? []).map((r) => ({
     id: r.id as string,
     role: r.role as 'user' | 'assistant',
-    content: r.content as string,
-    createdAt: new Date(r.created_at as string),
+    parts: [{ type: 'text', text: r.content as string }],
   }));
 
   return (

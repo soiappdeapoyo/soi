@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { objectWithFallback } from '@/lib/ai/fallback';
 import { remember } from '@/lib/ai/rag';
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
   const { object } = await objectWithFallback({
     schema: ResponseSchema,
-    system: `Eres SOI. Onboarding inspirado en Brian Tracy. Español neutro, cálido, breve.
+    instructions: `Eres SOI. Onboarding inspirado en Brian Tracy. Español neutro, cálido, breve.
 Estructura: validación emocional → reformulación con el principio SOI ("${SOI_PRINCIPLE_LINE}") → micro-acción de 24h.
 Nunca prometas resultados garantizados ni des consejos médicos.`,
     prompt: `La persona eligió el espejo: "${card.title}" (${card.hint}). Eslabón probable: ${card.eslabon}.

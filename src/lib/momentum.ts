@@ -9,6 +9,7 @@ import type { Eslabon } from '@/config/agents';
 export const MOMENTUM_KINDS = [
   'return', 'action_completed', 'ritual_completed', 'routine_completed', 'evidence_saved',
   'reflection', 'goal_set', 'blueprint_implemented', 'blueprint_step', 'blueprint_completed',
+  'video_watched', 'checkin',
 ] as const;
 export type MomentumKind = (typeof MOMENTUM_KINDS)[number];
 export type MomentumEvent = { kind: MomentumKind; created_at: string };
@@ -29,8 +30,8 @@ function plural(n: number, one: string, many: string) {
 
 /**
  * Momentum Score (0–100): continuidad de transformación, no productividad.
- * Ventana de 7 días. Pesos: regreso diario 25 · acciones 20 · constancia (racha) 20 ·
- * avance de metas 15 · reflexión 10 · Blueprints 10.
+ * Ventana de 7 días. Pesos: regreso diario 25 · acciones 20 · constancia (racha) 15 ·
+ * avance de metas 15 · reflexión 10 · Blueprints 10 · inspiración (videos terminados) 5.
  * Sin castigo: lo que falta se nombra como "por retomar", nunca como fallo.
  */
 export function computeMomentum(events: MomentumEvent[], streak: number, now = new Date()): MomentumResult {
@@ -47,10 +48,11 @@ export function computeMomentum(events: MomentumEvent[], streak: number, now = n
   const score = Math.round(
     (Math.min(activeDays, 7) / 7) * 25 +
     (Math.min(actions, 7) / 7) * 20 +
-    (Math.min(Math.max(streak, 0), 21) / 21) * 20 +
+    (Math.min(Math.max(streak, 0), 21) / 21) * 15 +
     (Math.min(goals, 5) / 5) * 15 +
     (Math.min(counts.reflection, 3) / 3) * 10 +
-    (Math.min(blueprints, 5) / 5) * 10,
+    (Math.min(blueprints, 5) / 5) * 10 +
+    (Math.min(counts.video_watched, 2) / 2) * 5,
   );
 
   const signals: MomentumSignal[] = [];
@@ -59,6 +61,7 @@ export function computeMomentum(events: MomentumEvent[], streak: number, now = n
   if (counts.goal_set) signals.push({ positive: true, label: `Definiste ${plural(counts.goal_set, 'meta', 'metas')}` });
   if (counts.evidence_saved) signals.push({ positive: true, label: `Registraste ${plural(counts.evidence_saved, 'evidencia', 'evidencias')}` });
   if (counts.reflection) signals.push({ positive: true, label: `Reflexionaste sobre ${plural(counts.reflection, 'aprendizaje', 'aprendizajes')}` });
+  if (counts.video_watched) signals.push({ positive: true, label: `Viste ${plural(counts.video_watched, 'video recomendado', 'videos recomendados')}` });
   if (counts.blueprint_step) signals.push({ positive: true, label: `Avanzaste ${plural(counts.blueprint_step, 'paso', 'pasos')} de tus Blueprints` });
   if (streak >= 7) signals.push({ positive: true, label: `Racha de ${streak} días` });
 
@@ -105,7 +108,7 @@ export function detectMomentumState(i: StateInput): MomentumState {
 
 const GUIDANCE: Record<Intervention, string> = {
   EXECUTE: `EXECUTE — su energía está alta. Aprovecha el momento: propone un avance concreto de su meta y conviértelo en una Action Card (createActionCard). Sin teoría extra.`,
-  INSPIRE: `INSPIRE — su energía está baja. Hoy no necesita más teoría ni exigencia. Ofrece inspiración breve dentro de SOI (si está disponible, un video con youtubeSearch) y una sola acción mínima de 2 minutos.`,
+  INSPIRE: `INSPIRE — su energía está baja. Hoy no necesita más teoría ni exigencia. Ofrece inspiración breve dentro de SOI: busca con youtubeSearch un video corto de Brian Tracy, Hal Elrod, Robin Sharma, Joe Dispenza, Neville Goddard o Napoleon Hill (se reproduce dentro de SOI, sin salir de la app). Al terminar el video SOI le hará una sola pregunta de reflexión.`,
   REGULATE: `REGULATE — hay estrés o bloqueo. Secuencia: respiración guiada breve → si quiere, meditación → una línea de diario → recién después, aclarar el siguiente paso. No propongas metas nuevas.`,
   CLARIFY: `CLARIFY — hay demasiados objetivos o falta dirección. Conversa para extraer UNA prioridad, confírmala con la persona y conviértela en un plan de un solo paso (createActionCard).`,
 };
@@ -119,6 +122,74 @@ Tu responsabilidad es aumentar la probabilidad de que esta persona siga avanzand
 - Estado detectado: ${state}. Intervención: ${GUIDANCE[STATE_INTERVENTION[state]]}
 - Ciclo: inspiración → reflexión → insight → acción → evidencia. Después de inspirar o enseñar, haz UNA sola pregunta poderosa ("¿Qué idea quieres convertir en parte de tu vida?").
 - Cuando la persona responda con un insight valioso, guárdalo como Moment con captureMoment (privado; ella decide si lo comparte).
+- Si el mensaje empieza con "Mi reflexión de «…»", ya quedó guardada como conocimiento: responde en una frase ("Esa idea quedó guardada.") y conviértela en UNA Action Card de 3 minutos con createActionCard. No vuelvas a guardarla con captureMoment.
 - No menciones el score ni el estado salvo que la persona pregunte.
 - Pregunta guía: ¿esto aumenta la probabilidad de que se convierta en quien quiere ser?`;
 }
+
+// ---------------------------------------------------------------------------
+// Hoy: la IA decide qué necesitas ahora (ejecutar, inspirarte, reflexionar o continuar).
+// ---------------------------------------------------------------------------
+
+/** Reflection Engine: después de inspirar, una sola pregunta poderosa. */
+export const REFLECTION_QUESTION = '¿Qué idea quieres convertir en parte de tu vida?';
+
+export type TodayMode = 'REGULATE' | 'REFLECT' | 'CLARIFY' | 'CONTINUE' | 'EXECUTE' | 'INSPIRE';
+
+export type TodayInput = {
+  /** Check-in de hoy, si la persona lo hizo. Tiene prioridad sobre lo inferido. */
+  checkin: MomentumState | null;
+  score: number;
+  weakestLink: Eslabon | null;
+  goalsCount: number;
+  pendingActions: number;
+  activeImplementation: boolean;
+  /** Un video terminado hoy sin reflexión registrada después. */
+  unreflectedVideo: boolean;
+  ritualDoneToday: boolean;
+  ritualAvailable: boolean;
+};
+
+export type TodayDecision = { mode: TodayMode; state: MomentumState; headline: string; detail: string };
+
+/** Estado sin mensaje: check-in del día; si no hay, se infiere del score y del eslabón débil. */
+export function inferState(i: Pick<TodayInput, 'checkin' | 'score' | 'goalsCount' | 'weakestLink'>): MomentumState {
+  if (i.checkin) return i.checkin;
+  if (i.goalsCount > 5) return 'confusion';
+  if (i.score >= 60) return 'high_energy';
+  return 'low_energy';
+}
+
+/**
+ * Prioridad: regular > reflexionar lo que acaba de ver > aclarar > continuar/ejecutar > inspirar.
+ * Nunca exige: con energía baja, inspira primero; con ansiedad, regula antes de cualquier tarea.
+ */
+export function decideToday(i: TodayInput): TodayDecision {
+  const state = inferState(i);
+  if (state === 'anxiety') {
+    return { mode: 'REGULATE', state, headline: 'Primero, respira.', detail: 'Un minuto para bajar el ritmo. Después vemos el siguiente paso, sin prisa.' };
+  }
+  if (i.unreflectedVideo) {
+    return { mode: 'REFLECT', state, headline: '¿Qué idea quieres convertir en parte de tu vida?', detail: 'Terminaste un video. Una sola respuesta y SOI la convierte en acción.' };
+  }
+  if (state === 'confusion') {
+    return { mode: 'CLARIFY', state, headline: 'Elijamos una sola prioridad.', detail: 'Cuando todo parece importante, nada avanza. Hablemos dos minutos y la encontramos.' };
+  }
+  if (state === 'high_energy') {
+    if (i.pendingActions > 0) return { mode: 'EXECUTE', state, headline: 'Aprovechemos este momento.', detail: 'Tu energía está alta. Termina una acción pendiente ahora.' };
+    if (i.activeImplementation) return { mode: 'CONTINUE', state, headline: 'Sigue construyendo tu sistema.', detail: 'Tienes un Blueprint en práctica. Un paso más hoy.' };
+    return { mode: 'EXECUTE', state, headline: 'Aprovechemos este momento.', detail: 'Convirtamos tu energía en un plan concreto con SOI.' };
+  }
+  // Energía baja: continuar si hay algo pequeño en marcha; si no, inspirar sin exigir.
+  if (i.ritualAvailable && !i.ritualDoneToday) {
+    return { mode: 'CONTINUE', state, headline: 'Tu ritual de hoy está listo.', detail: 'Cuatro pasos cortos para empezar con intención.' };
+  }
+  return { mode: 'INSPIRE', state, headline: 'Hoy no necesitas más teoría.', detail: 'Pero unos minutos con alguien que te inspira pueden devolverte el enfoque.' };
+}
+
+export const CHECKIN_OPTIONS: { state: MomentumState; label: string }[] = [
+  { state: 'high_energy', label: 'Con energía' },
+  { state: 'low_energy', label: 'Con poca energía' },
+  { state: 'anxiety', label: 'Con ansiedad' },
+  { state: 'confusion', label: 'Sin claridad' },
+];

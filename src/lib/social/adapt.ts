@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { objectWithFallback } from '@/lib/ai/fallback';
 import { ActionCardSchema } from '@/lib/action-card';
 import type { ActionCard, SoiBlueprint, UserProfile } from '@/types/database';
@@ -34,7 +34,7 @@ export async function adaptBlueprint(
     const { object } = await objectWithFallback({
       schema: AdaptSchema,
       timeoutMs: 15_000,
-      system: `Adaptas Blueprints de SOI (sistemas de transformación personal) a la realidad de una persona.
+      instructions: `Adaptas Blueprints de SOI (sistemas de transformación personal) a la realidad de una persona.
 - Conserva la esencia y la fuente (${clean(bp.source, 120)}); no inventes técnicas nuevas.
 - Ajusta los pasos para que el total no supere ${minutes} minutos al día.
 - Español neutro, pasos concretos y amables. Sin consejos médicos.

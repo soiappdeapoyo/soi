@@ -26,7 +26,7 @@ export function MomentOwnerControls({ id, visibility, canShare, isCreator, bluep
     if (!window.confirm('¿Eliminar este momento? No se puede deshacer.')) return;
     setBusy(true);
     await fetch(`/api/moments/${id}`, { method: 'DELETE' });
-    router.push('/momentos?tab=biblioteca');
+    router.push('/mi-vida#biblioteca');
   }
 
   return (

@@ -45,7 +45,7 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
     q,
     supabase.from('agent_knowledge').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('category', 'evidencia'),
     loadMomentum(supabase, user.id, profile?.streak_current ?? 0),
-    loadEvolution(supabase, user.id),
+    loadEvolution(supabase, user.id, profile?.goals?.length ?? 0),
   ]);
 
   const total = count ?? 0;

@@ -43,14 +43,18 @@ export function MomentumCard({ m }: { m: MomentumResult }) {
   );
 }
 
-/** Evidence of Transformation: no historial, evolución. Ideas → acciones → hábitos → resultados. */
+/**
+ * Evidence of Transformation: no historial, evolución. Se lee como una cadena:
+ * videos vistos → ideas guardadas → ejercicios → hábitos → metas.
+ */
 export function EvolutionChain({ steps }: { steps: { label: string; value: number }[] }) {
   return (
-    <ol className="nums grid grid-cols-2 gap-1.5 rounded-[14px] bg-soi-sidebar p-1.5 sm:grid-cols-4" aria-label="Tu evolución">
-      {steps.map((s) => (
-        <li key={s.label} className="rounded-lg bg-white px-3 py-2.5 shadow-ring">
-          <span className="block text-xl font-medium text-soi-ink">{s.value}</span>
-          <span className="block text-xs text-soi-muted">{s.label}</span>
+    <ol className="nums flex flex-col gap-1.5 rounded-[14px] bg-soi-sidebar p-1.5" aria-label="Tu evolución">
+      {steps.map((s, i) => (
+        <li key={s.label} className="flex items-center gap-3 rounded-lg bg-white px-3 py-2.5 shadow-ring">
+          <span className="w-10 text-right text-xl font-medium text-soi-ink">{s.value}</span>
+          <span className="flex-1 text-sm text-soi-muted">{s.label}</span>
+          {i < steps.length - 1 && <span aria-hidden="true" className="text-soi-subtle">↓</span>}
         </li>
       ))}
     </ol>

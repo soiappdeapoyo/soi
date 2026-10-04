@@ -1,15 +1,15 @@
 import {
   Sparkles, Heart, Brain, Moon, TrendingUp, Clock, Target, Star, Compass, LifeBuoy,
-  Users, User, Sunrise, Settings, Flame, MessageCircle, Lock, Layers, PenLine, type LucideIcon,
+  Users, User, Sunrise, Settings, Flame, MessageCircle, Lock, Layers, PenLine, Sun, Zap, Orbit, type LucideIcon,
 } from 'lucide-react';
 
 const MAP: Record<string, LucideIcon> = {
   Sparkles, Heart, Brain, Moon, TrendingUp, Clock, Target, Star, Compass, LifeBuoy,
-  Users, User, Sunrise, Settings, Flame, MessageCircle, Lock, Layers, PenLine,
+  Users, User, Sunrise, Settings, Flame, MessageCircle, Lock, Layers, PenLine, Sun, Zap, Orbit,
 };
 
 /** Íconos lucide a 1.5 de trazo, tamaños coherentes 16/20/24 (por defecto 20). */
-export function Icon({ name, className }: { name: string; className?: string }) {
+export function Icon({ name, className, strokeWidth = 1.5 }: { name: string; className?: string; strokeWidth?: number }) {
   const C = MAP[name] ?? Sparkles;
-  return <C aria-hidden="true" strokeWidth={1.5} className={className ?? 'h-5 w-5'} />;
+  return <C aria-hidden="true" strokeWidth={strokeWidth} style={{ strokeWidth }} className={className ?? 'h-5 w-5'} />;
 }

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { rpcError } from '@/lib/social/guard';
 import { recordMomentum } from '@/lib/momentum-server';

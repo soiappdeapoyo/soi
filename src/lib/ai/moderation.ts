@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { objectWithFallback } from './fallback';
 import { detectCrisis } from './crisis';
 
@@ -20,7 +20,7 @@ export async function moderatePost(content: string): Promise<ModerationResult> {
   try {
     const { object } = await objectWithFallback({
       schema: ModerationSchema,
-      system: `Moderas una comunidad de bienestar en español. Rechaza: ventas o autopromoción, links, consejos médicos
+      instructions: `Moderas una comunidad de bienestar en español. Rechaza: ventas o autopromoción, links, consejos médicos
 (dosis, medicamentos, diagnósticos, dejar tratamientos), odio, acoso, contenido sexual, spam. Permite testimonios, peticiones de apoyo y preguntas sobre prácticas.`,
       prompt: content.slice(0, 2000),
     });

@@ -1,8 +1,10 @@
 import { SidebarContent, type SidebarData } from './sidebar-content';
 import { MobileNav } from './mobile-nav';
+import { BottomNav } from './bottom-nav';
 
 /**
- * Desktop ≥1024: sidebar 280px · Tablet 768-1023: sidebar colapsado (72px, solo iconos) · Mobile <768: drawer (Vaul).
+ * Desktop ≥1024: sidebar 280px · Tablet 768-1023: sidebar colapsado (72px, solo iconos) ·
+ * Mobile <768: header con logo + barra inferior de 5 pestañas; lo secundario vive en el menú (Vaul).
  */
 export function AppShell({ data, children }: { data: SidebarData; children: React.ReactNode }) {
   return (
@@ -15,7 +17,8 @@ export function AppShell({ data, children }: { data: SidebarData; children: Reac
         <div className="h-full lg:hidden"><SidebarContent data={data} compact /></div>
         <div className="hidden h-full lg:block"><SidebarContent data={data} /></div>
       </aside>
-      <main id="main" className="min-w-0 flex-1">{children}</main>
+      <main id="main" className="min-w-0 flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
+      <BottomNav avatarUrl={data.avatarUrl} name={data.name} />
     </div>
   );
 }

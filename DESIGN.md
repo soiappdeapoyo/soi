@@ -24,6 +24,8 @@ Esta guía no reemplaza el "Principio SOI" ni las reglas de `CLAUDE.md`. Solo go
 | Sidebar | Ítems de 14 px con íconos de 16 px y trazo 1.5; el activo es blanco con anillo de 1 px; secciones en 11 px atenuado | `components/layout/sidebar-content.tsx` |
 | Chat | Sin bloques al inicio: saludo de SOI + compositor tipo tarjeta (radio 20 = botón 8 + p-2), acción de un toque (`PracticeCard`, radio 14) | `components/chat/*` |
 | Radios | control 8 · bandeja de segmentos 14 · tarjeta 20 · bandeja 28 | tokens `--radius-*` |
+| Barra inferior | 5 pestañas (Hoy · Impulso · SOI · Mi Vida · Yo), h-14 + área segura, velo `bg-white/90` + blur, línea superior de 1 px. Activo: tinta + trazo 2 + `aria-current`; inactivo: `soi-subtle`. **Cambiar de pestaña no anima** (alta frecuencia); solo press 0.97. SOI es una pastilla con la marca. Se oculta en el temporizador de rutina | `components/layout/bottom-nav.tsx` |
+| Video en SOI | Facade → reproductor sin sugeridos; al terminar, la tarjeta de reflexión entra con `animate-enter` (evento raro, una vez) | `components/media/soi-player.tsx` |
 | Principio SOI | Encabezado discreto + menú `⋯`; control segmentado Pensamientos/Emociones/Acciones/Resultados; chips con los agentes del eslabón | `layout/page-header.tsx` · `principio/principio-nav.tsx` |
 | Tarjeta del ritual | Bandeja gris (p-2, 32 px) → tarjeta blanca (p-4, 24 px) → botones (8 px) | `rituals/ritual-timer.tsx` |
 | Círculo | Relleno azul claro, anillo azul de 2.5 px, número grande tabular | idem |

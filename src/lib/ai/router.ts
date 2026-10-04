@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { detectCrisis } from './crisis';
 import { objectWithFallback } from './fallback';
 
@@ -28,7 +28,7 @@ export async function classifyIntent(message: string, history: string[] = []): P
   try {
     const { object } = await objectWithFallback({
       schema: RouterSchema,
-      system: `Clasificas mensajes en SOI, una app de manifestación y rutinas.
+      instructions: `Clasificas mensajes en SOI, una app de manifestación y rutinas.
 Aplicas el principio: pensamientos → emociones → acciones → resultados.
 Detecta el eslabón más débil y elige el agente adecuado:
 pensamiento→afirmacion/manifestacion, emocion→meditacion/suenos, accion→rutinas/brian_tracy/riqueza, resultado→evidencias.
