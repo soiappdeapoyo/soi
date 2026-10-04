@@ -6,6 +6,7 @@ export type UserProfile = {
   user_id: string;
   display_name: string | null;
   avatar_url: string | null;
+  bio?: string | null;
   archetype: string | null;
   dominant_emotion: string | null;
   recurring_themes: string[];

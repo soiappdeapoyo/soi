@@ -144,7 +144,7 @@ export function Conversation({ threadId, meId, other, initial, hasMore: initialM
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-7rem-env(safe-area-inset-bottom))] max-w-2xl flex-col md:h-dvh">
+    <div className="mx-auto flex h-[calc(100dvh-9rem-env(safe-area-inset-bottom))] max-w-2xl flex-col md:h-dvh">
       <header className="flex items-center gap-2 border-b border-black/[0.06] px-2 py-2">
         <Link href="/mensajes" aria-label="Volver a mensajes" className="press flex h-10 w-10 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04]"><ArrowLeft className="h-5 w-5" aria-hidden="true" /></Link>
         <Link href={`/u/${other.user_id}`} className="press flex min-w-0 flex-1 items-center gap-2">

@@ -17,7 +17,7 @@ export function AppShell({ data, children }: { data: SidebarData; children: Reac
         <div className="h-full lg:hidden"><SidebarContent data={data} compact /></div>
         <div className="hidden h-full lg:block"><SidebarContent data={data} /></div>
       </aside>
-      <main id="main" className="min-w-0 flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
+      <main id="main" className="min-w-0 flex-1 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
       <BottomNav avatarUrl={data.avatarUrl} name={data.name} />
     </div>
   );

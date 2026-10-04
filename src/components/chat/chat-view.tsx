@@ -133,7 +133,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
   const a = activeAgent && activeAgent !== 'crisis' ? AGENTS[activeAgent] : null;
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-7rem-env(safe-area-inset-bottom))] max-w-2xl flex-col md:h-dvh">
+    <div className="mx-auto flex h-[calc(100dvh-9rem-env(safe-area-inset-bottom))] max-w-2xl flex-col md:h-dvh">
       {/* Quién te acompaña ahora: una línea discreta, no un bloque. */}
       <p className="nums flex h-10 shrink-0 items-center justify-center gap-1.5 text-xs text-soi-subtle" aria-live="polite">
         <span className="font-medium text-soi-muted">SOI</span>

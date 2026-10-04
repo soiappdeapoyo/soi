@@ -7,13 +7,14 @@ import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
 
 /**
- * Barra de navegación inferior (móvil < 768 px), estilo Instagram / Substack.
+ * Barra de navegación inferior (móvil < 768 px), estilo Instagram / Substack: un rectángulo flotante con esquinas
+ * redondeadas, separado de los bordes, translúcido y solo con íconos (la etiqueta queda para lectores de pantalla).
  *
  * Decisiones de movimiento (DESIGN.md + Emil Kowalski):
  * - Se toca decenas de veces al día → cambiar de pestaña es INSTANTÁNEO: sin transición de color ni indicador animado.
  * - Única respuesta física: el ítem se hunde al presionar (scale 0.97, 120 ms, ease-out fuerte).
- * - El estado activo se comunica con color + trazo más grueso + etiqueta, nunca solo con color.
- * - Respeta el área segura del iPhone y queda fija sobre el contenido con un velo translúcido.
+ * - Activo = ícono en tinta con trazo más grueso + cápsula de fondo (no solo color).
+ * - Respeta el área segura del iPhone.
  */
 export function BottomNav({ avatarUrl, name }: { avatarUrl: string | null; name: string }) {
   const pathname = usePathname();
@@ -22,22 +23,23 @@ export function BottomNav({ avatarUrl, name }: { avatarUrl: string | null; name:
   return (
     <nav
       aria-label="Navegación principal"
-      className="fixed inset-x-0 bottom-0 z-30 bg-white/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_0_rgb(11_11_11/0.06)] backdrop-blur-md md:hidden"
+      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 mx-auto max-w-md rounded-[22px] bg-white/85 shadow-[0_0_0_1px_rgb(11_11_11/0.06),0_8px_24px_rgb(11_11_11/0.12)] backdrop-blur-xl backdrop-saturate-150 md:hidden"
     >
-      <ul className="mx-auto grid h-14 max-w-md grid-cols-5">
+      <ul className="grid h-14 grid-cols-5 px-1.5">
         {PRIMARY_TABS.map((tab) => {
           const active = isTabActive(pathname, tab);
           return (
-            <li key={tab.id} className="flex">
+            <li key={tab.id} className="flex items-center justify-center">
               <Link
                 href={tab.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex flex-1 select-none flex-col items-center justify-center gap-0.5 [-webkit-tap-highlight-color:transparent] [touch-action:manipulation]',
+                  'flex h-11 w-full max-w-16 select-none items-center justify-center rounded-2xl [-webkit-tap-highlight-color:transparent] [touch-action:manipulation]',
                   'transition-transform duration-(--dur-press) ease-out-strong active:scale-[0.97]',
-                  active ? 'text-soi-ink' : 'text-soi-subtle',
+                  active ? 'bg-black/[0.05] text-soi-ink' : 'text-soi-muted',
                 )}
               >
+                <span className="sr-only">{tab.label}</span>
                 {tab.id === 'soi' ? (
                   <span
                     aria-hidden="true"
@@ -54,20 +56,19 @@ export function BottomNav({ avatarUrl, name }: { avatarUrl: string | null; name:
                     src={avatarUrl}
                     alt=""
                     data-bare
-                    className={cn('h-6 w-6 rounded-full object-cover', active ? 'shadow-[0_0_0_1.5px_var(--color-soi-ink)]' : 'opacity-80')}
+                    className={cn('h-7 w-7 rounded-full object-cover', active ? 'shadow-[0_0_0_2px_white,0_0_0_3.5px_var(--color-soi-ink)]' : 'opacity-90')}
                   />
                 ) : tab.id === 'yo' ? (
                   <span
                     aria-hidden="true"
-                    className={cn('flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-medium',
+                    className={cn('flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium',
                       active ? 'bg-soi-ink text-white' : 'bg-soi-tray text-soi-muted')}
                   >
                     {name.charAt(0).toUpperCase()}
                   </span>
                 ) : (
-                  <Icon name={tab.icon} className="h-6 w-6" strokeWidth={active ? 2 : 1.5} />
+                  <Icon name={tab.icon} className="h-[26px] w-[26px]" strokeWidth={active ? 2.25 : 1.75} />
                 )}
-                <span className={cn('text-[10px] leading-none', active && 'font-medium')}>{tab.label}</span>
               </Link>
             </li>
           );

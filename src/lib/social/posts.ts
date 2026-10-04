@@ -27,7 +27,9 @@ export type PostView = PostRow & {
 
 export const POST_FIELDS = 'id, author_id, body, images, moment_id, moment_slug, quote_of, restack_of, parent_id, root_id, like_count, reply_count, restack_count, created_at, edited_at';
 
+/** Rutas que empiezan con "/" son archivos de la app (fotos demo en /public/demo); el resto, Storage. */
 export function publicImageUrl(path: string) {
+  if (path.startsWith('/')) return path;
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${path}`;
 }
 

@@ -28,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Sonner: apilado con escala progresiva, entrada desde el borde, salida por swipe. */}
         <Toaster
           position="bottom-center"
+          mobileOffset={{ bottom: 'calc(5.25rem + env(safe-area-inset-bottom))' }}
           duration={3500}
           toastOptions={{ className: 'rounded-xl! shadow-raised! border-0! font-sans! text-soi-ink!' }}
         />

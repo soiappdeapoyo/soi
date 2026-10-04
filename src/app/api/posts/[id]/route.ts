@@ -42,7 +42,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { error } = await admin.from('soi_posts').update({ body: text, images, edited_at: editedAt }).eq('id', id).eq('author_id', user.id);
   if (error) return Response.json({ ok: false, message: 'No se pudo guardar.' }, { status: 500 });
   const removed = (post.images as string[]).filter((i) => !images.includes(i));
-  if (removed.length) await admin.storage.from('post-media').remove(removed);
+  const stored = removed.filter((i) => !i.startsWith('/'));
+  if (stored.length) await admin.storage.from('post-media').remove(stored);
   return Response.json({ ok: true, body: text, images, edited_at: editedAt });
 }
 
@@ -54,6 +55,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const { data: post } = await supabase.from('soi_posts').select('images').eq('id', id).eq('author_id', user.id).maybeSingle();
   if (!post) return Response.json({ ok: false, message: 'No encontrado.' }, { status: 404 });
   const { error } = await supabase.from('soi_posts').delete().eq('id', id).eq('author_id', user.id);
-  if (!error && (post.images as string[]).length) await createAdminClient().storage.from('post-media').remove(post.images as string[]);
+  const stored = (post.images as string[]).filter((i) => !i.startsWith('/'));
+  if (!error && stored.length) await createAdminClient().storage.from('post-media').remove(stored);
   return Response.json({ ok: !error });
 }
