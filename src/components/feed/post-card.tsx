@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { useDismiss } from '@/hooks/use-dismiss';
+import { ImageViewer } from '@/components/media/image-viewer';
 import { Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ShareToDm } from './share-to-dm';
@@ -186,7 +187,7 @@ export function PostCard({ post, clamp = true, onQuote, onDeleted, variant = 'fe
 
           {post.moment && variant !== 'reply' && (
             <div className="mt-3">
-              <MomentFlowCard m={post.moment} />
+              <MomentFlowCard m={post.moment} variant="feature" />
             </div>
           )}
 
@@ -242,14 +243,20 @@ export function PostCard({ post, clamp = true, onQuote, onDeleted, variant = 'fe
 /** 1 imagen: completa · 2: dos columnas · 3–4: cuadrícula. Bordes concéntricos con la tarjeta. */
 export function ImageGrid({ urls }: { urls: string[] }) {
   const n = urls.length;
+  const [open, setOpen] = useState<number | null>(null);
+  const close = useCallback(() => setOpen(null), []);
   return (
-    <div className={cn('mt-3 grid gap-1 overflow-hidden rounded-[14px]', n === 1 ? 'grid-cols-1' : 'grid-cols-2')}>
-      {urls.map((u, i) => (
-        <a key={u} href={u} target="_blank" rel="noreferrer" className={cn('block bg-soi-tray', n === 3 && i === 0 && 'row-span-2')}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={u} alt="" loading="lazy" className={cn('h-full w-full object-cover', n === 1 ? 'max-h-[28rem]' : 'aspect-square')} />
-        </a>
-      ))}
-    </div>
+    <>
+      <div className={cn('mt-3 grid gap-1 overflow-hidden rounded-[14px]', n === 1 ? 'grid-cols-1' : 'grid-cols-2')}>
+        {urls.map((u, i) => (
+          <button key={u} type="button" onClick={(e) => { e.stopPropagation(); setOpen(i); }} aria-label={n > 1 ? `Ver foto ${i + 1} de ${n}` : 'Ver foto'}
+            className={cn('block bg-soi-tray', n === 3 && i === 0 && 'row-span-2')}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={u} alt="" loading="lazy" className={cn('h-full w-full object-cover', n === 1 ? 'max-h-[28rem]' : 'aspect-square')} />
+          </button>
+        ))}
+      </div>
+      <ImageViewer urls={urls} index={open} onClose={close} />
+    </>
   );
 }

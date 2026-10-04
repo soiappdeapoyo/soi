@@ -126,7 +126,7 @@ describe('streamWithFallback', () => {
             : [
               { type: 'text-start', id: 't' }, { type: 'text-delta', id: 't', delta: 'listo' }, { type: 'text-end', id: 't' },
               { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage },
-            ],
+            ] as never[],
         }),
       }),
     });

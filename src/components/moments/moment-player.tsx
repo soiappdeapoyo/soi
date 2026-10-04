@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { blockSpeech } from '@/lib/moments/speech';
 import { toast } from 'sonner';
 import { Check, Flame, Pause, Play, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
 import { Button, buttonClass } from '@/components/ui/button';
@@ -68,11 +69,11 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   const shownBlock = blocks[shown]!;
   const total = blockSeconds(block);
 
-  const say = useCallback(async (text: string) => {
+  const say = useCallback(async (text: string, slow = false) => {
     if (!voiceOn || !ttsAllowed) return;
     try {
       const { speak } = await import('@/lib/voice/tts');
-      await speak(text, { voice: voice ?? undefined });
+      await speak(text, { voice: voice ?? undefined, rate: slow ? 0.88 : 1, pauseMs: slow ? 700 : 0 });
     } catch { /* TTS opcional */ }
   }, [voiceOn, ttsAllowed, voice]);
 
@@ -115,10 +116,20 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     return () => clearTimeout(t);
   }, [index, shown]);
 
+  // La voz lee el bloque completo: título e instrucciones (las meditaciones guiadas, enteras y pausadas).
   useEffect(() => {
-    if (phase === 'run') void say(block.title);
+    if (phase !== 'run') return;
+    const { text, slow } = blockSpeech(block);
+    void say(text, slow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, phase]);
+
+  // Silenciar corta la lectura en curso; al salir del reproductor, también.
+  useEffect(() => {
+    if (voiceOn) return;
+    void import('@/lib/voice/tts').then(({ stopSpeaking }) => stopSpeaking());
+  }, [voiceOn]);
+  useEffect(() => () => { void import('@/lib/voice/tts').then(({ stopSpeaking }) => stopSpeaking()); }, []);
 
   async function start() {
     if (locked) { setSheet(true); return; }

@@ -25,7 +25,7 @@ export default async function NuevoMomentPage({ searchParams }: { searchParams: 
   if (editar) {
     const m = await getMoment(supabase, editar);
     if (!m || m.creator_id !== user.id) redirect('/m/nuevo');
-    initial = { id: m.id, title: m.title, objective: m.objective, kind: m.kind, source: m.source, blocks: (await fullBlocks(supabase, m)) ?? m.blocks, durationDays: m.duration_days };
+    initial = { id: m.id, title: m.title, objective: m.objective, kind: m.kind, source: m.source, blocks: (await fullBlocks(supabase, m)) ?? m.blocks, durationDays: m.duration_days, cover: m.cover };
   } else if (idea) {
     const { data } = await supabase.from('soi_moments').select('title, insight, actions, source_reference, category').eq('id', idea).eq('creator_id', user.id).maybeSingle();
     const i = data as Pick<SoiMoment, 'title' | 'insight' | 'actions' | 'source_reference'> | null;
@@ -45,9 +45,7 @@ export default async function NuevoMomentPage({ searchParams }: { searchParams: 
   ];
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-6 md:py-8">
-      <h1 className="text-3xl font-semibold tracking-tight">{initial?.id ? 'Editar Moment' : 'Crear Moment'}</h1>
-      <p className="mb-5 text-soi-muted">Combina acciones en una experiencia con intención: inicio, final y un cambio concreto.</p>
+    <div className="mx-auto max-w-2xl px-5 pb-6 md:pb-8">
       <MomentBuilder initial={initial} nestable={nestable} isCreator={Boolean(creator)}
         creatorName={(creator?.display_name as string | undefined) ?? profile?.display_name ?? 'ti'} />
     </div>

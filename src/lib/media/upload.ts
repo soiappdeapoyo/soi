@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client';
 
-export type Bucket = 'post-media' | 'moment-assets' | 'run-media';
+export type Bucket = 'post-media' | 'moment-assets' | 'run-media' | 'library';
 
 const MAX_IMAGE_SIDE = 1600;
 
@@ -24,7 +24,7 @@ export async function compressImage(file: Blob, maxSide = MAX_IMAGE_SIDE, qualit
 }
 
 function extFor(type: string) {
-  return ({ 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png', 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav' } as Record<string, string>)[type] ?? 'bin';
+  return ({ 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png', 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'application/pdf': 'pdf' } as Record<string, string>)[type] ?? 'bin';
 }
 
 /** Sube a <bucket>/<user_id>/<carpeta>/<uuid>.<ext>. Las políticas de Storage solo permiten la carpeta propia. */
@@ -36,7 +36,7 @@ export async function uploadMedia(bucket: Bucket, blob: Blob, folder = ''): Prom
   const path = [user.id, folder, `${crypto.randomUUID()}.${extFor(type)}`].filter(Boolean).join('/');
   const { error } = await supabase.storage.from(bucket).upload(path, blob, { contentType: type, upsert: false });
   if (error) throw new Error(error.message.includes('mime') ? 'Ese tipo de archivo no está permitido.' : error.message.includes('size') ? 'El archivo es demasiado grande.' : 'No se pudo subir el archivo.');
-  const publicUrl = bucket === 'run-media' ? null : supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+  const publicUrl = bucket === 'run-media' || bucket === 'library' ? null : supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
   return { path, publicUrl };
 }
 

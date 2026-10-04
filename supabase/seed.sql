@@ -220,3 +220,8 @@ INSERT INTO public.soi_posts (id, author_id, body, images, moment_slug, like_cou
    'La R de S.A.V.E.R.S. es mi favorita. 10 páginas con el café, junto a la ventana, antes de que la casa despierte.',
    '{/demo/posts/lectura-ventana.webp}', 'miracle_morning', 19, TRUE, NOW() - INTERVAL '1 day 8 hours')
 ON CONFLICT (id) DO UPDATE SET images = EXCLUDED.images;
+
+-- (covers_v1) portadas de los Moments demo
+UPDATE public.soi_blueprints SET cover_path = '/demo/moments/recuperar-momentum.webp' WHERE id = 'b1000000-0000-4000-8000-000000000001';
+UPDATE public.soi_blueprints SET cover_path = '/demo/moments/morning-success.webp' WHERE id = 'b1000000-0000-4000-8000-000000000002';
+UPDATE public.soi_blueprints SET cover_path = '/demo/moments/revision-financiera.webp' WHERE id = 'b1000000-0000-4000-8000-000000000003';

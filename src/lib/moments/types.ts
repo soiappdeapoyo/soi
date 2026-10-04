@@ -33,6 +33,8 @@ export type MomentFlow = {
   completions_count: number;
   is_demo: boolean;
   created_at: string;
+  /** URL lista para <img> (app o Storage), o null. */
+  cover: string | null;
 };
 
 export type MomentRun = {
@@ -50,7 +52,19 @@ export type MomentRun = {
 };
 
 export const MOMENT_FIELDS =
-  'id, creator_id, title, objective, required_minutes, duration_days, difficulty, eslabon, target_states, steps, source, tier, price_cents, currency, status, implementations_count, completions_count, steps_completed_count, is_demo, created_at, kind, blocks, parent_id, parent_slug, version, executions_count, forks_count';
+  'id, creator_id, title, objective, required_minutes, duration_days, difficulty, eslabon, target_states, steps, source, tier, price_cents, currency, status, implementations_count, completions_count, steps_completed_count, is_demo, created_at, kind, blocks, parent_id, parent_slug, version, executions_count, forks_count, cover_path';
+
+/** cover_path → URL: "/…" es un archivo de la app; lo demás vive en el bucket público moment-assets. */
+export function coverUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith('/')) return path;
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/moment-assets/${path}`;
+}
+
+/** Portada de un Moment oficial (public/moments/<slug con guiones>.webp). */
+export function officialCover(slug: string) {
+  return `/moments/${slug.replace(/_/g, '-')}.webp`;
+}
 
 /** Fila de soi_blueprints → MomentFlow. */
 export function toMomentFlow(row: Record<string, unknown>): MomentFlow {
@@ -81,5 +95,6 @@ export function toMomentFlow(row: Record<string, unknown>): MomentFlow {
     completions_count: (row.completions_count as number) ?? 0,
     is_demo: Boolean(row.is_demo),
     created_at: row.created_at as string,
+    cover: coverUrl(row.cover_path as string | null),
   };
 }

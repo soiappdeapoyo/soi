@@ -44,25 +44,58 @@ function pickVoice(all: SpeechSynthesisVoice[], id: string) {
   );
 }
 
-export async function speak(text: string, opts?: { voice?: string; rate?: number }) {
+/** Divide en frases de ≤ 220 caracteres: Chrome corta las locuciones largas (~15 s) y así se puede pausar entre frases. */
+export function splitForSpeech(text: string, max = 220): string[] {
+  const clean = text.replace(/[*_#>`\[\]()]/g, '').replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  const sentences = clean.match(/[^.!?…]+[.!?…]*["»”]?\s*/g) ?? [clean];
+  const out: string[] = [];
+  for (const raw of sentences) {
+    const sentence = raw.trim();
+    if (!sentence) continue;
+    if (sentence.length <= max) { out.push(sentence); continue; }
+    let rest = sentence;
+    while (rest.length > max) {
+      const cut = rest.lastIndexOf(',', max) > 40 ? rest.lastIndexOf(',', max) + 1 : rest.lastIndexOf(' ', max) > 40 ? rest.lastIndexOf(' ', max) : max;
+      out.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+    }
+    if (rest) out.push(rest);
+  }
+  return out;
+}
+
+let generation = 0;
+
+/**
+ * Lee el texto completo, frase por frase. `pauseMs` deja silencio entre frases (meditaciones guiadas).
+ * Una llamada nueva o stopSpeaking() interrumpe la lectura en curso.
+ */
+export async function speak(text: string, opts?: { voice?: string; rate?: number; pauseMs?: number }) {
   if (!supported()) return;
-  const plain = text.replace(/[*_#>`\[\]()]/g, '').slice(0, 1500);
   const synth = window.speechSynthesis;
   synth.cancel();
-
+  const mine = ++generation;
+  const parts = splitForSpeech(text.slice(0, 6000));
+  if (!parts.length) return;
   const voice = pickVoice(await loadVoices(), opts?.voice ?? DEFAULT_VOICE);
-  const u = new SpeechSynthesisUtterance(plain);
-  u.lang = voice?.lang ?? 'es-MX';
-  if (voice) u.voice = voice;
-  u.rate = opts?.rate ?? 1;
 
-  await new Promise<void>((resolve) => {
-    u.onend = () => resolve();
-    u.onerror = () => resolve();
-    synth.speak(u);
-  });
+  for (const part of parts) {
+    if (mine !== generation) return;
+    const u = new SpeechSynthesisUtterance(part);
+    u.lang = voice?.lang ?? 'es-MX';
+    if (voice) u.voice = voice;
+    u.rate = opts?.rate ?? 1;
+    await new Promise<void>((resolve) => {
+      u.onend = () => resolve();
+      u.onerror = () => resolve();
+      synth.speak(u);
+    });
+    if (opts?.pauseMs && mine === generation) await new Promise((r) => setTimeout(r, opts.pauseMs));
+  }
 }
 
 export function stopSpeaking() {
+  generation++;
   if (supported()) window.speechSynthesis.cancel();
 }

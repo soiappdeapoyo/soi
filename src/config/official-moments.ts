@@ -1,6 +1,6 @@
 import { ROUTINES, type RoutineId } from '@/config/routines';
 import type { ActionBlock, MomentKind } from '@/config/actions';
-import type { MomentFlow } from '@/lib/moments/types';
+import { officialCover, type MomentFlow } from '@/lib/moments/types';
 
 /**
  * Moments oficiales de SOI: las rutinas del marco teórico convertidas en flujos ejecutables.
@@ -77,6 +77,7 @@ function build(id: RoutineId): MomentFlow {
     tier: 'free', price_cents: 0, currency: 'usd', status: 'published', version: 1,
     parent_id: null, parent_slug: null, executions_count: 0, forks_count: 0,
     implementations_count: 0, completions_count: 0, is_demo: false, created_at: '2026-01-01T00:00:00.000Z',
+    cover: officialCover(id),
   };
 }
 

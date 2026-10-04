@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowDown, ArrowUp, GripVertical, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ImagePlus, GripVertical, Plus, X } from 'lucide-react';
+import { compressImage, uploadMedia } from '@/lib/media/upload';
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -52,7 +53,7 @@ const FIELDS: Record<ActionType, Field[]> = {
 
 type QuizQ = { q: string; options: string[]; answer: number; explain?: string };
 
-export type BuilderMoment = { id?: string; title: string; objective: string; kind: MomentKind; source: string; blocks: ActionBlock[]; durationDays?: number };
+export type BuilderMoment = { id?: string; title: string; objective: string; kind: MomentKind; source: string; blocks: ActionBlock[]; durationDays?: number; cover?: string | null };
 type Option = { value: string; label: string };
 
 /**
@@ -72,6 +73,32 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
   const [price, setPrice] = useState(9);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // Portada: undefined = sin cambios · null = quitar · string = ruta nueva en moment-assets.
+  const [coverPath, setCoverPath] = useState<string | null | undefined>(undefined);
+  const [coverPreview, setCoverPreview] = useState<string | null>(initial?.cover ?? null);
+  const [uploading, setUploading] = useState(false);
+  const coverInput = useRef<HTMLInputElement>(null);
+  const [initialSnapshot] = useState(() => JSON.stringify([initial?.title ?? '', initial?.objective ?? '', initial?.kind ?? 'growth', initial?.blocks ?? []]));
+  const dirty = coverPath !== undefined || JSON.stringify([title, objective, kind, blocks]) !== initialSnapshot;
+
+  async function pickCover(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const blob = await compressImage(file, 1600, 0.82);
+      const { path, publicUrl } = await uploadMedia('moment-assets', blob, 'cover');
+      setCoverPath(path); setCoverPreview(publicUrl);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'No se pudo subir la portada.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function cancel() {
+    if (dirty && !window.confirm('¿Salir sin guardar? Perderás los cambios.')) return;
+    if (initial?.id) router.push(`/m/${initial.id}`); else router.back();
+  }
 
   const minutes = useMemo(() => blocks.reduce((a, b) => a + (b.seconds ? b.seconds / 60 : b.minutes), 0), [blocks]);
   const set = (i: number, patch: Partial<ActionBlock>) => setBlocks((bs) => bs.map((b, j) => (j === i ? { ...b, ...patch } : b)));
@@ -128,14 +155,51 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
     const json = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok || json.ok === false) { setMsg(json.message ?? 'No se pudo guardar.'); return; }
+    const savedId = (initial?.id ?? json.id) as string;
+    if (coverPath !== undefined) {
+      const c = await fetch(`/api/moments-flow/${savedId}/cover`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: coverPath }) });
+      const cj = await c.json().catch(() => ({}));
+      if (!c.ok || !cj.ok) toast(cj.message ?? 'El Moment se guardó, pero no la portada.');
+    }
     toast(status === 'published' ? 'Moment publicado' : 'Moment guardado');
-    router.push(`/m/${initial?.id ?? json.id}`);
+    router.push(`/m/${savedId}`);
   }
 
   const ready = title.trim().length >= 3 && objective.trim().length >= 3 && source.trim().length >= 2 && blocks.length > 0;
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="sticky top-14 z-10 -mx-5 flex items-center justify-between bg-soi-canvas/95 px-3 py-1.5 shadow-[0_1px_0_rgb(11_11_11/0.06)] backdrop-blur md:top-0">
+        <Button size="sm" variant="ghost" onClick={cancel} disabled={busy}>Cancelar</Button>
+        <span className="text-sm font-medium">{initial?.id ? 'Editar Moment' : 'Nuevo Moment'}</span>
+        <Button size="sm" onClick={save} disabled={busy || !ready || uploading}>{busy ? 'Guardando…' : 'Guardar'}</Button>
+      </div>
+      <header>
+        <h1 className="text-3xl font-semibold tracking-tight">{initial?.id ? 'Editar Moment' : 'Crear Moment'}</h1>
+        <p className="text-soi-muted">Combina acciones en una experiencia con intención: inicio, final y un cambio concreto.</p>
+      </header>
+      <section aria-label="Portada" className="overflow-hidden rounded-[20px] bg-white shadow-ring">
+        {coverPreview ? (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={coverPreview} alt="Portada del Moment" className="aspect-[16/9] w-full object-cover" />
+            <div className="absolute bottom-2 right-2 flex gap-1.5">
+              <button type="button" onClick={() => coverInput.current?.click()} disabled={uploading} className="press h-9 rounded-lg bg-white/90 px-3 text-sm shadow-ring backdrop-blur">{uploading ? 'Subiendo…' : 'Cambiar'}</button>
+              <button type="button" onClick={() => { setCoverPath(null); setCoverPreview(null); }} className="press h-9 rounded-lg bg-white/90 px-3 text-sm shadow-ring backdrop-blur">Quitar</button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" onClick={() => coverInput.current?.click()} disabled={uploading}
+            className="press flex aspect-[16/6] w-full flex-col items-center justify-center gap-1 bg-soi-sidebar text-sm text-soi-muted hover:text-soi-ink">
+            <ImagePlus className="h-6 w-6" aria-hidden="true" />
+            {uploading ? 'Subiendo…' : 'Agregar portada'}
+            <span className="text-xs text-soi-subtle">Te ayuda a reconocer tu Moment de un vistazo</span>
+          </button>
+        )}
+        <input ref={coverInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" aria-label="Elegir imagen de portada"
+          onChange={(e) => { void pickCover(e.target.files?.[0]); e.target.value = ''; }} />
+      </section>
+
       <section className="rounded-[20px] bg-white p-4 shadow-ring">
         <Label htmlFor="mb-title">Nombre</Label>
         <Input id="mb-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sonríe otra vez" />
@@ -282,7 +346,10 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
         )}
       </section>
 
-      <Button size="lg" onClick={save} disabled={busy || !ready}>{busy ? 'Guardando…' : publish && isCreator ? 'Publicar Moment' : 'Guardar Moment'}</Button>
+      <div className="flex gap-2">
+        <Button size="lg" variant="outline" onClick={cancel} disabled={busy}>Cancelar</Button>
+        <Button size="lg" onClick={save} disabled={busy || !ready || uploading} className="flex-1">{busy ? 'Guardando…' : publish && isCreator ? 'Publicar Moment' : initial?.id ? 'Guardar cambios' : 'Guardar Moment'}</Button>
+      </div>
       {msg && <p role="alert" className="text-sm text-soi-danger">{msg}</p>}
     </div>
   );

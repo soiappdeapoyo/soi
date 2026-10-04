@@ -174,6 +174,10 @@ img:not([data-bare]) { outline: 1px solid rgb(0 0 0 / 0.08); outline-offset: -1p
 @keyframes milestone { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
 @keyframes pop { 0% { transform: scale(0.9); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 
+/* Ejercicios: dos fotos (inicio y final del movimiento) alternadas = la animación. Solo opacidad. */
+@keyframes frame-flip { 0%, 38% { opacity: 0; } 50%, 88% { opacity: 1; } 100% { opacity: 0; } }
+.exercise-flip { animation: frame-flip 2.2s var(--ease-in-out-strong) infinite; }
+
 /* ---------- Drawer (Vaul) ---------- */
 [data-vaul-drawer] {
   transition-duration: var(--dur-slow) !important;
@@ -195,4 +199,5 @@ img:not([data-bare]) { outline: 1px solid rgb(0 0 0 / 0.08); outline-offset: -1p
   }
   .press:active, .press-deep:active { transform: none !important; }
   [data-breath-halo] { animation: none !important; transform: none !important; opacity: 0.45 !important; }
+  .exercise-flip { animation: none !important; opacity: 0 !important; }
 }

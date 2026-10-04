@@ -53,18 +53,29 @@ export default async function MomentPage({ params, searchParams }: { params: Pro
       <Link href="/impulso" className="press inline-flex items-center gap-1 text-sm text-soi-muted hover:text-soi-ink"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Impulso</Link>
       {compra === 'ok' && !purchase && <p role="status" className="mt-4 rounded-[14px] bg-soi-accent-soft p-3 text-sm text-soi-accent">Estamos confirmando tu pago. Recarga en unos segundos.</p>}
 
-      <p className="mt-5 flex flex-wrap items-center gap-2 text-xs text-soi-muted">
-        <span className="rounded-md bg-soi-accent-soft px-1.5 py-0.5 font-medium text-soi-accent">{MOMENT_KINDS[m.kind].label}</span>
-        <span className="nums">{m.required_minutes} min · {blocks.length} acciones</span>
-        {!m.official && m.version > 1 && <span className="nums">· versión {m.version}</span>}
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{m.title}</h1>
-      <p className="mt-2 text-sm text-soi-muted">
-        {m.official ? <>Oficial de SOI · {m.author}</> : creator
-          ? <>por <Link href={`/c/${creator.handle}`} className="font-medium text-soi-ink underline-offset-4 hover:underline">{creator.display_name}</Link>{creator.is_verified && <BadgeCheck className="ml-1 inline h-4 w-4 align-[-3px] text-soi-accent" aria-label="Creador verificado" />}</>
-          : own ? 'Tuyo' : null}
-      </p>
-      <p className="mt-4 text-[17px] leading-relaxed">{m.objective}</p>
+      <header className={cn('relative mt-5', m.cover && 'overflow-hidden rounded-[24px] bg-soi-ink px-5 pb-6 pt-28 text-white shadow-soft')}>
+        {m.cover && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={m.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10" aria-hidden="true" />
+          </>
+        )}
+        <div className="relative">
+          <p className={cn('flex flex-wrap items-center gap-2 text-xs', m.cover ? 'text-white/85' : 'text-soi-muted')}>
+            <span className={cn('rounded-md px-1.5 py-0.5 font-medium', m.cover ? 'bg-white/20 text-white backdrop-blur' : 'bg-soi-accent-soft text-soi-accent')}>{MOMENT_KINDS[m.kind].label}</span>
+            <span className="nums">{m.required_minutes} min · {blocks.length} acciones</span>
+            {!m.official && m.version > 1 && <span className="nums">· versión {m.version}</span>}
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight [text-wrap:balance]">{m.title}</h1>
+          <p className={cn('mt-2 text-sm', m.cover ? 'text-white/85' : 'text-soi-muted')}>
+            {m.official ? <>Oficial de SOI · {m.author}</> : creator
+              ? <>por <Link href={`/c/${creator.handle}`} className={cn('font-medium underline-offset-4 hover:underline', m.cover ? 'text-white' : 'text-soi-ink')}>{creator.display_name}</Link>{creator.is_verified && <BadgeCheck className={cn('ml-1 inline h-4 w-4 align-[-3px]', m.cover ? 'text-white' : 'text-soi-accent')} aria-label="Creador verificado" />}</>
+              : own ? 'Tuyo' : null}
+          </p>
+          <p className="mt-4 text-[17px] leading-relaxed">{m.objective}</p>
+        </div>
+      </header>
       {parentTitle && parentHref && (
         <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-soi-muted">
           <GitBranch className="h-4 w-4" aria-hidden="true" /> Tu versión de <Link href={parentHref} className="underline underline-offset-4">{parentTitle}</Link>
