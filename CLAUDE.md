@@ -243,6 +243,7 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 - Evidencias: línea de tiempo, filtro por eslabón, hitos 10/50/100 con celebración, PDF (`/api/evidence/pdf`).
 - Comunidad: feed paginado, 4 reacciones atómicas (`toggle_reaction`), anonimato, moderación (regex dura para links/ventas/crisis + Gemini). **Regla dura:** nada de ventas, links ni consejos médicos.
 - **Seed demo:** 8 usuarios `*.demo@soi.app` (SOI+, `is_demo=true`) y 20 posts realistas en español.
+- **Demo en producción:** `supabase/demo/seed_production.sql` (contraseñas aleatorias, sin Blueprints premium, no se puede cargar dos veces). Se elimina con `supabase/demo/cleanup_demo.sql`, que se detiene si hay compras de Blueprints demo. `supabase/seed.sql` (contraseña `SoiDemo2026!`) es **solo para desarrollo local**.
 
 ---
 
