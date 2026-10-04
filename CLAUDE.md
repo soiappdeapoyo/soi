@@ -130,6 +130,7 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 | `0004_billing_functions.sql` | `decrement_free_query`, `expire_trials` |
 | `0005_streaks_community_push.sql` | Escudo de racha, `register_ritual_day`, `toggle_reaction`, país, avatar, push, autor/demo en posts, **permisos por columna en `user_profiles` (anti-bypass del paywall)**, endurecimiento de `decrement_free_query`/`expire_trials` |
 | `0006_atomic_free_queries.sql` | `consume_chat_query` (comprueba y descuenta atómicamente), `refund_chat_query` (si fallan todos los proveedores), `purge_crisis_logs` (retención 90 días) |
+| `0007_moments_blueprints_momentum.sql` | `creator_profiles`, `soi_moments`, `soi_blueprints`, `blueprint_implementations`, `blueprint_purchases`, `moment_interactions`, `momentum_events`; RPC `toggle_moment_interaction`, `implement_blueprint`, `toggle_implementation_step`, `set_implementation_result`, `trending_blueprints`, `creator_stats`. Contadores y compras **solo vía RPC/webhook** (permisos por columna) |
 
 **Uso de categorías:** `evidencia` (Muro), `ritual_diario` (ritual generado), `perfil_usuario` (onboarding, análisis), `conversacion` (memoria RAG), `accion` + tag `recordatorio` (scheduleReminder), `video_cache`, `aprendizaje_web`, `crisis_log`.
 
@@ -194,6 +195,8 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 4. `scheduleReminder` — `agent_knowledge` categoría `accion`, tag `recordatorio`.
 5. `webSearch` — Tavily.
 6. `suggestPractice` — botón dentro del mensaje para empezar una rutina, el ritual o registrar una evidencia (`PracticeCard`; candado en Free).
+7. `createActionCard` — insight → Action Card (`agent_knowledge` `accion` + tag `action_card`); "Marcar hecho" suma momentum.
+8. `captureMoment` — guarda un SOI Moment privado + el insight en la memoria transversal (`pensamiento`, tag `insight`, `metadata.moment_id`).
 
 ---
 
@@ -210,10 +213,28 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 ## 🎨 UI/UX
 - Guía visual y de movimiento: **DESIGN.md** (obligatoria).
 - Desktop ≥1024: sidebar 280px · Tablet 768-1023: sidebar de 72px con iconos · Mobile <768: drawer + header con logo.
-- Sidebar: Nueva conversación · PRÁCTICAS (7 agentes) · MI ESPACIO (Ritual, Evidencias, Comunidad, Perfil) · Recientes · Racha + escudos · Ajustes · Avatar · "Pasar a SOI+" si no es SOI+.
+- Sidebar: Nueva conversación · PRÁCTICAS (7 agentes) · MI ESPACIO (Momentos, Ritual, Evidencias, Comunidad, Estudio de creador, Perfil) · Recientes · Racha + escudos · Ajustes · Avatar · "Pasar a SOI+" si no es SOI+.
 - **Onboarding:** conversacional dentro del chat. Opcional: `/onboarding` con 8 espejos emocionales → minutos disponibles → validación, reformulación SOI, micro-acción de 24 h y rutina sugerida.
 
 ---
+
+## 🧭 Momentum Director (capa transversal de IA)
+No es un agente más: es un bloque del system prompt que se suma a **cualquier** agente (nunca en crisis). `src/lib/momentum.ts` (puro, testeado) + `momentum-server.ts`.
+- **Momentum Score** (0–100, 7 días): regreso diario 25 · acciones 20 · racha 20 · metas/evidencias 15 · reflexión 10 · Blueprints 10. Lo pendiente se nombra "por retomar" (sin castigo).
+- **Estado → intervención:** `anxiety → REGULATE` (respiración → meditación → diario → aclarar) · `confusion → CLARIFY` (una prioridad, un paso) · `high_energy → EXECUTE` (Action Card) · `low_energy → INSPIRE` (contenido breve + acción de 2 min). La regulación tiene prioridad.
+- **Eventos** (`momentum_events`): `return`, `action_completed`, `ritual_completed`, `routine_completed`, `evidence_saved`, `reflection`, `goal_set`, `blueprint_implemented`, `blueprint_step`, `blueprint_completed`.
+- **Creator Intelligence** (`src/lib/ai/creator-method.ts`): con Blueprints activos, el método, principios y límites del creador entran al prompt como datos ("el método de X aplicado a mi vida").
+- El Muro de Evidencias muestra evolución (Momentum + cadena ideas → acciones → sistemas → evidencias), no historial.
+
+## 🌱 SOI Moments, Evolution Feed y Creator Economy
+- **Moment** = evidencia de evolución (inspiración → insight → reflexión → acción). Privado por defecto; compartir requiere `community`. Moderado con las reglas de la comunidad.
+- **Blueprint** = sistema reusable creado por un Transformation Creator. Cita su fuente (obligatorio). `free` o `premium` (pago único, `CREATOR_REVENUE_SHARE` = 80% en `src/config/creators.ts`).
+- **Implementar** = la interacción principal: la IA adapta el Blueprint a los minutos y la realidad de la persona (`src/lib/social/adapt.ts`, con respaldo determinista). Gratis requiere `routine_execution`; premium requiere compra (vale en cualquier plan).
+- **Feed** `/momentos`: Para ti (prioriza el eslabón débil) · Tendencias (implementaciones de 7 días, no vistas) · Biblioteca (en práctica, mis momentos, guardados). Paginado con "Ver más", sin feed infinito. Interacciones: Resonancia, Guardar, Implementar.
+- **Creadores** `/creadores`: perfil con método, Transformation Score (alcance + completitud + retención + resultados; no seguidores), ganancias (ledger `blueprint_purchases`, `payout_status`). Públicas: `/c/[handle]` y `/b/[id]` (embudo desde redes).
+- **Ventas:** solo a través del precio del Blueprint dentro de SOI. Los textos siguen sin links ni autopromoción.
+- **Stripe:** `/api/blueprints/[id]/checkout` (mode `payment`, `metadata.kind = 'blueprint'`). El webhook separa compras de Blueprints de suscripciones.
+- **Pendiente:** pagos a creadores (Stripe Connect), programas con sesiones grupales, office hours y mentoría 1:1, verificación de creadores (`is_verified` solo con service role).
 
 ## 🔥 Crisis
 `src/lib/ai/crisis.ts` (texto normalizado, ideación/carga percibida/autolesión/inglés, excluye coloquialismos; `detectDistress` para señales suaves que se confirman con el clasificador antes del paywall; si el clasificador falla se asume crisis) + `src/config/crisis-resources.ts`. Se evalúa **antes** del paywall, nunca descuenta consultas, se registra en `crisis_log` y usa el país del perfil para mostrar las líneas de ayuda. En la comunidad, un post con señales de crisis se bloquea y se redirige al chat.

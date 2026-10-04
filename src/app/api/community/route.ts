@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess, getProfile } from '@/lib/billing/check-access';
-import { moderatePost } from '@/lib/ai/moderation';
+import { moderatePost, MODERATION_COPY } from '@/lib/ai/moderation';
 
 const Body = z.object({
   type: z.enum(['evidencia', 'peticion', 'testimonio', 'pregunta']),
@@ -9,12 +9,6 @@ const Body = z.object({
   isAnonymous: z.boolean().default(false),
 });
 
-const REASON_COPY: Record<string, string> = {
-  link: 'En la comunidad no se permiten enlaces externos.',
-  venta: 'En la comunidad no se permiten ventas ni autopromoción.',
-  consejo_medico: 'No compartimos consejos médicos. Consulta a un profesional de salud.',
-  crisis: 'Notamos que puedes estar pasando por un momento difícil. Escríbele a SOI en el chat: ahí tienes líneas de ayuda.',
-};
 
 export async function GET(req: Request) {
   const { supabase, user } = await getSessionUser();
@@ -40,7 +34,7 @@ export async function POST(req: Request) {
 
   const mod = await moderatePost(parsed.data.content);
   if (!mod.allowed) {
-    return Response.json({ ok: false, reason: mod.reason, message: REASON_COPY[mod.reason] ?? 'Tu publicación no cumple las reglas de la comunidad.' }, { status: 422 });
+    return Response.json({ ok: false, reason: mod.reason, message: MODERATION_COPY[mod.reason] ?? 'Tu publicación no cumple las reglas de la comunidad.' }, { status: 422 });
   }
 
   const profile = await getProfile(user.id);

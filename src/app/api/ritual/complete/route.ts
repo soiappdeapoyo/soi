@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { recordMomentum } from '@/lib/momentum-server';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess, getProfile } from '@/lib/billing/check-access';
 import { registerRitualDay } from '@/lib/streak';
@@ -27,5 +28,6 @@ export async function POST(req: Request) {
   }, { onConflict: 'user_id,ritual_date' });
 
   const streak = await registerRitualDay(supabase, user.id, today);
+  await recordMomentum(supabase, user.id, 'ritual_completed', { eslabon: 'accion' });
   return Response.json({ ok: true, streak });
 }

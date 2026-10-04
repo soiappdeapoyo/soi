@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess } from '@/lib/billing/check-access';
 import { remember } from '@/lib/ai/rag';
+import { recordMomentum } from '@/lib/momentum-server';
 import { EVIDENCE_MILESTONES } from '@/config/navigation';
 
 const Body = z.object({
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
     user_id: user.id, category: 'evidencia', title, content, tags,
     metadata: { eslabon_soi: eslabon, source: 'manual' }, status: 'completado',
   });
+  if (id) await recordMomentum(supabase, user.id, 'evidence_saved', { eslabon });
 
   const { count } = await supabase.from('agent_knowledge')
     .select('id', { count: 'exact', head: true })

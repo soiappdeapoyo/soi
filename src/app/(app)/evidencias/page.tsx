@@ -11,6 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { ESLABON_LABEL, type Eslabon } from '@/config/agents';
 import { EVIDENCE_MILESTONES } from '@/config/navigation';
 import { cn } from '@/lib/utils';
+import { MomentumCard, EvolutionChain } from '@/components/momentum/momentum-card';
+import { loadMomentum } from '@/lib/momentum-server';
+import { loadEvolution } from '@/lib/social/evolution';
 
 export const metadata: Metadata = { title: 'Muro de Evidencias' };
 
@@ -20,7 +23,7 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
   const { eslabon, hito } = await searchParams;
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
-  const { access } = await getAccessMap(user.id);
+  const { access, profile } = await getAccessMap(user.id);
 
   if (!access.evidence_save) {
     return (
@@ -38,9 +41,11 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
   let q = supabase.from('agent_knowledge').select('id, title, content, tags, metadata, created_at')
     .eq('user_id', user.id).eq('category', 'evidencia').order('created_at', { ascending: false }).limit(200);
   if (eslabon && eslabon !== 'todas') q = q.eq('metadata->>eslabon_soi', eslabon);
-  const [{ data: rows }, { count }] = await Promise.all([
+  const [{ data: rows }, { count }, momentum, evolution] = await Promise.all([
     q,
     supabase.from('agent_knowledge').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('category', 'evidencia'),
+    loadMomentum(supabase, user.id, profile?.streak_current ?? 0),
+    loadEvolution(supabase, user.id),
   ]);
 
   const total = count ?? 0;
@@ -63,6 +68,11 @@ export default async function EvidenciasPage({ searchParams }: { searchParams: P
       </header>
 
       {EVIDENCE_MILESTONES.includes(hitoNum as 10 | 50 | 100) && <div className="mt-4"><MilestoneCelebration milestone={hitoNum} /></div>}
+
+      <div className="mt-5 flex flex-col gap-3">
+        <MomentumCard m={momentum} />
+        <EvolutionChain steps={evolution} />
+      </div>
 
       <nav aria-label="Filtrar por eslabón" className="mt-5 flex flex-wrap gap-2">
         {FILTERS.map((f) => {

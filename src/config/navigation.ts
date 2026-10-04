@@ -1,12 +1,15 @@
 export const MY_SPACE = [
+  { href: '/momentos', label: 'Momentos', icon: 'Layers' },
   { href: '/ritual', label: 'Ritual diario', icon: 'Sunrise' },
   { href: '/evidencias', label: 'Muro de Evidencias', icon: 'Star' },
   { href: '/comunidad', label: 'Comunidad', icon: 'Users' },
+  { href: '/creadores', label: 'Estudio de creador', icon: 'PenLine' },
   { href: '/perfil', label: 'Mi perfil', icon: 'User' },
 ] as const;
 
 export const PROTECTED_PREFIXES = [
   '/chat', '/onboarding', '/rutinas', '/ritual', '/evidencias', '/comunidad', '/perfil', '/ajustes', '/planes',
+  '/momentos', '/blueprints', '/implementaciones', '/creadores',
 ];
 
 export const STREAK_MILESTONES = [7, 21, 40, 90] as const;

@@ -9,6 +9,9 @@ import { buildTools } from '@/lib/ai/tools';
 import { recall, remember } from '@/lib/ai/rag';
 import { isAgentId, type AgentId } from '@/config/agents';
 import { PAYWALL_MESSAGE } from '@/config/plans';
+import { detectMomentumState, momentumDirectorPrompt } from '@/lib/momentum';
+import { loadMomentum, recordDailyReturn } from '@/lib/momentum-server';
+import { creatorMethodPrompt } from '@/lib/ai/creator-method';
 
 export const maxDuration = 60;
 
@@ -72,7 +75,7 @@ export async function POST(req: Request) {
   }
 
   // 4) RAG + accesos de herramientas
-  const [memories, yt, ev, rt, ri] = await Promise.all([
+  const [memories, yt, ev, rt, ri, momentum, methods] = await Promise.all([
     isCrisis ? Promise.resolve([]) : recall(supabase, user.id, text, {
       categories: ['perfil_usuario', 'evidencia', 'conversacion', 'manifestacion', 'afirmacion', 'pensamiento', 'emocion', 'accion', 'resultado'],
       count: 4,
@@ -81,13 +84,25 @@ export async function POST(req: Request) {
     canAccess(user.id, 'evidence_save'),
     canAccess(user.id, 'routine_execution'),
     canAccess(user.id, 'daily_ritual'),
+    isCrisis ? Promise.resolve(null) : loadMomentum(supabase, user.id, profile?.streak_current ?? 0),
+    isCrisis ? Promise.resolve('') : creatorMethodPrompt(supabase, user.id),
+    isCrisis ? Promise.resolve() : recordDailyReturn(supabase, user.id),
   ]);
   const toolAccess = { youtube: yt.allowed, evidence: ev.allowed, routines: rt.allowed, ritual: ri.allowed };
   // Si SOI abrió la conversación, el saludo va como contexto (algunos proveedores exigen que el historial empiece por el usuario).
   const first = messages.findIndex((m) => m.role === 'user');
   const openerText = first > 0 ? messages.slice(0, first).map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n') : '';
+  // Momentum Director: capa transversal sobre cualquier agente (nunca en crisis).
+  const director = momentum && agent !== 'crisis'
+    ? momentumDirectorPrompt(detectMomentumState({
+      message: text, score: momentum.score, goalsCount: profile?.goals?.length ?? 0,
+      emotionalTone: route.emotionalTone, weakestLink: route.weakestLink ?? profile?.weakest_link,
+    }), momentum)
+    : '';
   const system = [
     buildSystemPrompt(agent, { profile, memories, tools: toolAccess, weakestLink: route.weakestLink }),
+    director,
+    agent === 'crisis' ? '' : methods,
     openerText && `TU PRIMER MENSAJE EN ESTA CONVERSACIÓN FUE: "${openerText.replace(/["\n]/g, ' ').slice(0, 400)}". Continúa desde ahí sin repetir el saludo.`,
   ].filter(Boolean).join('\n\n');
   const recent = (first > 0 ? messages.slice(first) : messages).slice(-20);
@@ -104,7 +119,7 @@ export async function POST(req: Request) {
     stream = await streamWithFallback(
       system,
       convertToCoreMessages(modelMessages),
-      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, access: toolAccess }),
+      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess }),
       async ({ text: out, provider, tokens, toolCalls, toolResults }) => {
         await supabase.from('messages').insert({
           conversation_id: conversationId, user_id: user.id, role: 'assistant', content: out || '…',

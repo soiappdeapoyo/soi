@@ -5,14 +5,17 @@ import { searchYouTube } from '@/lib/integrations/youtube';
 import { webSearch } from '@/lib/integrations/web-search';
 import { remember } from './rag';
 import { ROUTINES, ROUTINE_IDS } from '@/config/routines';
+import { recordMomentum } from '@/lib/momentum-server';
+import { ActionCardSchema, EslabonSchema } from '@/lib/action-card';
 
 type Ctx = {
   supabase: SupabaseClient;
   userId: string;
+  authorName?: string | null;
   access: { youtube: boolean; evidence: boolean; routines?: boolean; ritual?: boolean };
 };
 
-export function buildTools({ supabase, userId, access }: Ctx) {
+export function buildTools({ supabase, userId, authorName, access }: Ctx) {
   return {
     youtubeSearch: tool({
       description: 'Busca videos de YouTube en español (meditaciones guiadas, charlas de los autores de SOI).',
@@ -45,6 +48,7 @@ export function buildTools({ supabase, userId, access }: Ctx) {
           user_id: userId, category: 'evidencia', title, content, tags,
           metadata: { eslabon_soi: eslabon, source: 'chat' }, status: 'completado',
         });
+        if (id) await recordMomentum(supabase, userId, 'evidence_saved', { eslabon });
         return { locked: false as const, id };
       },
     }),
@@ -64,6 +68,7 @@ export function buildTools({ supabase, userId, access }: Ctx) {
         const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
         if (!Object.keys(clean).length) return { ok: true };
         const { error } = await supabase.from('user_profiles').update(clean).eq('user_id', userId);
+        if (!error && patch.goals?.length) await recordMomentum(supabase, userId, 'goal_set', { eslabon: 'resultado' });
         return { ok: !error };
       },
     }),
@@ -102,6 +107,52 @@ export function buildTools({ supabase, userId, access }: Ctx) {
           return { kind, href: '/ritual', label: 'Ritual de hoy', detail: 'Afirmación · visualización · acción · señal', reason, locked: access.ritual === false };
         }
         return { kind, href: '/evidencias/nueva', label: 'Guardar una evidencia', detail: 'Muro de Evidencias', reason, locked: !access.evidence };
+      },
+    }),
+
+    createActionCard: tool({
+      description: 'Convierte un insight o una prioridad en una Action Card concreta que la persona puede marcar como hecha.',
+      parameters: ActionCardSchema.extend({
+        category: z.string().max(40).optional().describe('Área de vida, p. ej. "Money OS", "Salud", "Relaciones"'),
+      }),
+      execute: async ({ title, minutes, detail, eslabon, category }) => {
+        const id = await remember(supabase, {
+          user_id: userId, category: 'accion', title, content: detail ?? title,
+          tags: ['action_card'], status: 'en_progreso',
+          metadata: { eslabon_soi: eslabon ?? 'accion', minutes, area: category ?? null, source: 'chat' },
+          withEmbedding: false,
+        });
+        return { id: id ?? null, title, minutes, detail: detail ?? null, category: category ?? null, done: false };
+      },
+    }),
+
+    captureMoment: tool({
+      description: 'Guarda un SOI Moment privado cuando la persona transforma una idea, emoción o aprendizaje en acción (inspiración → insight → reflexión → acción).',
+      parameters: z.object({
+        title: z.string().min(3).max(120),
+        insight: z.string().min(3).max(1000).describe('La idea central, en palabras de la persona'),
+        reflectionQuestion: z.string().max(300).optional(),
+        userReflection: z.string().max(2000).optional(),
+        category: EslabonSchema.default('accion'),
+        sourceType: z.enum(['video', 'book', 'podcast', 'personal_experience', 'ai_generated']).default('ai_generated'),
+        sourceReference: z.string().max(200).optional().describe('Autor y obra si viene de un libro o video'),
+        actions: z.array(ActionCardSchema).max(5).default([]),
+      }),
+      execute: async (m) => {
+        const { data, error } = await supabase.from('soi_moments').insert({
+          creator_id: userId, author_name: authorName ?? null, title: m.title, insight: m.insight,
+          reflection_question: m.reflectionQuestion ?? null, user_reflection: m.userReflection ?? null,
+          category: m.category, source_type: m.sourceType, source_reference: m.sourceReference ?? null,
+          actions: m.actions, visibility: 'private',
+        }).select('id').single();
+        if (error) return { ok: false as const };
+        // Grafo de conocimiento: el insight queda en la memoria transversal enlazado al Moment.
+        await remember(supabase, {
+          user_id: userId, category: 'pensamiento', title: m.title, content: m.insight,
+          tags: ['insight', 'moment'], metadata: { eslabon_soi: m.category, moment_id: data.id },
+        });
+        await recordMomentum(supabase, userId, 'reflection', { eslabon: m.category, metadata: { moment_id: data.id } });
+        return { ok: true as const, id: data.id as string, title: m.title };
       },
     }),
 

@@ -3,10 +3,11 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Link from 'next/link';
-import { Volume2, Star, Lock, BellRing } from 'lucide-react';
+import { Volume2, Star, Lock, BellRing, Layers } from 'lucide-react';
 import type { Message } from 'ai';
 import { YouTubeEmbed } from './youtube-embed';
 import { PracticeCard, type Practice } from './practice-card';
+import { ActionCardView, type ActionCardResult } from './action-card-view';
 import { cn } from '@/lib/utils';
 
 type Props = { message: Message; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null };
@@ -47,6 +48,18 @@ export function MessageBubble({ message, ttsAllowed, onSpeak, practice }: Props)
           }
           if (t.toolName === 'suggestPractice') {
             return <PracticeCard key={t.toolCallId} practice={t.result as Practice} />;
+          }
+          if (t.toolName === 'createActionCard') {
+            return <ActionCardView key={t.toolCallId} card={t.result as ActionCardResult} />;
+          }
+          if (t.toolName === 'captureMoment') {
+            const r = t.result as { ok: boolean; id?: string };
+            if (!r.ok || !r.id) return null;
+            return (
+              <p key={t.toolCallId} className="mt-2 flex items-center gap-2 text-sm text-soi-muted">
+                <Layers className="h-4 w-4 text-soi-accent" aria-hidden="true" /> Guardé este momento en tu <Link href={`/momentos/${r.id}`} className="underline underline-offset-4">biblioteca</Link>
+              </p>
+            );
           }
           if (t.toolName === 'scheduleReminder') {
             const r = t.result as { ok: boolean; when: string };

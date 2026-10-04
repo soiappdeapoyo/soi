@@ -30,3 +30,11 @@ export async function moderatePost(content: string): Promise<ModerationResult> {
     return { allowed: true, reason: 'ok' };
   }
 }
+
+/** Mensajes visibles cuando un contenido no pasa la moderación. */
+export const MODERATION_COPY: Record<string, string> = {
+  link: 'En la comunidad no se permiten enlaces externos.',
+  venta: 'En la comunidad no se permiten ventas ni autopromoción.',
+  consejo_medico: 'No compartimos consejos médicos. Consulta a un profesional de salud.',
+  crisis: 'Notamos que puedes estar pasando por un momento difícil. Escríbele a SOI en el chat: ahí tienes líneas de ayuda.',
+};
