@@ -12,6 +12,13 @@ const ModerationSchema = z.object({
 
 export type ModerationResult = z.infer<typeof ModerationSchema>;
 
+/** Filtros duros sin IA (rápidos, para mensajes directos): enlaces y ventas. */
+export function hardFilter(content: string): 'link' | 'venta' | null {
+  if (LINK.test(content)) return 'link';
+  if (SALES.test(content)) return 'venta';
+  return null;
+}
+
 /** Regla dura: nada de ventas, links externos, ni consejos médicos. */
 export async function moderatePost(content: string): Promise<ModerationResult> {
   if (detectCrisis(content)) return { allowed: false, reason: 'crisis' };

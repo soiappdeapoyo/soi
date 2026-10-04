@@ -2,10 +2,13 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { useDismiss } from '@/hooks/use-dismiss';
+import { Textarea } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { ShareToDm } from './share-to-dm';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { BadgeCheck, Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat2, Share } from 'lucide-react';
+import { BadgeCheck, Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat2, Share, X } from 'lucide-react';
 import { MomentFlowCard } from '@/components/moments/moment-flow-card';
 import type { PostView } from '@/lib/social/posts';
 import { Avatar, shortTime } from './avatar';
@@ -35,6 +38,15 @@ export function PostCard({ post, clamp = true, onQuote, onDeleted, variant = 'fe
   const [expanded, setExpanded] = useState(!clamp);
   const [menu, setMenu] = useState(false);
   const [restackMenu, setRestackMenu] = useState(false);
+  // Edición en línea (solo publicaciones propias).
+  const [body, setBody] = useState(post.body);
+  const [images, setImages] = useState(post.images);
+  const [editedAt, setEditedAt] = useState(post.edited_at);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(post.body ?? '');
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [dm, setDm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuBtn = useRef<HTMLButtonElement>(null);
   const restackRef = useRef<HTMLDivElement>(null);
@@ -42,7 +54,8 @@ export function PostCard({ post, clamp = true, onQuote, onDeleted, variant = 'fe
   useDismiss(menuRef, menu, useCallback(() => setMenu(false), []), menuBtn);
   useDismiss(restackRef, restackMenu, useCallback(() => setRestackMenu(false), []), restackBtn);
   const href = `/p/${post.id}`;
-  const long = (post.body?.length ?? 0) > 420 || (post.body?.split('\n').length ?? 0) > 7;
+  const long = (body?.length ?? 0) > 420 || (body?.split('\n').length ?? 0) > 7;
+  const imageUrl = (path: string) => post.imageUrls[post.images.indexOf(path)] ?? '';
 
   async function call(path: string, init?: RequestInit) {
     const res = await fetch(path, { method: 'POST', ...init });
@@ -82,6 +95,18 @@ export function PostCard({ post, clamp = true, onQuote, onDeleted, variant = 'fe
     const res = await fetch(`/api/posts/${post.id}`, { method: 'DELETE' });
     if (res.ok) { toast('Publicación eliminada'); onDeleted?.(post.id); if (variant === 'detail') router.push('/impulso'); }
   }
+  async function saveEdit() {
+    setSavingEdit(true);
+    const res = await fetch(`/api/posts/${post.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: draft, removeImages: removed }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setSavingEdit(false);
+    if (!res.ok || !json.ok) { toast(json.message ?? 'No se pudo guardar.'); return; }
+    setBody(json.body); setImages(json.images); setEditedAt(json.edited_at); setEditing(false); setRemoved([]);
+    toast('Publicación actualizada');
+  }
+
   async function report() {
     setMenu(false);
     const reason = window.prompt('¿Por qué reportas esta publicación? (opcional)') ?? '';
@@ -108,6 +133,7 @@ export function PostCard({ post, clamp = true, onQuote, onDeleted, variant = 'fe
             {a.handle && <span className="truncate text-soi-subtle">@{a.handle}</span>}
             <span aria-hidden="true" className="text-soi-subtle">·</span>
             <Link href={href} className="shrink-0 text-soi-subtle hover:underline"><time dateTime={post.created_at}>{shortTime(post.created_at)}</time></Link>
+            {editedAt && <span className="shrink-0 text-xs text-soi-subtle" title={`Editado ${new Date(editedAt).toLocaleString('es')}`}>· editado</span>}
             <div className="relative ml-auto">
               <button ref={menuBtn} type="button" onClick={() => setMenu((m) => !m)} aria-haspopup="menu" aria-expanded={menu} aria-label="Más opciones"
                 className="press flex h-8 w-8 items-center justify-center rounded-lg text-soi-subtle hover:bg-black/[0.04]"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></button>
@@ -115,6 +141,8 @@ export function PostCard({ post, clamp = true, onQuote, onDeleted, variant = 'fe
                 <div ref={menuRef} role="menu" style={{ '--origin': 'top right' } as React.CSSProperties} data-state="open"
                   className="popover-motion absolute right-0 top-9 z-20 min-w-44 rounded-xl bg-white p-1 shadow-raised">
                   <button role="menuitem" type="button" onClick={() => { setMenu(false); void share(); }} className="press flex min-h-10 w-full items-center rounded-lg px-3 text-left text-sm hover:bg-black/[0.04]">Compartir enlace</button>
+                  <button role="menuitem" type="button" onClick={() => { setMenu(false); setDm(true); }} className="press flex min-h-10 w-full items-center rounded-lg px-3 text-left text-sm hover:bg-black/[0.04]">Enviar por mensaje</button>
+                  {post.mine && <button role="menuitem" type="button" onClick={() => { setMenu(false); setDraft(body ?? ''); setEditing(true); }} className="press flex min-h-10 w-full items-center rounded-lg px-3 text-left text-sm hover:bg-black/[0.04]">Editar</button>}
                   {post.mine
                     ? <button role="menuitem" type="button" onClick={remove} className="press flex min-h-10 w-full items-center rounded-lg px-3 text-left text-sm text-soi-danger hover:bg-black/[0.04]">Eliminar</button>
                     : <button role="menuitem" type="button" onClick={report} className="press flex min-h-10 w-full items-center rounded-lg px-3 text-left text-sm hover:bg-black/[0.04]">Reportar</button>}
@@ -123,14 +151,38 @@ export function PostCard({ post, clamp = true, onQuote, onDeleted, variant = 'fe
             </div>
           </div>
 
-          {post.body && (
+          {editing ? (
+            <div className="mt-2 flex flex-col gap-2">
+              <label htmlFor={`edit-${post.id}`} className="sr-only">Editar publicación</label>
+              <Textarea id={`edit-${post.id}`} value={draft} onChange={(e) => setDraft(e.target.value)} rows={4} maxLength={3000} autoFocus />
+              {images.length > 0 && (
+                <ul className="flex flex-wrap gap-2">
+                  {images.map((path) => {
+                    const gone = removed.includes(path);
+                    return (
+                      <li key={path} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imageUrl(path)} alt="" className={cn('h-16 w-16 rounded-lg object-cover', gone && 'opacity-30')} />
+                        <button type="button" onClick={() => setRemoved((r) => (gone ? r.filter((x) => x !== path) : [...r, path]))} aria-label={gone ? 'Conservar imagen' : 'Quitar imagen'}
+                          className="press absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-soi-ink text-white"><X className="h-3.5 w-3.5" aria-hidden="true" /></button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setRemoved([]); }}>Cancelar</Button>
+                <Button size="sm" onClick={saveEdit} disabled={savingEdit}>{savingEdit ? 'Guardando…' : 'Guardar'}</Button>
+              </div>
+            </div>
+          ) : body && (
             <div className="mt-1">
-              <p className={cn('whitespace-pre-wrap break-words text-[15px] leading-relaxed text-soi-ink', !expanded && long && 'line-clamp-6')}>{post.body}</p>
+              <p className={cn('whitespace-pre-wrap break-words text-[15px] leading-relaxed text-soi-ink', !expanded && long && 'line-clamp-6')}>{body}</p>
               {!expanded && long && <button type="button" onClick={() => setExpanded(true)} className="mt-1 text-sm font-medium text-soi-accent">Ver más</button>}
             </div>
           )}
 
-          {post.imageUrls.length > 0 && <ImageGrid urls={post.imageUrls} />}
+          {!editing && images.length > 0 && <ImageGrid urls={images.map(imageUrl).filter(Boolean)} />}
 
           {post.moment && variant !== 'reply' && (
             <div className="mt-3">
@@ -182,6 +234,7 @@ export function PostCard({ post, clamp = true, onQuote, onDeleted, variant = 'fe
           </div>
         </div>
       </div>
+      <ShareToDm open={dm} onOpenChange={setDm} postId={post.id} />
     </article>
   );
 }

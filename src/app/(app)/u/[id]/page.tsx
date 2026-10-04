@@ -8,6 +8,7 @@ import { loadByAuthor, type PublicAuthor } from '@/lib/social/posts';
 import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import { Avatar } from '@/components/feed/avatar';
 import { FollowButton } from '@/components/feed/follow-button';
+import { MessageButton } from '@/components/dm/message-button';
 import { FeedList } from '@/components/feed/feed-list';
 import { MomentFlowCard } from '@/components/moments/moment-flow-card';
 
@@ -27,6 +28,10 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
     supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('creator_id', id).eq('status', 'published').order('executions_count', { ascending: false }).limit(4),
     getAccessMap(user.id),
   ]);
+  const [{ data: canMessage }, { data: thread }] = id === user.id ? [{ data: false }, { data: null }] : await Promise.all([
+    supabase.rpc('can_message', { p_sender: user.id, p_recipient: id }),
+    supabase.from('dm_threads').select('id').eq('user_a', [user.id, id].sort()[0]!).eq('user_b', [user.id, id].sort()[1]!).maybeSingle(),
+  ]);
   const a = ((prof ?? []) as PublicAuthor[])[0];
   if (!a) notFound();
   const mine = id === user.id;
@@ -44,7 +49,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           <p className="nums mt-1 text-sm text-soi-muted">{followingCount ?? 0} siguiendo</p>
           <div className="mt-3">
             {mine ? <Link href="/perfil" className="text-sm text-soi-accent underline underline-offset-4">Editar mi perfil</Link>
-              : <FollowButton userId={id} initial={Boolean(iFollow)} count={followers ?? 0} />}
+              : <div className="flex flex-wrap items-center gap-2"><FollowButton userId={id} initial={Boolean(iFollow)} count={followers ?? 0} />{access.community && <MessageButton userId={id} enabled={Boolean(canMessage) || Boolean(thread)} />}</div>}
           </div>
         </div>
       </header>

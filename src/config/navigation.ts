@@ -4,7 +4,7 @@
  */
 export const PRIMARY_TABS = [
   { id: 'hoy', href: '/hoy', label: 'Hoy', icon: 'Sun', match: ['/hoy', '/ritual'] },
-  { id: 'impulso', href: '/impulso', label: 'Impulso', icon: 'Zap', match: ['/impulso', '/m', '/p', '/u', '/actividad', '/momentos', '/blueprints', '/comunidad', '/c/'] },
+  { id: 'impulso', href: '/impulso', label: 'Impulso', icon: 'Zap', match: ['/impulso', '/m', '/p', '/u', '/actividad', '/mensajes', '/momentos', '/blueprints', '/comunidad', '/c/'] },
   { id: 'soi', href: '/chat', label: 'SOI', icon: 'MessageCircle', match: ['/chat'] },
   { id: 'mi-vida', href: '/mi-vida', label: 'Mi Vida', icon: 'Orbit', match: ['/mi-vida', '/ideas', '/implementaciones', '/rutinas'] },
   { id: 'yo', href: '/yo', label: 'Yo', icon: 'User', match: ['/yo', '/perfil', '/ajustes', '/planes', '/evidencias', '/creadores'] },
@@ -31,7 +31,7 @@ export const MY_SPACE = [
 export const PROTECTED_PREFIXES = [
   '/hoy', '/impulso', '/mi-vida', '/yo',
   '/chat', '/onboarding', '/rutinas', '/ritual', '/evidencias', '/comunidad', '/perfil', '/ajustes', '/planes',
-  '/momentos', '/blueprints', '/implementaciones', '/creadores', '/m', '/ideas', '/p', '/u', '/actividad',
+  '/momentos', '/blueprints', '/implementaciones', '/creadores', '/m', '/ideas', '/p', '/u', '/actividad', '/mensajes',
 ];
 
 export const STREAK_MILESTONES = [7, 21, 40, 90] as const;

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { Bell, Bookmark, Compass } from 'lucide-react';
+import { Bell, Bookmark, Compass, Mail } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import { loadForYou, loadFollowing, unreadNotifications } from '@/lib/social/posts';
@@ -28,10 +28,11 @@ export default async function ImpulsoPage({ searchParams }: { searchParams: Prom
   if (!user) redirect('/login');
   const { profile, access } = await getAccessMap(user.id);
 
-  const [feed, unread, today] = await Promise.all([
+  const [feed, unread, today, { data: unreadDm }] = await Promise.all([
     following ? loadFollowing(supabase, user.id) : loadForYou(supabase, user.id, 0),
     unreadNotifications(supabase, user.id),
     loadToday(supabase, user.id, profile, access.daily_ritual),
+    supabase.rpc('dm_unread_threads'),
   ]);
   const kinds = MODE_KINDS[today.decision.mode];
   const rec = await recommendMoment(supabase, user.id, kinds);
@@ -55,6 +56,10 @@ export default async function ImpulsoPage({ searchParams }: { searchParams: Prom
         <nav aria-label="Atajos" className="ml-auto flex items-center gap-1">
           <Link href="/impulso/explorar" aria-label="Explorar Moments" className="press flex h-10 w-10 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink"><Compass className="h-5 w-5" aria-hidden="true" /></Link>
           <Link href="/impulso/guardados" aria-label="Guardados" className="press flex h-10 w-10 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink"><Bookmark className="h-5 w-5" aria-hidden="true" /></Link>
+          <Link href="/mensajes" aria-label={unreadDm ? `Mensajes: ${unreadDm} sin leer` : 'Mensajes'} className="press relative flex h-10 w-10 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink">
+            <Mail className="h-5 w-5" aria-hidden="true" />
+            {Number(unreadDm) > 0 && <span className="nums absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-soi-accent-fill px-1 text-[10px] font-medium text-white">{Number(unreadDm) > 9 ? '9+' : Number(unreadDm)}</span>}
+          </Link>
           <Link href="/actividad" aria-label={unread ? `Actividad: ${unread} sin leer` : 'Actividad'} className="press relative flex h-10 w-10 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink">
             <Bell className="h-5 w-5" aria-hidden="true" />
             {unread > 0 && <span className="nums absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-soi-accent-fill px-1 text-[10px] font-medium text-white">{unread > 9 ? '9+' : unread}</span>}

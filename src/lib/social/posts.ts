@@ -7,7 +7,7 @@ export type PostRow = {
   id: string; author_id: string; body: string | null; images: string[];
   moment_id: string | null; moment_slug: string | null; quote_of: string | null; restack_of: string | null;
   parent_id: string | null; root_id: string | null;
-  like_count: number; reply_count: number; restack_count: number; created_at: string;
+  like_count: number; reply_count: number; restack_count: number; created_at: string; edited_at: string | null;
 };
 
 export type PublicAuthor = { user_id: string; display_name: string; avatar_url: string | null; handle: string | null; is_verified: boolean };
@@ -25,7 +25,7 @@ export type PostView = PostRow & {
   mine: boolean;
 };
 
-export const POST_FIELDS = 'id, author_id, body, images, moment_id, moment_slug, quote_of, restack_of, parent_id, root_id, like_count, reply_count, restack_count, created_at';
+export const POST_FIELDS = 'id, author_id, body, images, moment_id, moment_slug, quote_of, restack_of, parent_id, root_id, like_count, reply_count, restack_count, created_at, edited_at';
 
 export function publicImageUrl(path: string) {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${path}`;
