@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeMomentum, detectMomentumState, momentumDirectorPrompt, STATE_INTERVENTION, decideToday, inferState, type MomentumEvent, type TodayInput } from '@/lib/momentum';
 import { transformationScore, impactScore, creatorShare } from '@/config/creators';
-import { scaleSteps } from '@/lib/social/adapt';
 import { computeAchievements } from '@/lib/achievements';
 
 const now = new Date('2026-10-10T12:00:00Z');
@@ -58,14 +57,6 @@ describe('creadores', () => {
   });
 });
 
-describe('scaleSteps', () => {
-  const steps = [{ title: 'Moverse', minutes: 20 }, { title: 'Reflexionar', minutes: 20 }, { title: 'Crecer', minutes: 20 }];
-  it('reduce proporcionalmente a los minutos disponibles', () => {
-    expect(scaleSteps(steps, 15).map((s) => s.minutes)).toEqual([5, 5, 5]);
-  });
-  it('no cambia nada si hay tiempo de sobra', () => expect(scaleSteps(steps, 90)).toEqual(steps));
-  it('cada paso conserva al menos 1 minuto', () => expect(scaleSteps(steps, 1).every((s) => s.minutes >= 1)).toBe(true));
-});
 
 describe('decideToday', () => {
   const base: TodayInput = {

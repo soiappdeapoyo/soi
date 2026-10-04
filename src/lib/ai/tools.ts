@@ -7,6 +7,7 @@ import { remember } from './rag';
 import { ROUTINES, ROUTINE_IDS } from '@/config/routines';
 import { recordMomentum } from '@/lib/momentum-server';
 import { ActionCardSchema, EslabonSchema } from '@/lib/action-card';
+import { ACTION_TYPES, MomentKindSchema, parseBlocks, type ActionType } from '@/config/actions';
 
 type Ctx = {
   supabase: SupabaseClient;
@@ -101,7 +102,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
       execute: async ({ kind, routineId, reason }) => {
         if (kind === 'routine') {
           const r = ROUTINES[routineId ?? 'brian_tracy_5min'];
-          return { kind, href: `/rutinas/${r.id}`, label: r.label, detail: `${r.author} · ${r.totalMinutes} min`, reason, locked: access.routines === false };
+          return { kind, href: `/m/${r.id}/play`, label: r.label, detail: `${r.author} · ${r.totalMinutes} min`, reason, locked: access.routines === false };
         }
         if (kind === 'ritual') {
           return { kind, href: '/ritual', label: 'Ritual de hoy', detail: 'Afirmación · visualización · acción · señal', reason, locked: access.ritual === false };
@@ -110,24 +111,40 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
       },
     }),
 
-    createActionCard: tool({
-      description: 'Convierte un insight o una prioridad en una Action Card concreta que la persona puede marcar como hecha.',
-      inputSchema: ActionCardSchema.extend({
-        category: z.string().max(40).optional().describe('Área de vida, p. ej. "Money OS", "Salud", "Relaciones"'),
+    createMoment: tool({
+      description: 'Diseña un SOI Moment: un flujo corto de acciones (3 a 6) con intención, objetivo y resultado esperado, listo para comenzar. Úsalo en lugar de tareas sueltas.',
+      inputSchema: z.object({
+        title: z.string().min(3).max(80).describe('Nombre evocador, p. ej. "Reconectar"'),
+        objective: z.string().min(3).max(300).describe('El cambio emocional, mental o conductual que busca'),
+        kind: MomentKindSchema.describe('recovery para ansiedad, tristeza o falta de enfoque; growth para metas; learning si parte de un libro o video; daily si se repetirá'),
+        reason: z.string().max(160).describe('Por qué este Moment ahora, en una frase cálida'),
+        source: z.string().min(2).max(200).describe('Autores en los que se basa, p. ej. "Diseñado por SOI · basado en Brian Tracy y Joe Dispenza"'),
+        blocks: z.array(z.object({
+          type: z.enum(ACTION_TYPES.filter((t) => t !== 'moment') as [ActionType, ...ActionType[]]),
+          title: z.string().min(2).max(80),
+          minutes: z.number().int().min(1).max(30),
+          config: z.record(z.unknown()).describe('breathing:{inhale,exhale} meditation:{guide} timer:{instruction} writing:{prompt} visualization:{scene} checklist:{items[]} video:{query} walk:{instruction} gratitude:{count} reading:{book,pages} reflection:{question} affirmation:{text,repeat} goal:{prompt} emotion_log:{question} rest:{instruction,variant} celebration:{message} next_step:{instruction}'),
+          source: z.string().max(160).optional().describe('Autor y obra de la técnica, si aplica'),
+        })).min(2).max(8),
       }),
-      execute: async ({ title, minutes, detail, eslabon, category }) => {
-        const id = await remember(supabase, {
-          user_id: userId, category: 'accion', title, content: detail ?? title,
-          tags: ['action_card'], status: 'en_progreso',
-          metadata: { eslabon_soi: eslabon ?? 'accion', minutes, area: category ?? null, source: 'chat' },
-          withEmbedding: false,
-        });
-        return { id: id ?? null, title, minutes, detail: detail ?? null, category: category ?? null, done: false };
+      execute: async (m) => {
+        const { blocks, errors } = parseBlocks(m.blocks.map((b, i) => ({ ...b, id: `b${i + 1}` })));
+        if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
+        const { data, error } = await supabase.from('soi_blueprints').insert({
+          creator_id: userId, title: m.title, objective: m.objective, kind: m.kind, source: m.source,
+          blocks, steps: [], status: 'private',
+        }).select('id, required_minutes').single();
+        if (error) return { ok: false as const, errors: ['No se pudo guardar el Moment.'] };
+        return {
+          ok: true as const, id: data.id as string, title: m.title, kind: m.kind, reason: m.reason,
+          minutes: data.required_minutes as number, blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })),
+          locked: access.routines === false,
+        };
       },
     }),
 
-    captureMoment: tool({
-      description: 'Guarda un SOI Moment privado cuando la persona transforma una idea, emoción o aprendizaje en acción (inspiración → insight → reflexión → acción).',
+    captureIdea: tool({
+      description: 'Guarda una Idea privada cuando la persona descubre un insight valioso (inspiración → insight → reflexión). Para convertirla en acción, después usa createMoment.',
       inputSchema: z.object({
         title: z.string().min(3).max(120),
         insight: z.string().min(3).max(1000).describe('La idea central, en palabras de la persona'),
@@ -146,7 +163,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
           actions: m.actions, visibility: 'private',
         }).select('id').single();
         if (error) return { ok: false as const };
-        // Grafo de conocimiento: el insight queda en la memoria transversal enlazado al Moment.
+        // Grafo de conocimiento: el insight queda en la memoria transversal enlazado a la Idea.
         await remember(supabase, {
           user_id: userId, category: 'pensamiento', title: m.title, content: m.insight,
           tags: ['insight', 'moment'], metadata: { eslabon_soi: m.category, moment_id: data.id },

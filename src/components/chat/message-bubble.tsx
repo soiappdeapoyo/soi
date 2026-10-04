@@ -8,6 +8,7 @@ import type { UIMessage } from 'ai';
 import { SoiPlayer, type SoiVideo } from '@/components/media/soi-player';
 import { PracticeCard, type Practice } from './practice-card';
 import { ActionCardView, type ActionCardResult } from './action-card-view';
+import { MomentProposal, type MomentProposalResult } from './moment-proposal';
 import { cn } from '@/lib/utils';
 
 type Reflect = (text: string, video: SoiVideo) => void;
@@ -41,13 +42,18 @@ function ToolResult({ part, onReflected }: { part: ToolPart; onReflected?: Refle
     return v ? <div className="mt-3"><SoiPlayer video={v} onReflected={onReflected} /></div> : null;
   }
   if (name === 'suggestPractice') return <PracticeCard practice={out as Practice} />;
+  if (name === 'createMoment') {
+    const r = out as MomentProposalResult | { ok: false };
+    return r.ok ? <MomentProposal m={r} /> : null;
+  }
+  // Conversaciones anteriores a los Moments ejecutables.
   if (name === 'createActionCard') return <ActionCardView card={out as ActionCardResult} />;
-  if (name === 'captureMoment') {
+  if (name === 'captureIdea' || name === 'captureMoment') {
     const r = out as { ok: boolean; id?: string };
     if (!r.ok || !r.id) return null;
     return (
       <p className="mt-2 flex items-center gap-2 text-sm text-soi-muted">
-        <Layers className="h-4 w-4 text-soi-accent" aria-hidden="true" /> Guardé este momento en tu <Link href={`/momentos/${r.id}`} className="underline underline-offset-4">biblioteca</Link>
+        <Layers className="h-4 w-4 text-soi-accent" aria-hidden="true" /> Guardé esta idea en tu <Link href={`/ideas/${r.id}`} className="underline underline-offset-4">biblioteca</Link>
       </p>
     );
   }

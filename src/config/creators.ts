@@ -1,6 +1,6 @@
 /**
  * SOI Creator Economy — reglas de negocio en un solo lugar.
- * Los creadores no venden acceso a contenido: venden transformaciones empaquetadas (Blueprints).
+ * Los creadores no venden acceso a contenido: venden transformaciones empaquetadas (Moments premium).
  */
 
 /** Parte del precio que corresponde al creador (el resto cubre plataforma, IA y procesamiento de pagos). */
@@ -40,14 +40,15 @@ export type CreatorStats = { implementations: number; completions: number; activ
  */
 export function transformationScore(s: CreatorStats): number {
   if (!s.implementations) return 0;
-  const completion = s.completions / s.implementations;
-  const retention = s.active_last_14d / s.implementations;
-  const results = s.results_reported / s.implementations;
+  // Ejecuciones y resultados pueden superar a las personas (alguien repite un Moment): cada ratio se limita a 1.
+  const completion = Math.min(1, s.completions / s.implementations);
+  const retention = Math.min(1, s.active_last_14d / s.implementations);
+  const results = Math.min(1, s.results_reported / s.implementations);
   const reach = Math.log10(1 + s.implementations) / 4; // 10.000 implementaciones ≈ 1
   return Math.round(Math.min(1, reach) * 40 + completion * 25 + retention * 20 + results * 15);
 }
 
-/** Impact Score de un Blueprint: transformación generada, no vistas. */
+/** Impact Score de un Moment: transformación generada, no vistas. */
 export function impactScore(b: { implementations_count: number; completions_count: number; steps_completed_count: number }) {
   return b.implementations_count + b.completions_count * 3 + Math.floor(b.steps_completed_count / 5);
 }

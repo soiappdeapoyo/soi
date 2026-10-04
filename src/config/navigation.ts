@@ -4,9 +4,9 @@
  */
 export const PRIMARY_TABS = [
   { id: 'hoy', href: '/hoy', label: 'Hoy', icon: 'Sun', match: ['/hoy', '/ritual'] },
-  { id: 'impulso', href: '/impulso', label: 'Impulso', icon: 'Zap', match: ['/impulso', '/momentos', '/blueprints', '/comunidad', '/c/'] },
+  { id: 'impulso', href: '/impulso', label: 'Impulso', icon: 'Zap', match: ['/impulso', '/m', '/momentos', '/blueprints', '/comunidad', '/c/'] },
   { id: 'soi', href: '/chat', label: 'SOI', icon: 'MessageCircle', match: ['/chat'] },
-  { id: 'mi-vida', href: '/mi-vida', label: 'Mi Vida', icon: 'Orbit', match: ['/mi-vida', '/implementaciones', '/rutinas'] },
+  { id: 'mi-vida', href: '/mi-vida', label: 'Mi Vida', icon: 'Orbit', match: ['/mi-vida', '/ideas', '/implementaciones', '/rutinas'] },
   { id: 'yo', href: '/yo', label: 'Yo', icon: 'User', match: ['/yo', '/perfil', '/ajustes', '/planes', '/evidencias', '/creadores'] },
 ] as const;
 export type PrimaryTab = (typeof PRIMARY_TABS)[number];
@@ -15,9 +15,9 @@ export function isTabActive(pathname: string, tab: { match: readonly string[] })
   return tab.match.some((m) => pathname === m || pathname.startsWith(m.endsWith('/') ? m : `${m}/`));
 }
 
-/** Pantallas inmersivas donde la barra inferior se oculta (temporizador de rutina). */
+/** Pantallas inmersivas donde la barra inferior se oculta (ejecución de un Moment). */
 export function hidesBottomNav(pathname: string) {
-  return /^\/rutinas\/[^/]+$/.test(pathname);
+  return /^\/m\/[^/]+\/play$/.test(pathname) || /^\/rutinas\/[^/]+$/.test(pathname);
 }
 
 /** Accesos secundarios (sidebar y menú móvil). */
@@ -31,7 +31,7 @@ export const MY_SPACE = [
 export const PROTECTED_PREFIXES = [
   '/hoy', '/impulso', '/mi-vida', '/yo',
   '/chat', '/onboarding', '/rutinas', '/ritual', '/evidencias', '/comunidad', '/perfil', '/ajustes', '/planes',
-  '/momentos', '/blueprints', '/implementaciones', '/creadores',
+  '/momentos', '/blueprints', '/implementaciones', '/creadores', '/m', '/ideas',
 ];
 
 export const STREAK_MILESTONES = [7, 21, 40, 90] as const;

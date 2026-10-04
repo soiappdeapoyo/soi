@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const { supabase, user } = await getSessionUser();
   if (!user) return new Response('No autorizado', { status: 401 });
   const parsed = Body.safeParse(await req.json());
-  if (!parsed.success) return Response.json({ ok: false, message: 'Revisa los campos del momento.' }, { status: 400 });
+  if (!parsed.success) return Response.json({ ok: false, message: 'Revisa los campos de la idea.' }, { status: 400 });
   const m = parsed.data;
 
   if (m.visibility === 'community') {
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     insight: m.insight, reflection_question: m.reflectionQuestion ?? null, user_reflection: m.userReflection ?? null,
     actions: m.actions, visibility: m.visibility,
   }).select('id').single();
-  if (error) return Response.json({ ok: false, message: 'No se pudo guardar el momento.' }, { status: 500 });
+  if (error) return Response.json({ ok: false, message: 'No se pudo guardar la idea.' }, { status: 500 });
 
   await remember(supabase, {
     user_id: user.id, category: 'pensamiento', title: m.title, content: m.insight,

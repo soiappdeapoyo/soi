@@ -3,10 +3,10 @@ import type { Metadata } from 'next';
 import { BadgeCheck } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
 import { PublicShell } from '@/components/public/public-shell';
-import { BlueprintCard } from '@/components/social/blueprint-card';
-import { BLUEPRINT_FIELDS } from '@/lib/social/queries';
+import { MomentFlowCard } from '@/components/moments/moment-flow-card';
+import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import { transformationScore, type CreatorStats } from '@/config/creators';
-import type { CreatorProfile, SoiBlueprint } from '@/types/database';
+import type { CreatorProfile } from '@/types/database';
 
 async function load(handle: string) {
   const { supabase, user } = await getSessionUser();
@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ handle: s
   if (!creator) return { title: 'Creador' };
   return {
     title: `${creator.display_name} en SOI`,
-    description: creator.bio ?? `Blueprints de transformación de ${creator.display_name} para implementar en tu vida.`,
+    description: creator.bio ?? `Moments de transformación de ${creator.display_name} para vivir en tu vida.`,
   };
 }
 
@@ -31,7 +31,7 @@ export default async function CreatorPublicPage({ params }: { params: Promise<{ 
   if (!creator) notFound();
 
   const [{ data: blueprints }, { data: statsRows }] = await Promise.all([
-    supabase.from('soi_blueprints').select(BLUEPRINT_FIELDS).eq('creator_id', creator.user_id).eq('status', 'published').order('implementations_count', { ascending: false }),
+    supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('creator_id', creator.user_id).eq('status', 'published').order('executions_count', { ascending: false }),
     supabase.rpc('creator_stats', { p_creator: creator.user_id }),
   ]);
   const raw = (Array.isArray(statsRows) ? statsRows[0] : statsRows) as Record<keyof CreatorStats, number | string> | null;
@@ -53,7 +53,7 @@ export default async function CreatorPublicPage({ params }: { params: Promise<{ 
       <dl className="nums mt-5 grid grid-cols-3 gap-1.5 rounded-[14px] bg-soi-sidebar p-1.5">
         {[
           { k: 'Transformation Score', v: transformationScore(stats) },
-          { k: 'Implementaciones', v: stats.implementations },
+          { k: 'Personas', v: stats.implementations },
           { k: 'Lo completaron', v: stats.completions },
         ].map((t) => (
           <div key={t.k} className="rounded-lg bg-white px-3 py-2.5 shadow-ring">
@@ -73,12 +73,12 @@ export default async function CreatorPublicPage({ params }: { params: Promise<{ 
       )}
 
       <section className="mt-6">
-        <h2 className="mb-2 text-sm font-medium text-soi-muted">Blueprints</h2>
+        <h2 className="mb-2 text-sm font-medium text-soi-muted">Moments</h2>
         {blueprints?.length ? (
           <ul className="flex flex-col gap-2">
-            {(blueprints as SoiBlueprint[]).map((b) => <li key={b.id}><BlueprintCard bp={b} href={`/b/${b.id}`} /></li>)}
+            {blueprints.map((b) => { const m = toMomentFlow(b); return <li key={m.id}><MomentFlowCard m={m} creator={{ user_id: creator.user_id, handle: creator.handle, display_name: creator.display_name, is_verified: creator.is_verified }} href={`/b/${m.id}`} /></li>; })}
           </ul>
-        ) : <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">Pronto publicará sus primeros sistemas.</p>}
+        ) : <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">Pronto publicará sus primeros Moments.</p>}
       </section>
     </PublicShell>
   );

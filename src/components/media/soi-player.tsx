@@ -42,10 +42,12 @@ type Phase = 'facade' | 'playing' | 'reflect' | 'saved';
  * Inspiración dentro de SOI: sin salir de la app, sin videos sugeridos ni Shorts (rel=0).
  * Al terminar, SOI reaparece con UNA pregunta y la respuesta se guarda como conocimiento estructurado.
  */
-export function SoiPlayer({ video, onReflected, startWithReflection = false }: {
+export function SoiPlayer({ video, onReflected, startWithReflection = false, onEnded }: {
   video: SoiVideo; onReflected?: (text: string, video: SoiVideo) => void;
   /** Para retomar la reflexión de un video ya visto (pestaña Hoy). */
   startWithReflection?: boolean;
+  /** Dentro de un Moment: al terminar, continúa al siguiente bloque (la reflexión la pone el propio Moment). */
+  onEnded?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>(startWithReflection ? 'reflect' : 'facade');
   const [text, setText] = useState('');
@@ -63,11 +65,12 @@ export function SoiPlayer({ video, onReflected, startWithReflection = false }: {
     endedRef.current = true;
     playerRef.current?.destroy();
     playerRef.current = null;
-    setPhase('reflect');
+    setPhase(onEnded ? 'facade' : 'reflect');
     fetch('/api/momentum/video', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ videoId: video.id, title: video.title, channel: video.channel }),
     }).catch(() => {});
+    onEnded?.();
   }
 
   async function play() {
@@ -119,7 +122,7 @@ export function SoiPlayer({ video, onReflected, startWithReflection = false }: {
           ) : (
             <p className="mt-2 flex items-center gap-2 text-[15px]">
               <Check className="h-4 w-4 text-soi-accent" aria-hidden="true" /> Esa idea quedó guardada.
-              {momentId && <Link href={`/momentos/${momentId}`} className="ml-auto text-sm text-soi-accent underline underline-offset-4">Ver</Link>}
+              {momentId && <Link href={`/ideas/${momentId}`} className="ml-auto text-sm text-soi-accent underline underline-offset-4">Ver</Link>}
             </p>
           )}
         </div>

@@ -4,7 +4,7 @@
 
 ## Cómo usar esta guía (para Claude Code Opus)
 
-Antes de escribir cualquier componente visual en SOI, lee esta guía completa. Aplica estas reglas a todo lo que el usuario toca: botones, tarjetas, drawers, diálogos, toasts, el `RitualTimer`, el paywall y el chat.
+Antes de escribir cualquier componente visual en SOI, lee esta guía completa. Aplica estas reglas a todo lo que el usuario toca: botones, tarjetas, drawers, diálogos, toasts, el reproductor de Moments, el paywall y el chat.
 
 La filosofía: **la calidad está en los detalles que nadie nota conscientemente, pero que se sienten.** La interfaz de SOI debe sentirse calmada, precisa y táctil. SOI es una app de bienestar: el movimiento nunca debe alterar, apurar ni distraer a la persona.
 
@@ -26,6 +26,8 @@ Esta guía no reemplaza el "Principio SOI" ni las reglas de `CLAUDE.md`. Solo go
 | Radios | control 8 · bandeja de segmentos 14 · tarjeta 20 · bandeja 28 | tokens `--radius-*` |
 | Barra inferior | 5 pestañas (Hoy · Impulso · SOI · Mi Vida · Yo), h-14 + área segura, velo `bg-white/90` + blur, línea superior de 1 px. Activo: tinta + trazo 2 + `aria-current`; inactivo: `soi-subtle`. **Cambiar de pestaña no anima** (alta frecuencia); solo press 0.97. SOI es una pastilla con la marca. Se oculta en el temporizador de rutina | `components/layout/bottom-nav.tsx` |
 | Video en SOI | Facade → reproductor sin sugeridos; al terminar, la tarjeta de reflexión entra con `animate-enter` (evento raro, una vez) | `components/media/soi-player.tsx` |
+| Tarjeta de Moment | Tipo + duración + **íconos de sus bloques** (la forma del flujo) + creador + ejecuciones. Sin métricas de vanidad | `components/moments/moment-flow-card.tsx` |
+| Constructor | Biblioteca de acciones en cuadrícula, bloques editables inline, reordenar con flechas (sin arrastrar en v1), total de minutos siempre visible | `components/moments/moment-builder.tsx` |
 | Principio SOI | Encabezado discreto + menú `⋯`; control segmentado Pensamientos/Emociones/Acciones/Resultados; chips con los agentes del eslabón | `layout/page-header.tsx` · `principio/principio-nav.tsx` |
 | Tarjeta del ritual | Bandeja gris (p-2, 32 px) → tarjeta blanca (p-4, 24 px) → botones (8 px) | `rituals/ritual-timer.tsx` |
 | Círculo | Relleno azul claro, anillo azul de 2.5 px, número grande tabular | idem |
@@ -154,7 +156,10 @@ En SOI esto es la utilidad **`press`** (y `press-deep` = `scale(0.9)` para reacc
 
 ## 5. Aplicación específica en SOI
 
-### RitualTimer
+### Reproductor de Moments (antes RitualTimer)
+
+> El RitualTimer se generalizó en `components/moments/moment-player.tsx`: una acción a la vez, barra de tiempo lineal, halo de respiración solo en respiración y meditación, misma transición de paso, una sola celebración. Las reglas de abajo siguen vigentes.
+
 - Círculo SVG con `stroke-dashoffset` y transición **lineal** (tiempo real).
 - **Círculo de respiración**: halo detrás del círculo, ~4 s inhalar / ~6 s exhalar, `scale(1 → 1.12)` + `opacity` (`animate-breathe`). Se pausa con el temporizador (`animation-play-state`).
 - Cambio de paso: sale con `opacity` + `translateY(-4px)` (120 ms) y el nuevo entra desde `translateY(6px)` (200 ms). No cruzar ambos a la vez.

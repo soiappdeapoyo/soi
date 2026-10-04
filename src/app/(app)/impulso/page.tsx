@@ -1,145 +1,142 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { Plus, Star } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { Plus } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
-import { LockedFeature } from '@/components/paywall/locked-feature';
 import { buttonClass } from '@/components/ui/button';
-import { MomentCard } from '@/components/social/moment-card';
-import { BlueprintCard } from '@/components/social/blueprint-card';
-import { ActionCardView } from '@/components/chat/action-card-view';
-import { Tendencias, Empty } from '@/components/social/feed-sections';
-import { BLUEPRINT_FIELDS, creatorsById, loadFeed, myInteractions, type FeedItem } from '@/lib/social/queries';
-import type { SoiBlueprint } from '@/types/database';
+import { MomentFlowCard } from '@/components/moments/moment-flow-card';
+import { Empty } from '@/components/social/feed-sections';
+import { creatorsById, type CreatorLite } from '@/lib/social/queries';
+import { MOMENT_FIELDS, toMomentFlow, type MomentFlow } from '@/lib/moments/types';
+import { recommendMoment } from '@/lib/moments/server';
+import { loadToday } from '@/lib/today';
+import { OFFICIAL_MOMENTS } from '@/config/official-moments';
+import { MOMENT_KINDS, MomentKindSchema, type MomentKind } from '@/config/actions';
+import { MODE_KINDS } from '@/lib/moments/recommend';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Impulso' };
 
-const TABS = [
-  { id: 'para-ti', label: 'Para ti' },
-  { id: 'tendencias', label: 'Tendencias' },
-] as const;
-
-type Evidence = { id: string; content: string; author_name: string | null; is_anonymous: boolean; created_at: string };
-type Item =
-  | FeedItem
-  | { type: 'evidence'; item: Evidence }
-  | { type: 'action'; item: { id: string; title: string; minutes: number; area: string | null } };
 
 /**
- * Impulso: un flujo diseñado para mantener el momentum, no una red social tradicional.
- * Mezcla transformaciones de otros (Moments), sistemas para implementar (Blueprints), evidencias de la comunidad
- * y TU siguiente acción, intercalada para que inspirarse siempre desemboque en hacer.
+ * Impulso: el feed no muestra publicaciones, muestra Moments — secuencias de acciones que producen resultados.
+ * Hoy recomendado (según tu estado) · Tendencia (ejecuciones de la semana) · Nuevos. Filtro por tipo.
  * Paginado con "Ver más": sin scroll infinito ni métricas de vanidad.
  */
-export default async function ImpulsoPage({ searchParams }: { searchParams: Promise<{ tab?: string; antes?: string }> }) {
+export default async function ImpulsoPage({ searchParams }: { searchParams: Promise<{ tipo?: string; antes?: string }> }) {
   const sp = await searchParams;
-  const tab = sp.tab === 'tendencias' ? 'tendencias' : 'para-ti';
+  const tipo = MomentKindSchema.safeParse(sp.tipo).success ? (sp.tipo as MomentKind) : null;
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
-  const { access, profile } = await getAccessMap(user.id);
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-6 md:py-8">
       <header className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Impulso</h1>
-          <p className="text-soi-muted">Lo que está transformando vidas, para que también actúes.</p>
+          <p className="text-soi-muted">Moments que transforman: ejecútalos, guárdalos y hazlos tuyos.</p>
         </div>
-        <Link href="/momentos/nuevo" className={buttonClass('primary', 'sm')}><Plus className="h-4 w-4" aria-hidden="true" /> Momento</Link>
+        <Link href="/m/nuevo" className={buttonClass('primary', 'sm')}><Plus className="h-4 w-4" aria-hidden="true" /> Crear</Link>
       </header>
 
-      <nav aria-label="Secciones" className="mt-5 grid grid-cols-2 gap-1 rounded-[14px] bg-soi-sidebar p-1.5">
-        {TABS.map((t) => (
-          <Link key={t.id} href={`/impulso?tab=${t.id}`} aria-current={tab === t.id ? 'page' : undefined}
-            className={cn('press flex h-9 items-center justify-center rounded-lg text-sm',
-              tab === t.id ? 'bg-white text-soi-ink shadow-ring' : 'text-soi-muted hover:text-soi-ink')}>
-            {t.label}
-          </Link>
+      <nav aria-label="Tipo de Moment" className="-mx-5 mt-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
+        <KindChip href="/impulso" active={!tipo} label="Para ti" />
+        {(Object.keys(MOMENT_KINDS) as MomentKind[]).map((k) => (
+          <KindChip key={k} href={`/impulso?tipo=${k}`} active={tipo === k} label={MOMENT_KINDS[k].label} />
         ))}
       </nav>
 
       <div className="mt-5">
-        {!access.community ? (
-          <LockedFeature title="Impulso" description="Descubre e implementa las transformaciones que están cambiando vidas en SOI. Tu biblioteca sigue en Mi Vida." />
-        ) : tab === 'tendencias' ? (
-          <Tendencias supabase={supabase} />
-        ) : (
-          <ParaTi supabase={supabase} userId={user.id} before={sp.antes} weakestLink={profile?.weakest_link ?? null} />
-        )}
+        {tipo ? <ByKind supabase={supabase} kind={tipo} before={sp.antes} /> : <ParaTi supabase={supabase} userId={user.id} />}
       </div>
     </div>
   );
 }
 
+function KindChip({ href, active, label }: { href: string; active: boolean; label: string }) {
+  return (
+    <Link href={href} aria-current={active ? 'page' : undefined}
+      className={cn('press flex h-9 shrink-0 items-center rounded-lg px-3 text-sm', active ? 'bg-soi-ink text-white' : 'bg-white text-soi-ink shadow-ring hover:shadow-soft')}>
+      {label}
+    </Link>
+  );
+}
+
 type Sb = Awaited<ReturnType<typeof getSessionUser>>['supabase'];
 
-async function ParaTi({ supabase, userId, before, weakestLink }: { supabase: Sb; userId: string; before?: string; weakestLink: string | null }) {
-  const firstPage = !before;
-  const [{ items, nextBefore }, { data: evidence }, { data: actions }, { data: recommended }] = await Promise.all([
-    loadFeed(supabase, { before, weakestLink }),
-    supabase.from('community_posts').select('id, content, author_name, is_anonymous, created_at')
-      .eq('type', 'evidencia').eq('is_public', true).eq('flagged', false)
-      .lt('created_at', before ?? new Date().toISOString()).order('created_at', { ascending: false }).limit(3),
-    firstPage
-      ? supabase.from('agent_knowledge').select('id, title, metadata').eq('user_id', userId).eq('category', 'accion')
-        .contains('tags', ['action_card']).eq('status', 'en_progreso').order('created_at', { ascending: false }).limit(1)
-      : Promise.resolve({ data: [] as { id: string; title: string; metadata: unknown }[] }),
-    firstPage && weakestLink
-      ? supabase.from('soi_blueprints').select(BLUEPRINT_FIELDS).eq('status', 'published').eq('eslabon', weakestLink)
-        .order('implementations_count', { ascending: false }).limit(2)
-      : Promise.resolve({ data: [] as SoiBlueprint[] }),
+function Section({ title, hint, items, creators, badge }: { title: string; hint?: string; items: MomentFlow[]; creators: Map<string, CreatorLite>; badge?: string }) {
+  if (!items.length) return null;
+  return (
+    <section className="mb-8" aria-label={title}>
+      <h2 className="text-sm font-medium text-soi-muted">{title}</h2>
+      {hint && <p className="mb-2 text-xs text-soi-subtle">{hint}</p>}
+      <ul className="mt-2 flex flex-col gap-3">
+        {items.map((m) => <li key={m.id}><MomentFlowCard m={m} creator={m.creator_id ? creators.get(m.creator_id) : undefined} badge={badge} /></li>)}
+      </ul>
+    </section>
+  );
+}
+
+async function ParaTi({ supabase, userId }: { supabase: Sb; userId: string }) {
+  const { profile, access } = await getAccessMap(userId);
+  const { decision } = await loadToday(supabase, userId, profile, access.daily_ritual);
+  const kinds = MODE_KINDS[decision.mode];
+
+  const [recommended, { data: trendingRows }, { data: fresh }, { data: forKinds }] = await Promise.all([
+    recommendMoment(supabase, userId, kinds),
+    supabase.rpc('trending_blueprints', { p_days: 7, p_limit: 5 }),
+    supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('status', 'published').order('created_at', { ascending: false }).limit(5),
+    supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('status', 'published').in('kind', kinds).order('executions_count', { ascending: false }).limit(3),
   ]);
+  const trendingIds = ((trendingRows ?? []) as { blueprint_id: string; recent_implementations: number }[]).filter((r) => Number(r.recent_implementations) > 0).map((r) => r.blueprint_id);
+  const { data: trendingData } = trendingIds.length
+    ? await supabase.from('soi_blueprints').select(MOMENT_FIELDS).in('id', trendingIds)
+    : { data: [] as Record<string, unknown>[] };
+  const byId = new Map((trendingData ?? []).map((r) => [r.id as string, toMomentFlow(r)]));
+  const trending = trendingIds.map((id) => byId.get(id)).filter(Boolean) as MomentFlow[];
 
-  // Mezcla: feed base + evidencias cada 4 elementos + tu siguiente acción en 2º lugar + recomendados para tu eslabón.
-  const seen = new Set(items.filter((x) => x.type === 'blueprint').map((x) => x.item.id));
-  const merged: Item[] = [...items];
-  ((recommended ?? []) as SoiBlueprint[]).filter((b) => !seen.has(b.id)).forEach((b, i) => merged.splice(Math.min(1 + i * 5, merged.length), 0, { type: 'blueprint', item: b }));
-  ((evidence ?? []) as Evidence[]).forEach((e, i) => merged.splice(Math.min(3 + i * 4, merged.length), 0, { type: 'evidence', item: e }));
-  const next = (actions ?? [])[0];
-  if (next) {
-    const m = (next.metadata ?? {}) as { minutes?: number; area?: string | null };
-    merged.splice(Math.min(1, merged.length), 0, { type: 'action', item: { id: next.id as string, title: next.title as string, minutes: m.minutes ?? 5, area: m.area ?? null } });
-  }
+  const recs: MomentFlow[] = [];
+  const add = (m: MomentFlow | null | undefined) => { if (m && !recs.some((x) => x.id === m.id)) recs.push(m); };
+  add(recommended);
+  (forKinds ?? []).map(toMomentFlow).forEach(add);
+  OFFICIAL_MOMENTS.filter((m) => kinds.includes(m.kind)).forEach(add);
 
-  const [creators, mine] = await Promise.all([
-    creatorsById(supabase, merged.filter((x) => x.type === 'blueprint').map((x) => (x.item as SoiBlueprint).creator_id)),
-    myInteractions(supabase, userId, merged.filter((x) => x.type === 'moment').map((x) => x.item.id)),
-  ]);
+  const seen = new Set([...recs, ...trending].map((m) => m.id));
+  const nuevos = (fresh ?? []).map(toMomentFlow).filter((m) => !seen.has(m.id));
+  const all = [...recs, ...trending, ...nuevos];
+  const creators = await creatorsById(supabase, all.map((m) => m.creator_id).filter(Boolean) as string[]);
 
-  if (!merged.length) return <Empty text="Aún no hay transformaciones compartidas. Sé la primera persona en convertir una idea en acción." />;
-
+  if (!all.length) return <Empty text="Aún no hay Moments publicados. Crea el primero o empieza con uno oficial." />;
   return (
     <>
+      <Section title="Hoy recomendado" hint={decision.headline} items={recs.slice(0, 3)} creators={creators} />
+      <Section title="Tendencia" hint="Los que más personas ejecutaron esta semana." items={trending} creators={creators} badge="Tendencia" />
+      <Section title="Nuevos" items={nuevos} creators={creators} badge="Nuevo" />
+    </>
+  );
+}
+
+async function ByKind({ supabase, kind, before }: { supabase: Sb; kind: MomentKind; before?: string }) {
+  let q = supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('status', 'published').eq('kind', kind)
+    .order('created_at', { ascending: false }).limit(12);
+  if (before) q = q.lt('created_at', before);
+  const { data } = await q;
+  const published = (data ?? []).map(toMomentFlow);
+  const official = before ? [] : OFFICIAL_MOMENTS.filter((m) => m.kind === kind);
+  const items = [...official, ...published];
+  const creators = await creatorsById(supabase, published.map((m) => m.creator_id).filter(Boolean) as string[]);
+  if (!items.length) return <Empty text={`Todavía no hay Moments de ${MOMENT_KINDS[kind].label.toLowerCase()}. ¿Creas el primero?`} />;
+  const last = published.at(-1);
+  return (
+    <>
+      <p className="mb-3 text-sm text-soi-muted">{MOMENT_KINDS[kind].hint}</p>
       <ul className="flex flex-col gap-3">
-        {merged.map((x) => (
-          <li key={`${x.type}-${x.item.id}`}>
-            {x.type === 'moment' && <MomentCard m={x.item} mine={{ resonance: mine.has(`${x.item.id}:resonance`), save: mine.has(`${x.item.id}:save`) }} />}
-            {x.type === 'blueprint' && <BlueprintCard bp={x.item} creator={creators.get(x.item.creator_id)} />}
-            {x.type === 'evidence' && (
-              <article className="rounded-[20px] bg-white p-4 shadow-ring">
-                <p className="flex items-center gap-1.5 text-xs text-soi-muted">
-                  <Star className="h-3.5 w-3.5 text-soi-gold" aria-hidden="true" />
-                  Evidencia · {x.item.is_anonymous ? 'Alma anónima' : (x.item.author_name ?? 'Alguien de SOI')} · {formatDistanceToNow(new Date(x.item.created_at), { addSuffix: true, locale: es })}
-                </p>
-                <p className="mt-2 text-[15px] leading-relaxed">{x.item.content}</p>
-              </article>
-            )}
-            {x.type === 'action' && (
-              <section aria-label="Tu siguiente acción" className="rounded-[20px] bg-soi-sidebar p-3">
-                <p className="px-1 text-xs font-medium text-soi-muted">Tu siguiente acción</p>
-                <ActionCardView card={{ id: x.item.id, title: x.item.title, minutes: x.item.minutes, detail: null, category: x.item.area, done: false }} />
-              </section>
-            )}
-          </li>
-        ))}
+        {items.map((m) => <li key={m.id}><MomentFlowCard m={m} creator={m.creator_id ? creators.get(m.creator_id) : undefined} /></li>)}
       </ul>
-      {nextBefore && (
+      {published.length === 12 && last && (
         <div className="mt-5 text-center">
-          <Link href={`/impulso?antes=${encodeURIComponent(nextBefore)}`} className={buttonClass('outline', 'sm')}>Ver más</Link>
+          <Link href={`/impulso?tipo=${kind}&antes=${encodeURIComponent(last.created_at)}`} className={buttonClass('outline', 'sm')}>Ver más</Link>
         </div>
       )}
     </>

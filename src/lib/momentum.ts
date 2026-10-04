@@ -9,7 +9,7 @@ import type { Eslabon } from '@/config/agents';
 export const MOMENTUM_KINDS = [
   'return', 'action_completed', 'ritual_completed', 'routine_completed', 'evidence_saved',
   'reflection', 'goal_set', 'blueprint_implemented', 'blueprint_step', 'blueprint_completed',
-  'video_watched', 'checkin',
+  'video_watched', 'checkin', 'moment_completed',
 ] as const;
 export type MomentumKind = (typeof MOMENTUM_KINDS)[number];
 export type MomentumEvent = { kind: MomentumKind; created_at: string };
@@ -31,7 +31,7 @@ function plural(n: number, one: string, many: string) {
 /**
  * Momentum Score (0–100): continuidad de transformación, no productividad.
  * Ventana de 7 días. Pesos: regreso diario 25 · acciones 20 · constancia (racha) 15 ·
- * avance de metas 15 · reflexión 10 · Blueprints 10 · inspiración (videos terminados) 5.
+ * avance de metas 15 · reflexión 10 · Moments propios (versiones y pasos) 10 · inspiración (videos terminados) 5.
  * Sin castigo: lo que falta se nombra como "por retomar", nunca como fallo.
  */
 export function computeMomentum(events: MomentumEvent[], streak: number, now = new Date()): MomentumResult {
@@ -41,7 +41,7 @@ export function computeMomentum(events: MomentumEvent[], streak: number, now = n
   for (const e of recent) counts[e.kind] = (counts[e.kind] ?? 0) + 1;
 
   const activeDays = new Set(recent.map((e) => e.created_at.slice(0, 10))).size;
-  const actions = counts.action_completed + counts.ritual_completed + counts.routine_completed;
+  const actions = counts.action_completed + counts.ritual_completed + counts.routine_completed + counts.moment_completed;
   const goals = counts.evidence_saved + counts.goal_set + counts.blueprint_completed;
   const blueprints = counts.blueprint_implemented + counts.blueprint_step;
 
@@ -57,6 +57,7 @@ export function computeMomentum(events: MomentumEvent[], streak: number, now = n
 
   const signals: MomentumSignal[] = [];
   if (counts.ritual_completed + counts.routine_completed) signals.push({ positive: true, label: `Completaste ${plural(counts.ritual_completed + counts.routine_completed, 'ritual o rutina', 'rituales o rutinas')}` });
+  if (counts.moment_completed) signals.push({ positive: true, label: `Completaste ${plural(counts.moment_completed, 'Moment', 'Moments')}` });
   if (counts.action_completed) signals.push({ positive: true, label: `Convertiste ${plural(counts.action_completed, 'idea', 'ideas')} en acción` });
   if (counts.goal_set) signals.push({ positive: true, label: `Definiste ${plural(counts.goal_set, 'meta', 'metas')}` });
   if (counts.evidence_saved) signals.push({ positive: true, label: `Registraste ${plural(counts.evidence_saved, 'evidencia', 'evidencias')}` });
@@ -107,10 +108,10 @@ export function detectMomentumState(i: StateInput): MomentumState {
 }
 
 const GUIDANCE: Record<Intervention, string> = {
-  EXECUTE: `EXECUTE — su energía está alta. Aprovecha el momento: propone un avance concreto de su meta y conviértelo en una Action Card (createActionCard). Sin teoría extra.`,
-  INSPIRE: `INSPIRE — su energía está baja. Hoy no necesita más teoría ni exigencia. Ofrece inspiración breve dentro de SOI: busca con youtubeSearch un video corto de Brian Tracy, Hal Elrod, Robin Sharma, Joe Dispenza, Neville Goddard o Napoleon Hill (se reproduce dentro de SOI, sin salir de la app). Al terminar el video SOI le hará una sola pregunta de reflexión.`,
-  REGULATE: `REGULATE — hay estrés o bloqueo. Secuencia: respiración guiada breve → si quiere, meditación → una línea de diario → recién después, aclarar el siguiente paso. No propongas metas nuevas.`,
-  CLARIFY: `CLARIFY — hay demasiados objetivos o falta dirección. Conversa para extraer UNA prioridad, confírmala con la persona y conviértela en un plan de un solo paso (createActionCard).`,
+  EXECUTE: `EXECUTE — su energía está alta. Aprovecha el momento: diseña con createMoment un Moment de crecimiento (kind growth) que avance su meta, con un bloque goal o next_step. Sin teoría extra.`,
+  INSPIRE: `INSPIRE — su energía está baja. Hoy no necesita más teoría ni exigencia. Diseña con createMoment un Moment corto de inspiración: un bloque video (query con un autor del marco de SOI: Brian Tracy, Hal Elrod, Robin Sharma, Joe Dispenza, Neville Goddard o Napoleon Hill), una reflexión de UNA pregunta y una acción mínima de 2 minutos.`,
+  REGULATE: `REGULATE — hay estrés o bloqueo. Diseña con createMoment un Moment de recuperación (kind recovery): respiración → meditación breve → escritura de una línea → registro emocional. No propongas metas nuevas.`,
+  CLARIFY: `CLARIFY — hay demasiados objetivos o falta dirección. Conversa para extraer UNA prioridad, confírmala y diseña con createMoment un Moment corto: escritura de prioridades → objetivo → próximo paso.`,
 };
 
 /** Bloque del system prompt: capa transversal sobre cualquier agente. */
@@ -121,8 +122,8 @@ Tu responsabilidad es aumentar la probabilidad de que esta persona siga avanzand
 - Momentum Score: ${m.score}/100. Señales recientes: ${pos}.
 - Estado detectado: ${state}. Intervención: ${GUIDANCE[STATE_INTERVENTION[state]]}
 - Ciclo: inspiración → reflexión → insight → acción → evidencia. Después de inspirar o enseñar, haz UNA sola pregunta poderosa ("¿Qué idea quieres convertir en parte de tu vida?").
-- Cuando la persona responda con un insight valioso, guárdalo como Moment con captureMoment (privado; ella decide si lo comparte).
-- Si el mensaje empieza con "Mi reflexión de «…»", ya quedó guardada como conocimiento: responde en una frase ("Esa idea quedó guardada.") y conviértela en UNA Action Card de 3 minutos con createActionCard. No vuelvas a guardarla con captureMoment.
+- Cuando la persona responda con un insight valioso, guárdalo como Idea con captureIdea (privada; ella decide si la comparte).
+- Si el mensaje empieza con "Mi reflexión de «…»", ya quedó guardada como conocimiento: responde en una frase ("Esa idea quedó guardada.") y conviértela en un Moment de 3 minutos con createMoment (por ejemplo: escritura sobre cómo aplicarla → próximo paso). No vuelvas a guardarla con captureIdea.
 - No menciones el score ni el estado salvo que la persona pregunte.
 - Pregunta guía: ¿esto aumenta la probabilidad de que se convierta en quien quiere ser?`;
 }
@@ -177,7 +178,7 @@ export function decideToday(i: TodayInput): TodayDecision {
   }
   if (state === 'high_energy') {
     if (i.pendingActions > 0) return { mode: 'EXECUTE', state, headline: 'Aprovechemos este momento.', detail: 'Tu energía está alta. Termina una acción pendiente ahora.' };
-    if (i.activeImplementation) return { mode: 'CONTINUE', state, headline: 'Sigue construyendo tu sistema.', detail: 'Tienes un Blueprint en práctica. Un paso más hoy.' };
+    if (i.activeImplementation) return { mode: 'CONTINUE', state, headline: 'Sigue construyendo tu sistema.', detail: 'Tienes un Moment en marcha. Vívelo hoy.' };
     return { mode: 'EXECUTE', state, headline: 'Aprovechemos este momento.', detail: 'Convirtamos tu energía en un plan concreto con SOI.' };
   }
   // Energía baja: continuar si hay algo pequeño en marcha; si no, inspirar sin exigir.

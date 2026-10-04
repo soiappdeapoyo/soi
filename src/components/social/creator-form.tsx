@@ -59,7 +59,7 @@ export function CreatorForm({ initial, suggestedName }: { initial: CreatorProfil
       <div>
         <Label htmlFor="cf-method">Tu método</Label>
         <Textarea id="cf-method" value={methodology} onChange={(e) => setMethodology(e.target.value)} maxLength={3000} rows={4}
-          placeholder="Cómo piensas y trabajas. SOI lo usará para aplicar tu método a la vida de cada persona que implemente tus Blueprints." />
+          placeholder="Cómo piensas y trabajas. SOI lo usará para aplicar tu método a la vida de cada persona que viva tus Moments." />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>

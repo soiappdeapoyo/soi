@@ -60,7 +60,7 @@ export function buildSystemPrompt(agentId: AgentId, ctx: PromptContext = {}): st
     : '';
 
   const tools = `HERRAMIENTAS:
-- updateProfile, scheduleReminder, suggestPractice, createActionCard y captureMoment: disponibles.
+- updateProfile, scheduleReminder, suggestPractice, createMoment y captureIdea: disponibles.
 - webSearch: solo para datos verificables (no para técnicas).
 - youtubeSearch: ${ctx.tools?.youtube ? 'disponible' : 'NO disponible (plan Free). Si ayudaría un video, menciona que es parte de SOI+.'}
 - saveEvidence: ${ctx.tools?.evidence ? 'disponible' : 'NO disponible (plan Free). Sugiere anotar la evidencia y menciona SOI+.'}`;

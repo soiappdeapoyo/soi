@@ -6,10 +6,10 @@ import { getSessionUser } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/billing/check-access';
 import { buttonClass } from '@/components/ui/button';
 import { CreatorForm } from '@/components/social/creator-form';
-import { BlueprintCard } from '@/components/social/blueprint-card';
-import { BLUEPRINT_FIELDS } from '@/lib/social/queries';
+import { MomentFlowCard } from '@/components/moments/moment-flow-card';
+import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import { formatPrice, transformationScore, type CreatorStats } from '@/config/creators';
-import type { CreatorProfile, SoiBlueprint } from '@/types/database';
+import type { CreatorProfile } from '@/types/database';
 
 export const metadata: Metadata = { title: 'Estudio de creador' };
 
@@ -30,7 +30,7 @@ export default async function CreadoresPage() {
       <div className="mx-auto max-w-2xl px-5 py-8">
         <h1 className="text-3xl font-semibold tracking-tight">Estudio de creador</h1>
         <p className="mb-5 mt-1 text-soi-muted">
-          Convierte tu conocimiento en Blueprints que otras personas implementan, con seguimiento de la IA aplicando tu método a su vida.
+          Convierte tu conocimiento en Moments: secuencias de acciones que otras personas ejecutan, adaptan y mejoran, con la IA aplicando tu método a su vida.
           Publica gratis para generar confianza o cobra por sistemas completos.
         </p>
         <CreatorForm initial={null} suggestedName={profile?.display_name ?? ''} />
@@ -40,7 +40,7 @@ export default async function CreadoresPage() {
 
   const c = creator as CreatorProfile;
   const [{ data: blueprints }, { data: statsRows }, { data: purchases }] = await Promise.all([
-    supabase.from('soi_blueprints').select(BLUEPRINT_FIELDS).eq('creator_id', user.id).order('created_at', { ascending: false }),
+    supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('creator_id', user.id).neq('status', 'private').order('created_at', { ascending: false }),
     supabase.rpc('creator_stats', { p_creator: user.id }),
     supabase.from('blueprint_purchases').select('creator_share_cents, payout_status, currency').eq('creator_id', user.id),
   ]);
@@ -55,7 +55,7 @@ export default async function CreadoresPage() {
 
   const tiles = [
     { k: 'Transformation Score', v: String(transformationScore(stats)) },
-    { k: 'Implementaciones', v: String(stats.implementations) },
+    { k: 'Personas', v: String(stats.implementations) },
     { k: 'Completitud', v: `${completion}%` },
     { k: 'Activas (14 días)', v: String(stats.active_last_14d) },
   ];
@@ -69,7 +69,7 @@ export default async function CreadoresPage() {
         </div>
         <div className="flex gap-2">
           <Link href={`/c/${c.handle}`} className={buttonClass('outline', 'sm')}><ExternalLink className="h-4 w-4" aria-hidden="true" /> Perfil público</Link>
-          <Link href="/creadores/blueprint" className={buttonClass('primary', 'sm')}><Plus className="h-4 w-4" aria-hidden="true" /> Blueprint</Link>
+          <Link href="/m/nuevo" className={buttonClass('primary', 'sm')}><Plus className="h-4 w-4" aria-hidden="true" /> Moment</Link>
         </div>
       </header>
 
@@ -90,15 +90,15 @@ export default async function CreadoresPage() {
       </section>
 
       <section className="mt-6" aria-labelledby="mine">
-        <h2 id="mine" className="mb-2 text-sm font-medium text-soi-muted">Tus Blueprints</h2>
+        <h2 id="mine" className="mb-2 text-sm font-medium text-soi-muted">Tus Moments publicados y borradores</h2>
         {blueprints?.length ? (
           <ul className="flex flex-col gap-2">
-            {(blueprints as SoiBlueprint[]).map((b) => (
-              <li key={b.id}><BlueprintCard bp={b} /></li>
+            {blueprints.map((b) => (
+              <li key={b.id as string}><MomentFlowCard m={toMomentFlow(b)} /></li>
             ))}
           </ul>
         ) : (
-          <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">Empieza por un momento que te transformó y conviértelo en un sistema que otros puedan implementar.</p>
+          <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">Diseña tu primer Moment: una secuencia de acciones que otras personas puedan vivir y adaptar.</p>
         )}
       </section>
 

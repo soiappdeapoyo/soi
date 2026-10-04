@@ -22,7 +22,7 @@ export default async function ImplementacionPage({ params }: { params: Promise<{
     <div className="mx-auto max-w-2xl px-5 py-8">
       <Link href="/mi-vida#biblioteca" className="press inline-flex items-center gap-1 text-sm text-soi-muted hover:text-soi-ink"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Mi Vida</Link>
       <p className="mt-5 text-xs text-soi-muted">Tu versión · {impl.adapted_minutes ?? impl.blueprint?.required_minutes} min al día</p>
-      <h1 className="mt-1 text-3xl font-semibold tracking-tight">{impl.blueprint?.title ?? 'Blueprint'}</h1>
+      <h1 className="mt-1 text-3xl font-semibold tracking-tight">{impl.blueprint?.title ?? 'Moment'}</h1>
       {impl.adaptation_note && <p className="mt-3 rounded-[14px] bg-soi-accent-soft p-3 text-[15px] text-soi-accent">{impl.adaptation_note}</p>}
 
       <div className="mt-6">
@@ -32,7 +32,7 @@ export default async function ImplementacionPage({ params }: { params: Promise<{
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <Link href="/chat" className={buttonClass('outline', 'sm')}><MessageCircle className="h-4 w-4" aria-hidden="true" /> Hablarlo con SOI</Link>
-        {impl.blueprint && <Link href={`/blueprints/${impl.blueprint.id}`} className="text-sm text-soi-muted underline-offset-4 hover:underline">Ver el original</Link>}
+        {impl.blueprint && <Link href={`/m/${impl.blueprint.id}`} className="text-sm text-soi-muted underline-offset-4 hover:underline">Ver el original</Link>}
       </div>
       {impl.blueprint?.source && <p className="mt-4 text-xs text-soi-muted">Fuente: {impl.blueprint.source}</p>}
     </div>

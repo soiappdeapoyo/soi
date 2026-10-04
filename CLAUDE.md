@@ -131,6 +131,7 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 | `0005_streaks_community_push.sql` | Escudo de racha, `register_ritual_day`, `toggle_reaction`, país, avatar, push, autor/demo en posts, **permisos por columna en `user_profiles` (anti-bypass del paywall)**, endurecimiento de `decrement_free_query`/`expire_trials` |
 | `0006_atomic_free_queries.sql` | `consume_chat_query` (comprueba y descuenta atómicamente), `refund_chat_query` (si fallan todos los proveedores), `purge_crisis_logs` (retención 90 días) |
 | `0008_momentum_signals.sql` | Amplía `momentum_events.kind` con `video_watched` y `checkin` |
+| `0009_executable_moments.sql` | Moments ejecutables sobre `soi_blueprints` (`kind`, `blocks`, `premium_blocks` sin lectura, `parent_id`/`parent_slug`, `version`, `executions_count`, `forks_count`, estado `private`), trigger `moment_normalize` (vista previa premium, `steps` y minutos derivados, no publicar forks de premium), `moment_runs`, `moment_versions`, RPC `get_moment_blocks`, `fork_moment`, `complete_moment_run` (cuenta 1 vez/persona/día, solo gratis o comprado), `save_moment_version`; `trending_blueprints` y `creator_stats` cuentan ejecuciones y versiones |
 | `0007_moments_blueprints_momentum.sql` | `creator_profiles`, `soi_moments`, `soi_blueprints`, `blueprint_implementations`, `blueprint_purchases`, `moment_interactions`, `momentum_events`; RPC `toggle_moment_interaction`, `implement_blueprint`, `toggle_implementation_step`, `set_implementation_result`, `trending_blueprints`, `creator_stats`. Contadores y compras **solo vía RPC/webhook** (permisos por columna) |
 
 **Uso de categorías:** `evidencia` (Muro), `ritual_diario` (ritual generado), `perfil_usuario` (onboarding, análisis), `conversacion` (memoria RAG), `accion` + tag `recordatorio` (scheduleReminder), `video_cache`, `aprendizaje_web`, `crisis_log`.
@@ -196,15 +197,17 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 4. `scheduleReminder` — `agent_knowledge` categoría `accion`, tag `recordatorio`.
 5. `webSearch` — Tavily.
 6. `suggestPractice` — botón dentro del mensaje para empezar una rutina, el ritual o registrar una evidencia (`PracticeCard`; candado en Free).
-7. `createActionCard` — insight → Action Card (`agent_knowledge` `accion` + tag `action_card`); "Marcar hecho" suma momentum.
-8. `captureMoment` — guarda un SOI Moment privado + el insight en la memoria transversal (`pensamiento`, tag `insight`, `metadata.moment_id`).
+7. `createMoment` — **la IA diseña SOI Moments, no tareas sueltas**: 2 a 8 bloques del catálogo, validados con `parseBlocks` (lo inválido se descarta; con menos de 2 válidos devuelve errores para que la IA corrija). Se guarda privado y en el chat aparece "Preparé un Moment de N minutos" + Comenzar (`MomentProposal`).
+8. `captureIdea` — guarda una Idea privada (`soi_moments`) + el insight en la memoria transversal (`pensamiento`, tag `insight`, `metadata.moment_id`).
+
+Las Action Cards ya no se crean desde el chat: existen como bloque `next_step` de un Moment (al completar se vuelven acción pendiente en Hoy) y para el historial anterior.
 
 ---
 
 ## ⏰ Rutinas y Ritual Diario
 
-- `src/config/routines.ts` (5 rutinas con autor, fuente y eslabón). `routineForMinutes()` para el onboarding.
-- `RitualTimer`: círculo SVG, paso grande, cita del autor en itálicas, pausa/saltar/salir, TTS, ánimo antes/después, celebración, CTA al Muro, candado en Free.
+- `src/config/routines.ts` (5 rutinas con autor, fuente y eslabón) sigue siendo la fuente de verdad del contenido; `src/config/official-moments.ts` las convierte en **Moments oficiales** (slug = id de la rutina). `routineForMinutes()` para el onboarding.
+- El antiguo `RitualTimer` se generalizó en el reproductor de Moments (`src/components/moments/moment-player.tsx`); `/rutinas` redirige a Impulso (Diarios) y `/rutinas/[id]` a `/m/[id]/play`.
 - **Ritual diario** (`/ritual`, `src/lib/ritual.ts`): 4 partes (afirmación → visualización → acción → señal), generado por fase.
 - **Racha sin castigo** (`register_ritual_day`): 1 día sin practicar no rompe; 2 días consumen un escudo; hitos 7/21/40/90 regalan un escudo; la fase avanza con la racha (chispa → vacío → alineación → manifestación). Mensaje: "Ayer no te vimos, pero aquí seguimos. ¿Retomamos?"
 - **Cron:** `/api/cron/daily-ritual` (`0 6 * * *`, solo SOI+, push) y `/api/cron/expire-trials`.
@@ -219,17 +222,31 @@ Para agregar un agente: entrada en `AGENTS` + ficha en `AGENT_SPECS` + enum del 
 
 ---
 
+## ✨ SOI Moments (la unidad central)
+> Un SOI Moment es un flujo inteligente, editable y reutilizable de acciones que busca producir un cambio específico en el estado emocional, mental o conductual. Tiene intención, inicio, final, objetivo y resultado esperado. Chat → Moment → ejecución → resultados → aprendizaje → mejor versión.
+
+- **Mapeo de tablas (no se renombran, Regla #7):** `soi_blueprints` = Moments ejecutables · `soi_moments` = Ideas. En TS: `MomentFlow` (`src/lib/moments/types.ts`) e `Idea`.
+- **Biblioteca de acciones** (`src/config/actions.ts`): 16 acciones (`breathing`, `meditation`, `timer`, `writing`, `visualization`, `checklist`, `video`, `walk`, `gratitude`, `reading`, `reflection`, `affirmation`, `goal`, `emotion_log`, `rest`, `celebration`) + estructurales `next_step` y `moment` (composición). Cada una con esquema zod de `config`; `parseBlocks()` valida todo bloque (constructor, chat y mejoras). Un bloque cita su `source` cuando usa la técnica de un autor.
+- **Tipos:** `daily`, `recovery`, `growth`, `learning`, `challenge`, `community` (`MOMENT_KINDS`).
+- **Oficiales:** las 5 rutinas como Moments (`/m/<slug>`), en código, nunca en la tabla. Para modificarlos se guarda una copia (`parent_slug`).
+- **Composición:** un bloque `moment` reutiliza otro Moment; `flattenBlocks()` lo expande (profundidad 2, sin ciclos).
+- **Rutas:** `/m/[id]` (detalle; uuid o slug) · `/m/[id]/play` (reproductor, oculta la barra inferior) · `/m/nuevo` (constructor; `?editar=`, `?idea=`). Redirecciones desde `/blueprints/*`, `/rutinas/*`, `/momentos/*`, `/creadores/blueprint`.
+- **Ejecución** (`moment-player.tsx` + `block-runners.tsx`): ánimo antes → una acción a la vez (los bloques temporizados avanzan solos) → ánimo después, "¿te ayudó?" y "¿qué funcionó?" → celebración. Al completar (`/api/moment-runs/[id]/complete`): momentum `moment_completed`, racha, metas de bloques `goal` al perfil, `next_step` como acción pendiente y el aprendizaje a la memoria.
+- **Mejor versión:** `/api/moments-flow/[id]/improve` propone la v2 (`proposeImprovement` con IA; respaldo `improveByRules`); la persona acepta (`/versions` → `save_moment_version`, con historial) o descarta. Si el Moment no es suyo (u oficial), se crea su copia: **el original nunca cambia**.
+- **Premium:** el público ve vista previa (títulos y minutos); el contenido completo solo vía `get_moment_blocks` (dueño o comprador). Un fork de premium no se puede publicar.
+- **Acceso:** ejecutar requiere `routine_execution` (Free bloqueado); un premium requiere compra en cualquier plan. Navegar Impulso y crear Moments es libre; publicar exige perfil de creador.
+
 ## 🧭 Momentum Director (capa transversal de IA)
 No es un agente más: es un bloque del system prompt que se suma a **cualquier** agente (nunca en crisis). `src/lib/momentum.ts` (puro, testeado) + `momentum-server.ts`.
-- **Momentum Score** (0–100, 7 días): regreso diario 25 · acciones 20 · racha 20 · metas/evidencias 15 · reflexión 10 · Blueprints 10. Lo pendiente se nombra "por retomar" (sin castigo).
-- **Estado → intervención:** `anxiety → REGULATE` (respiración → meditación → diario → aclarar) · `confusion → CLARIFY` (una prioridad, un paso) · `high_energy → EXECUTE` (Action Card) · `low_energy → INSPIRE` (contenido breve + acción de 2 min). La regulación tiene prioridad.
+- **Momentum Score** (0–100, 7 días): regreso diario 25 · acciones (incl. Moments completados) 20 · racha 15 · metas/evidencias 15 · reflexión 10 · Moments propios 10 · inspiración 5. Lo pendiente se nombra "por retomar" (sin castigo).
+- **Estado → intervención:** `anxiety → REGULATE` (respiración → meditación → diario → aclarar) · `confusion → CLARIFY` (una prioridad, un paso) · `high_energy → EXECUTE` (Moment de crecimiento) · `low_energy → INSPIRE` (Moment con video + reflexión). En todos los casos la IA responde diseñando un Moment. La regulación tiene prioridad.
 - **Eventos** (`momentum_events`): `return`, `action_completed`, `ritual_completed`, `routine_completed`, `evidence_saved`, `reflection`, `goal_set`, `blueprint_implemented`, `blueprint_step`, `blueprint_completed`.
-- **Creator Intelligence** (`src/lib/ai/creator-method.ts`): con Blueprints activos, el método, principios y límites del creador entran al prompt como datos ("el método de X aplicado a mi vida").
+- **Creator Intelligence** (`src/lib/ai/creator-method.ts`): si la persona vive Moments de creadores (su versión guardada o implementaciones previas), el método, principios y límites del creador entran al prompt como datos ("el método de X aplicado a mi vida").
 - El Muro de Evidencias muestra evolución (Momentum + cadena ideas → acciones → sistemas → evidencias), no historial.
 
 ### Ciclo inspiración → reflexión → acción
 - **Video dentro de SOI** (`components/media/soi-player.tsx`): IFrame API de YouTube (`youtube-nocookie`, `rel=0`), sin salir de la app. Al terminar (`ENDED` o "Terminé") registra `video_watched` y SOI reaparece con **una** pregunta (`REFLECTION_QUESTION`).
-- La respuesta va a `/api/reflections`: Moment privado (fuente: el video) + insight en la memoria + momentum `reflection`. En el chat también se envía "Mi reflexión de «…»" y el agente la convierte en UNA Action Card de 3 minutos.
+- La respuesta va a `/api/reflections`: Moment privado (fuente: el video) + insight en la memoria + momentum `reflection`. En el chat también se envía "Mi reflexión de «…»" y el agente la convierte en un Moment de 3 minutos.
 - **Hoy** (`/hoy`, `decideToday()` en `src/lib/momentum.ts`, datos en `src/lib/today.ts`): check-in de un toque (`/api/momentum/checkin`) y una tarjeta principal. Prioridad: REGULATE > REFLECT > CLARIFY > CONTINUE/EXECUTE > INSPIRE. El check-in de hoy también guía al Director en el chat (la ansiedad que aparece en el mensaje manda).
 - Video recomendado por estado (`src/lib/social/recommend-video.ts`): solo autores del marco SOI; caché `video_cache` de 7 días; bloqueado en Free.
 
@@ -237,7 +254,7 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 | Pestaña | Ruta | Qué ocurre |
 |---|---|---|
 | Hoy | `/hoy` (inicio tras el login) | La IA decide qué necesitas ahora |
-| Impulso | `/impulso` | Feed híbrido: Moments, Blueprints, evidencias de la comunidad, recomendados para tu eslabón y tu siguiente Action Card. Tendencias. "Ver más", sin scroll infinito |
+| Impulso | `/impulso` | **Solo Moments**: Hoy recomendado (según `decideToday`, mapeo `MODE_KINDS`), Tendencia (ejecuciones de 7 días) y Nuevos; chips por tipo (`?tipo=`). "Ver más", sin scroll infinito. Navegar es libre; ejecutar requiere SOI+ |
 | SOI | `/chat` | Conversación agéntica |
 | Mi Vida | `/mi-vida` | Grafo personal (`src/lib/life-graph.ts`): metas, riqueza, hábitos, rutinas, creencias, libros y videos, proyectos, progreso + Biblioteca |
 | Yo | `/yo` | Momentum, cadena de evolución, racha, logros (`src/lib/achievements.ts`), identidad y accesos |
@@ -245,13 +262,13 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 `PRIMARY_TABS` en `src/config/navigation.ts` (con prefijos `match`). Móvil: `BottomNav` + header con menú para lo secundario. Escritorio y tablet: las mismas 5 al inicio del sidebar. `/momentos` redirige a `/impulso` (la biblioteca va a `/mi-vida#biblioteca`).
 
 ## 🌱 SOI Moments, Evolution Feed y Creator Economy
-- **Moment** = evidencia de evolución (inspiración → insight → reflexión → acción). Privado por defecto; compartir requiere `community`. Moderado con las reglas de la comunidad.
-- **Blueprint** = sistema reusable creado por un Transformation Creator. Cita su fuente (obligatorio). `free` o `premium` (pago único, `CREATOR_REVENUE_SHARE` = 80% en `src/config/creators.ts`).
-- **Implementar** = la interacción principal: la IA adapta el Blueprint a los minutos y la realidad de la persona (`src/lib/social/adapt.ts`, con respaldo determinista). Gratis requiere `routine_execution`; premium requiere compra (vale en cualquier plan).
+- **Idea** (tabla `soi_moments`, rutas `/ideas`) = insight guardado (inspiración → reflexión). Privada por defecto; compartir requiere `community`. Una Idea se convierte en Moment desde `/m/nuevo?idea=`.
+- **Moment** (tabla `soi_blueprints`, ver sección siguiente) = flujo ejecutable. `free` o `premium` (pago único, `CREATOR_REVENUE_SHARE` = 80% en `src/config/creators.ts`).
+- **Guardar mi versión** (fork) es la forma de adoptar un Moment: copia privada editable; premium requiere compra.
 - **Feed** `/momentos`: Para ti (prioriza el eslabón débil) · Tendencias (implementaciones de 7 días, no vistas) · Biblioteca (en práctica, mis momentos, guardados). Paginado con "Ver más", sin feed infinito. Interacciones: Resonancia, Guardar, Implementar.
 - **Creadores** `/creadores`: perfil con método, Transformation Score (alcance + completitud + retención + resultados; no seguidores), ganancias (ledger `blueprint_purchases`, `payout_status`). Públicas: `/c/[handle]` y `/b/[id]` (embudo desde redes).
-- **Ventas:** solo a través del precio del Blueprint dentro de SOI. Los textos siguen sin links ni autopromoción.
-- **Stripe:** `/api/blueprints/[id]/checkout` (mode `payment`, `metadata.kind = 'blueprint'`). El webhook separa compras de Blueprints de suscripciones.
+- **Ventas:** solo a través del precio del Moment dentro de SOI. Los textos siguen sin links ni autopromoción.
+- **Stripe:** `/api/blueprints/[id]/checkout` (mode `payment`, `metadata.kind = 'blueprint'`). El webhook separa compras de Moments de suscripciones.
 - **Pendiente:** pagos a creadores (Stripe Connect), programas con sesiones grupales, office hours y mentoría 1:1, verificación de creadores (`is_verified` solo con service role).
 
 ## 🔥 Crisis
@@ -261,7 +278,7 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 - Evidencias: línea de tiempo, filtro por eslabón, hitos 10/50/100 con celebración, PDF (`/api/evidence/pdf`).
 - Comunidad: feed paginado, 4 reacciones atómicas (`toggle_reaction`), anonimato, moderación (regex dura para links/ventas/crisis + Gemini). **Regla dura:** nada de ventas, links ni consejos médicos.
 - **Seed demo:** 8 usuarios `*.demo@soi.app` (SOI+, `is_demo=true`) y 20 posts realistas en español.
-- **Demo en producción:** `supabase/demo/seed_production.sql` (contraseñas aleatorias, sin Blueprints premium, no se puede cargar dos veces). Se elimina con `supabase/demo/cleanup_demo.sql`, que se detiene si hay compras de Blueprints demo. `supabase/seed.sql` (contraseña `SoiDemo2026!`) es **solo para desarrollo local**.
+- **Demo en producción:** `supabase/demo/seed_production.sql` (contraseñas aleatorias, sin Moments premium, no se puede cargar dos veces). Se elimina con `supabase/demo/cleanup_demo.sql`, que se detiene si hay compras de Moments demo. `supabase/demo/moments_v2.sql` da bloques ejecutables a los Moments demo. `supabase/seed.sql` (contraseña `SoiDemo2026!`) es **solo para desarrollo local**.
 
 ---
 
@@ -284,8 +301,8 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 ### Fase 2 — Rutinas y Paywall
 - [x] Embeddings + RAG
 - [x] Perfil psicológico con weakest_link
-- [x] 5 rutinas + RitualTimer + TTS
-- [x] /rutinas y /rutinas/[id]
+- [x] 5 rutinas → Moments oficiales + reproductor de Moments + TTS
+- [x] /m/[id], /m/[id]/play y /m/nuevo (las rutas /rutinas redirigen)
 - [x] daily_routines
 - [x] Racha sin castigo + Escudo
 - [x] canAccess con feature flags
@@ -340,7 +357,7 @@ Resumen operativo:
 - Utilidades: `press` (scale 0.97), `press-deep` (0.9), `tap-target` (44 px), `nums` (tabular), `skeleton`, `popover-motion`.
 - `hover:` ya está limitado a `(hover: hover) and (pointer: fine)`.
 - Solo `transform` y `opacity`; nada de `transition: all`, `ease`, `ease-in` ni `scale(0)`.
-- Expresividad solo en el halo de respiración del `RitualTimer` y la celebración final.
+- Expresividad solo en el halo de respiración (respiración/meditación en el reproductor de Moments y en Hoy) y la celebración final.
 - Toasts con `sonner`, drawers con `vaul`, diálogos con `components/ui/dialog.tsx`.
 - Revisiones de UI en formato **Antes / Después / Por qué** (`UI-REVIEW.md`).
 

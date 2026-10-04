@@ -1,6 +1,6 @@
 import { moderatePost, MODERATION_COPY } from '@/lib/ai/moderation';
 
-/** Modera el texto visible de Moments y Blueprints antes de hacerlo público. */
+/** Modera el texto visible de Ideas y Moments antes de hacerlo público. */
 export async function moderateFields(fields: (string | null | undefined)[]) {
   const text = fields.filter(Boolean).join('\n').slice(0, 4000);
   if (!text) return null;
@@ -13,7 +13,7 @@ export async function moderateFields(fields: (string | null | undefined)[]) {
 }
 
 export function rpcError(message: string) {
-  if (message.includes('purchase_required')) return Response.json({ ok: false, message: 'Este Blueprint es premium.' }, { status: 402 });
+  if (message.includes('purchase_required')) return Response.json({ ok: false, message: 'Este Moment es premium.' }, { status: 402 });
   if (message.includes('not found')) return Response.json({ ok: false, message: 'No encontrado.' }, { status: 404 });
   return Response.json({ ok: false, message: 'No se pudo completar. Intenta de nuevo.' }, { status: 500 });
 }

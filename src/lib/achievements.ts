@@ -18,11 +18,11 @@ export function computeAchievements(i: AchievementInput): Achievement[] {
   return [
     ...STREAK_MILESTONES.map((m) => ({ id: `streak-${m}`, label: `Racha de ${m} días`, detail: 'Constancia sin castigo', unlocked: i.streakLongest >= m })),
     ...EVIDENCE_MILESTONES.map((m) => ({ id: `evidence-${m}`, label: `${m} evidencias`, detail: 'Pruebas de tu nueva identidad', unlocked: i.evidences >= m })),
-    { id: 'first-moment', label: 'Primer momento', detail: 'Convertiste una idea en acción', unlocked: i.moments > 0 },
+    { id: 'first-moment', label: 'Primera idea', detail: 'Guardaste una idea para tu vida', unlocked: i.moments > 0 },
     { id: 'first-reflection', label: 'Inspiración que se volvió idea', detail: 'Reflexionaste después de un video', unlocked: i.videoReflections > 0 },
     { id: 'first-shared', label: 'Inspiraste a alguien', detail: 'Compartiste un momento', unlocked: i.sharedMoments > 0 },
-    { id: 'first-blueprint', label: 'Primer sistema en práctica', detail: 'Implementaste un Blueprint', unlocked: i.implementations > 0 },
-    { id: 'blueprint-done', label: 'Sistema completado', detail: 'Terminaste un Blueprint', unlocked: i.completedImplementations > 0 },
+    { id: 'first-blueprint', label: 'Primer Moment propio', detail: 'Creaste o guardaste tu versión de un Moment', unlocked: i.implementations > 0 },
+    { id: 'blueprint-done', label: 'Moment completado', detail: 'Viviste un Moment de principio a fin', unlocked: i.completedImplementations > 0 },
     { id: 'creator', label: 'Transformation Creator', detail: 'Compartes tu método', unlocked: i.isCreator },
   ];
 }

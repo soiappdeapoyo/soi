@@ -10,7 +10,7 @@ export async function loadEvolution(supabase: SupabaseClient, userId: string, ac
     count(supabase.from('momentum_events').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('kind', 'video_watched')),
     count(supabase.from('soi_moments').select('id', { count: 'exact', head: true }).eq('creator_id', userId)),
     count(supabase.from('momentum_events').select('id', { count: 'exact', head: true }).eq('user_id', userId)
-      .in('kind', ['action_completed', 'ritual_completed', 'routine_completed', 'blueprint_step'])),
+      .in('kind', ['action_completed', 'ritual_completed', 'routine_completed', 'blueprint_step', 'moment_completed'])),
     count(supabase.from('blueprint_implementations').select('id', { count: 'exact', head: true }).eq('user_id', userId)),
   ]);
   return [

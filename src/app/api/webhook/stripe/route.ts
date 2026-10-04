@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       const s = event.data.object as Stripe.Checkout.Session;
       const userId = s.client_reference_id ?? s.metadata?.user_id;
 
-      // Compra única de un Blueprint premium: NO es una suscripción a SOI+.
+      // Compra única de un Moment premium (metadata.kind = 'blueprint' por compatibilidad): NO es una suscripción a SOI+.
       if (s.metadata?.kind === 'blueprint') {
         const blueprintId = s.metadata.blueprint_id;
         if (userId && blueprintId && s.payment_status === 'paid') {
