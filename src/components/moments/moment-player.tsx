@@ -18,6 +18,8 @@ type Props = {
   moment: { id: string; title: string; objective: string; source: string; author: string | null };
   blocks: ActionBlock[];
   locked: boolean;
+  /** Reto: día que se juega hoy. */
+  challenge?: { day: number; total: number } | null;
   ttsAllowed: boolean;
   voice?: string | null;
 };
@@ -38,7 +40,7 @@ function fmt(s: number) {
  * - Barra de tiempo LINEAL (es tiempo real). Halo de respiración solo en respiración y meditación.
  * - Una sola celebración al final (800 ms). Las salidas se guardan al pasar de bloque.
  */
-export function MomentPlayer({ moment, blocks, locked, ttsAllowed, voice }: Props) {
+export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('before');
   const [runId, setRunId] = useState<string | null>(null);
@@ -54,6 +56,7 @@ export function MomentPlayer({ moment, blocks, locked, ttsAllowed, voice }: Prop
   const [learning, setLearning] = useState('');
   const [helped, setHelped] = useState<boolean | null>(null);
   const [streak, setStreak] = useState<StreakInfo>(null);
+  const [challengeDone, setChallengeDone] = useState<{ day: number; completed: number; finished: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [improving, setImproving] = useState(false);
@@ -122,7 +125,7 @@ export function MomentPlayer({ moment, blocks, locked, ttsAllowed, voice }: Prop
     setBusy(true);
     const res = await fetch('/api/moment-runs', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ moment: moment.id, moodBefore: moodBefore ?? undefined }),
+      body: JSON.stringify({ moment: moment.id, moodBefore: moodBefore ?? undefined, challengeDay: challenge?.day }),
     });
     const json = await res.json().catch(() => ({}));
     setBusy(false);
@@ -146,6 +149,7 @@ export function MomentPlayer({ moment, blocks, locked, ttsAllowed, voice }: Prop
     setBusy(false);
     if (!res.ok) { toast(json.message ?? 'No se pudo guardar.'); return; }
     setStreak(json.streak ?? null);
+    setChallengeDone(json.challenge ?? null);
     setPhase('done');
     track('moment_completed', { moment: moment.id, mood_delta: moodBefore && moodAfter ? moodAfter - moodBefore : null });
   }
@@ -183,6 +187,7 @@ export function MomentPlayer({ moment, blocks, locked, ttsAllowed, voice }: Prop
     return (
       <Shell title={moment.title} onExit={`/m/${moment.id}`}>
         <div className="flex flex-col items-center gap-5 py-6 text-center">
+          {challenge && <p className="nums rounded-lg bg-soi-accent-soft px-3 py-1 text-sm font-medium text-soi-accent">Día {challenge.day} de {challenge.total}</p>}
           <p className="text-[15px] text-soi-muted">{moment.objective}</p>
           <fieldset>
             <legend className="text-sm font-medium">¿Cómo llegas?</legend>
@@ -238,6 +243,7 @@ export function MomentPlayer({ moment, blocks, locked, ttsAllowed, voice }: Prop
               {shownBlock.source && <p className="mt-1 text-xs italic text-soi-muted">{shownBlock.source}</p>}
             </div>
             <BlockRunner block={shownBlock} output={out} running={running} next={next} say={(t) => void say(t)}
+              elapsed={Math.max(0, total - remaining)} runId={runId}
               setOutput={(o) => setOutputs((all) => ({ ...all, [shownBlock.id]: o }))} />
           </div>
 
@@ -294,7 +300,8 @@ export function MomentPlayer({ moment, blocks, locked, ttsAllowed, voice }: Prop
           <span aria-hidden="true" className="absolute inset-0 animate-celebrate rounded-full ring-2 ring-soi-accent" />
           <span className="flex h-20 w-20 items-center justify-center rounded-full bg-soi-accent-soft text-soi-accent"><Check className="h-9 w-9" aria-hidden="true" /></span>
         </div>
-        <h2 className="text-2xl font-semibold">Moment completado</h2>
+        <h2 className="text-2xl font-semibold">{challengeDone ? (challengeDone.finished ? 'Reto completado' : `Día ${challengeDone.day} completado`) : 'Moment completado'}</h2>
+        {challengeDone && !challengeDone.finished && challenge && <p className="nums text-sm text-soi-muted">{challengeDone.completed} de {challenge.total} días · mañana sigue el día {challengeDone.day + 1}</p>}
         <p className="text-soi-muted">Cada acción es una evidencia de tu nueva identidad.</p>
         {streak && (
           <p className="nums inline-flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-sm font-medium text-orange-800">
@@ -307,6 +314,7 @@ export function MomentPlayer({ moment, blocks, locked, ttsAllowed, voice }: Prop
           <div className="mt-2 grid w-full gap-2 sm:grid-cols-2">
             <Button onClick={improve} disabled={improving}><Sparkles className="h-4 w-4" aria-hidden="true" /> {improving ? 'Preparando tu versión…' : 'Mejorar mi Moment'}</Button>
             <Link href="/evidencias/nueva" className={buttonClass('outline')}><Star className="h-4 w-4" aria-hidden="true" /> Llevar al Muro</Link>
+            <Link href={`/impulso?compartir=${moment.id}`} className={buttonClass('outline', 'md', 'sm:col-span-2')}>Compartir cómo te fue en Impulso</Link>
             <Link href="/hoy" className={buttonClass('ghost', 'md', 'sm:col-span-2')}>Volver a Hoy</Link>
           </div>
         ) : (

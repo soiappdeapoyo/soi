@@ -3,15 +3,19 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, GripVertical, Plus, X } from 'lucide-react';
+import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Icon } from '@/components/ui/icon';
 import { ACTIONS, ACTION_TYPES, MOMENT_KINDS, defaultBlock, type ActionBlock, type ActionType, type MomentKind } from '@/config/actions';
 import { CREATOR_REVENUE_SHARE, formatPrice } from '@/config/creators';
 import { cn } from '@/lib/utils';
+import { AudioField, QuizEditor } from './builder-fields';
 
-type Field = { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'lines' | 'select'; options?: { value: string; label: string }[]; min?: number; max?: number };
+type Field = { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'lines' | 'select' | 'time' | 'audio' | 'quiz'; options?: { value: string; label: string }[]; min?: number; max?: number };
 
 const FIELDS: Record<ActionType, Field[]> = {
   breathing: [{ key: 'inhale', label: 'Inhalar (s)', kind: 'number', min: 2, max: 8 }, { key: 'exhale', label: 'Exhalar (s)', kind: 'number', min: 2, max: 10 }],
@@ -31,10 +35,24 @@ const FIELDS: Record<ActionType, Field[]> = {
   rest: [{ key: 'instruction', label: 'Instrucción', kind: 'text' }, { key: 'variant', label: 'Tipo', kind: 'select', options: [{ value: 'rest', label: 'Descanso' }, { value: 'stretching', label: 'Estiramiento' }] }],
   celebration: [{ key: 'message', label: 'Mensaje', kind: 'text' }],
   next_step: [{ key: 'instruction', label: 'Instrucción', kind: 'text' }],
+  canvas: [{ key: 'prompt', label: 'Qué dibujar', kind: 'text' }],
+  mind_map: [{ key: 'center', label: 'Idea central', kind: 'text' }, { key: 'branches', label: 'Ramas', kind: 'number', min: 2, max: 8 }],
+  quiz: [{ key: 'questions', label: 'Preguntas', kind: 'quiz' }],
+  music: [{ key: 'query', label: 'Qué música buscar (o sube un audio)', kind: 'text' }, { key: 'audioUrl', label: 'Audio propio (opcional)', kind: 'audio' }],
+  audio: [{ key: 'mode', label: 'Modo', kind: 'select', options: [{ value: 'record', label: 'La persona se graba' }, { value: 'listen', label: 'Escuchar un audio' }] }, { key: 'prompt', label: 'Indicación', kind: 'text' }, { key: 'audioUrl', label: 'Audio para escuchar', kind: 'audio' }],
+  photo: [{ key: 'prompt', label: 'Qué fotografiar', kind: 'text' }],
+  agenda: [{ key: 'prompt', label: 'Pregunta', kind: 'text' }, { key: 'defaultTime', label: 'Hora sugerida', kind: 'time' }],
+  pomodoro: [{ key: 'focus', label: 'Foco (min)', kind: 'number', min: 5, max: 60 }, { key: 'rest', label: 'Descanso (min)', kind: 'number', min: 1, max: 30 }, { key: 'cycles', label: 'Ciclos', kind: 'number', min: 1, max: 4 }],
+  contract: [{ key: 'commitment', label: 'Compromiso', kind: 'textarea' }, { key: 'consequence', label: 'Si no lo cumplo… (opcional)', kind: 'text' }],
+  weekly_review: [{ key: 'focus', label: 'Enfoque (opcional)', kind: 'text' }],
+  tracking: [{ key: 'metric', label: 'Qué medir', kind: 'text' }, { key: 'unit', label: 'Unidad', kind: 'text' }, { key: 'target', label: 'Meta (opcional)', kind: 'number', min: 0, max: 100000 }],
+  stretching: [{ key: 'sequence', label: 'Estiramientos (uno por línea)', kind: 'lines' }, { key: 'secondsEach', label: 'Segundos cada uno', kind: 'number', min: 15, max: 180 }],
   moment: [],
 };
 
-export type BuilderMoment = { id?: string; title: string; objective: string; kind: MomentKind; source: string; blocks: ActionBlock[] };
+type QuizQ = { q: string; options: string[]; answer: number; explain?: string };
+
+export type BuilderMoment = { id?: string; title: string; objective: string; kind: MomentKind; source: string; blocks: ActionBlock[]; durationDays?: number };
 type Option = { value: string; label: string };
 
 /**
@@ -48,6 +66,7 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
   const [kind, setKind] = useState<MomentKind>(initial?.kind ?? 'growth');
   const [source, setSource] = useState(initial?.source ?? `Diseñado por ${creatorName}`);
   const [blocks, setBlocks] = useState<ActionBlock[]>(initial?.blocks ?? []);
+  const [durationDays, setDurationDays] = useState(initial?.durationDays && initial.durationDays > 1 ? initial.durationDays : 7);
   const [publish, setPublish] = useState(false);
   const [tier, setTier] = useState<'free' | 'premium'>('free');
   const [price, setPrice] = useState(9);
@@ -56,13 +75,38 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
 
   const minutes = useMemo(() => blocks.reduce((a, b) => a + (b.seconds ? b.seconds / 60 : b.minutes), 0), [blocks]);
   const set = (i: number, patch: Partial<ActionBlock>) => setBlocks((bs) => bs.map((b, j) => (j === i ? { ...b, ...patch } : b)));
-  const setCfg = (i: number, key: string, value: unknown) => setBlocks((bs) => bs.map((b, j) => (j === i ? { ...b, config: { ...b.config, [key]: value } } : b)));
+  // Pomodoro y estiramiento: la duración del bloque se deriva de su configuración.
+  const setCfg = (i: number, key: string, value: unknown) => setBlocks((bs) => bs.map((b, j) => {
+    if (j !== i) return b;
+    const config = { ...b.config, [key]: value };
+    if (b.type === 'pomodoro') {
+      const c = config as { focus: number; rest: number; cycles: number };
+      return { ...b, config, minutes: c.focus * c.cycles + c.rest * Math.max(0, c.cycles - 1), seconds: undefined };
+    }
+    if (b.type === 'stretching') {
+      const c = config as { sequence: string[]; secondsEach: number };
+      return { ...b, config, minutes: Math.max(1, Math.round((c.sequence.length * c.secondsEach) / 60)), seconds: c.sequence.length * c.secondsEach };
+    }
+    return { ...b, config };
+  }));
   const move = (i: number, d: -1 | 1) => setBlocks((bs) => {
     const n = [...bs]; const j = i + d;
     if (j < 0 || j >= n.length) return bs;
     [n[i], n[j]] = [n[j]!, n[i]!];
     return n;
   });
+
+  // Arrastrar para reordenar: puntero con umbral (no roba clics), táctil con pausa (no roba el scroll) y teclado.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setBlocks((bs) => arrayMove(bs, bs.findIndex((b) => b.id === active.id), bs.findIndex((b) => b.id === over.id)));
+  }
 
   function add(t: ActionType) {
     const b = defaultBlock(t);
@@ -77,9 +121,9 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
   async function save() {
     setBusy(true); setMsg(null);
     const status = publish && isCreator ? 'published' : 'private';
-    const payload = { title, objective, kind, source, blocks, status, tier: status === 'published' ? tier : 'free', priceCents: status === 'published' && tier === 'premium' ? Math.round(price * 100) : 0 };
+    const payload = { title, objective, kind, source, blocks, status, durationDays, tier: status === 'published' ? tier : 'free', priceCents: status === 'published' && tier === 'premium' ? Math.round(price * 100) : 0 };
     const res = initial?.id
-      ? await fetch(`/api/moments-flow/${initial.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, objective, kind, blocks, status }) })
+      ? await fetch(`/api/moments-flow/${initial.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, objective, kind, blocks, status, ...(kind === 'challenge' ? { durationDays } : {}) }) })
       : await fetch('/api/moments-flow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const json = await res.json().catch(() => ({}));
     setBusy(false);
@@ -104,6 +148,16 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
               className={cn('press h-8 rounded-lg px-2.5 text-xs', kind === k ? 'bg-soi-ink text-white' : 'bg-soi-sidebar text-soi-ink shadow-ring')}>{MOMENT_KINDS[k].label}</button>
           ))}
         </div>
+        {kind === 'challenge' && (
+          <div className="mt-3 flex items-end gap-3">
+            <div className="w-28">
+              <Label htmlFor="mb-days">Días del reto</Label>
+              <Input id="mb-days" type="number" min={2} max={90} value={durationDays} className="nums"
+                onChange={(e) => setDurationDays(Math.max(2, Math.min(90, Number(e.target.value) || 2)))} />
+            </div>
+            <p className="pb-2 text-xs text-soi-muted">Asigna cada acción a un día, o déjala en «Cada día» para que se repita. Avanza un día por día de calendario.</p>
+          </div>
+        )}
       </section>
 
       <section aria-labelledby="mb-flow">
@@ -112,10 +166,14 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
           <span className="nums text-sm text-soi-muted">{Math.round(minutes)} min · {blocks.length} acciones</span>
         </div>
         {blocks.length ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
           <ol className="flex flex-col gap-1.5 rounded-[20px] bg-soi-sidebar p-1.5">
             {blocks.map((b, i) => (
-              <li key={b.id} className="rounded-[14px] bg-white p-3 shadow-ring">
+              <SortableRow key={b.id} id={b.id} label={`Mover paso ${i + 1}: ${b.title}`}>
+                {(handle) => (<>
                 <div className="flex items-center gap-2">
+                  {handle}
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-soi-accent-soft text-soi-accent"><Icon name={ACTIONS[b.type].icon} className="h-4 w-4" /></span>
                   <label htmlFor={`t-${b.id}`} className="sr-only">Título del paso {i + 1}</label>
                   <Input id={`t-${b.id}`} value={b.title} onChange={(e) => set(i, { title: e.target.value })} maxLength={120} className="flex-1" />
@@ -127,6 +185,16 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                     </>
                   )}
                 </div>
+                {kind === 'challenge' && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <label htmlFor={`d-${b.id}`} className="text-xs text-soi-muted">Día</label>
+                    <Select id={`d-${b.id}`} value={b.day ? String(b.day) : 'all'} className="w-36"
+                      onChange={(e) => set(i, { day: e.target.value === 'all' ? undefined : Number(e.target.value) })}>
+                      <option value="all">Cada día</option>
+                      {Array.from({ length: durationDays }, (_, d) => <option key={d + 1} value={d + 1}>Día {d + 1}</option>)}
+                    </Select>
+                  </div>
+                )}
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {b.type === 'moment' ? (
                     <Select aria-label="Moment a reutilizar" value={(b.config.slug ? `slug:${b.config.slug}` : `id:${b.config.momentId}`) as string}
@@ -140,13 +208,16 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                     const id = `${b.id}-${f.key}`;
                     const v = b.config[f.key];
                     return (
-                      <div key={f.key} className={cn(f.kind === 'textarea' || f.kind === 'lines' ? 'sm:col-span-2' : '')}>
+                      <div key={f.key} className={cn(['textarea', 'lines', 'quiz', 'audio'].includes(f.kind) ? 'sm:col-span-2' : '')}>
                         <Label htmlFor={id} className="text-xs text-soi-muted">{f.label}</Label>
                         {f.kind === 'textarea' ? <Textarea id={id} rows={2} value={String(v ?? '')} onChange={(e) => setCfg(i, f.key, e.target.value)} />
                           : f.kind === 'lines' ? <Textarea id={id} rows={3} value={((v as string[]) ?? []).join('\n')} onChange={(e) => setCfg(i, f.key, e.target.value.split('\n').slice(0, 10))} />
                           : f.kind === 'number' ? <Input id={id} type="number" min={f.min} max={f.max} value={Number(v ?? f.min ?? 1)} className="nums"
                               onChange={(e) => setCfg(i, f.key, Math.max(f.min ?? 1, Math.min(f.max ?? 100, Number(e.target.value) || (f.min ?? 1))))} />
                           : f.kind === 'select' ? <Select id={id} value={String(v)} onChange={(e) => setCfg(i, f.key, e.target.value)}>{f.options!.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
+                          : f.kind === 'time' ? <Input id={id} type="time" value={String(v ?? '07:00')} onChange={(e) => setCfg(i, f.key, e.target.value)} className="nums" />
+                          : f.kind === 'audio' ? <AudioField id={id} value={v as string | undefined} onChange={(url) => setCfg(i, f.key, url)} />
+                          : f.kind === 'quiz' ? <QuizEditor value={(v as QuizQ[]) ?? []} onChange={(qs) => setCfg(i, f.key, qs)} />
                           : <Input id={id} value={String(v ?? '')} onChange={(e) => setCfg(i, f.key, e.target.value)} />}
                       </div>
                     );
@@ -157,9 +228,12 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                   <button type="button" onClick={() => move(i, 1)} disabled={i === blocks.length - 1} aria-label={`Bajar paso ${i + 1}`} className="press flex h-9 w-9 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] disabled:opacity-30"><ArrowDown className="h-4 w-4" aria-hidden="true" /></button>
                   <button type="button" onClick={() => setBlocks((bs) => bs.filter((_, j) => j !== i))} aria-label={`Quitar paso ${i + 1}`} className="press flex h-9 w-9 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04]"><X className="h-4 w-4" aria-hidden="true" /></button>
                 </div>
-              </li>
+                </>)}
+              </SortableRow>
             ))}
           </ol>
+          </SortableContext>
+          </DndContext>
         ) : <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">Elige acciones de la biblioteca para construir tu flujo.</p>}
       </section>
 
@@ -211,5 +285,28 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
       <Button size="lg" onClick={save} disabled={busy || !ready}>{busy ? 'Guardando…' : publish && isCreator ? 'Publicar Moment' : 'Guardar Moment'}</Button>
       {msg && <p role="alert" className="text-sm text-soi-danger">{msg}</p>}
     </div>
+  );
+}
+
+/**
+ * Fila arrastrable. Solo el asa inicia el arrastre (los campos siguen siendo editables).
+ * Durante el arrastre: elevación con sombra, sin escalar; el resto se desplaza con transform (ease-out fuerte).
+ * Con teclado: foco en el asa, espacio para tomar, flechas para mover, espacio para soltar.
+ */
+function SortableRow({ id, label, children }: { id: string; label: string; children: (handle: React.ReactNode) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id, transition: { duration: 200, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' },
+  });
+  const handle = (
+    <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners} aria-label={label}
+      className="flex h-9 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-soi-subtle hover:text-soi-ink active:cursor-grabbing">
+      <GripVertical className="h-4 w-4" aria-hidden="true" />
+    </button>
+  );
+  return (
+    <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn('relative rounded-[14px] bg-white p-3 shadow-ring', isDragging && 'z-10 shadow-raised')}>
+      {children(handle)}
+    </li>
   );
 }

@@ -32,6 +32,31 @@ export const ACTION_CONFIG = {
   emotion_log: z.object({ question: z.string().trim().max(200).default('¿Cómo te sientes ahora?') }),
   rest: z.object({ instruction: text(300), variant: z.enum(['rest', 'stretching']).default('rest') }),
   celebration: z.object({ message: z.string().trim().max(200).default('Lo hiciste. Esto también es evidencia.') }),
+  // ---- v2: acciones creativas, de medios y de seguimiento ----
+  canvas: z.object({ prompt: text(300) }),
+  mind_map: z.object({ center: text(120), branches: z.number().int().min(2).max(8).default(4) }),
+  quiz: z.object({
+    questions: z.array(z.object({
+      q: text(240),
+      options: z.array(text(120)).min(2).max(4),
+      answer: z.number().int().min(0).max(3),
+      explain: z.string().trim().max(300).optional(),
+    })).min(1).max(10),
+  }).refine((c) => c.questions.every((q) => q.answer < q.options.length), { message: 'La respuesta correcta debe ser una de las opciones' }),
+  music: z.object({ query: z.string().trim().max(120).optional(), audioUrl: z.string().url().max(500).optional(), title: z.string().max(160).optional() })
+    .refine((c) => c.query || c.audioUrl, { message: 'La música necesita una búsqueda o un audio' }),
+  audio: z.object({
+    mode: z.enum(['listen', 'record']).default('record'),
+    audioUrl: z.string().url().max(500).optional(),
+    prompt: z.string().trim().max(300).default('Grábate diciendo cómo te sientes y qué quieres hoy.'),
+  }).refine((c) => c.mode === 'record' || c.audioUrl, { message: 'Para escuchar hace falta subir un audio' }),
+  photo: z.object({ prompt: text(300) }),
+  agenda: z.object({ prompt: text(240), defaultTime: z.string().regex(/^\d{2}:\d{2}$/).default('07:00') }),
+  pomodoro: z.object({ focus: z.number().int().min(5).max(60).default(25), rest: z.number().int().min(1).max(30).default(5), cycles: z.number().int().min(1).max(4).default(1) }),
+  contract: z.object({ commitment: text(400), consequence: z.string().trim().max(300).optional() }),
+  weekly_review: z.object({ focus: z.string().trim().max(200).optional() }),
+  tracking: z.object({ metric: text(80), unit: z.string().trim().max(20).default(''), target: z.number().min(0).max(100000).optional() }),
+  stretching: z.object({ sequence: z.array(text(120)).min(1).max(8), secondsEach: z.number().int().min(15).max(180).default(40) }),
   next_step: z.object({ instruction: text(240) }),
   moment: z.object({ momentId: z.string().uuid().optional(), slug: z.string().max(60).optional() })
     .refine((c) => c.momentId || c.slug, { message: 'Un Moment anidado necesita momentId o slug' }),
@@ -41,7 +66,7 @@ export type ActionType = keyof typeof ACTION_CONFIG;
 export const ACTION_TYPES = Object.keys(ACTION_CONFIG) as [ActionType, ...ActionType[]];
 
 /** Qué produce cada acción al ejecutarse (se guarda en moment_runs.outputs). */
-export type ActionOutput = 'none' | 'text' | 'list' | 'checks' | 'mood';
+export type ActionOutput = 'none' | 'text' | 'list' | 'checks' | 'mood' | 'media' | 'structured';
 
 export const ACTIONS: Record<ActionType, { label: string; icon: string; minutes: number; eslabon: Eslabon; output: ActionOutput; hint: string }> = {
   breathing: { label: 'Respiración', icon: 'Wind', minutes: 2, eslabon: 'emocion', output: 'none', hint: 'Inhala y exhala a un ritmo guiado' },
@@ -60,6 +85,18 @@ export const ACTIONS: Record<ActionType, { label: string; icon: string; minutes:
   emotion_log: { label: 'Registro emocional', icon: 'Smile', minutes: 1, eslabon: 'emocion', output: 'mood', hint: 'Nombra cómo te sientes' },
   rest: { label: 'Descanso', icon: 'Coffee', minutes: 3, eslabon: 'emocion', output: 'none', hint: 'Pausa o estiramiento' },
   celebration: { label: 'Celebración', icon: 'PartyPopper', minutes: 1, eslabon: 'resultado', output: 'none', hint: 'Reconoce lo que hiciste' },
+  canvas: { label: 'Canvas', icon: 'Palette', minutes: 5, eslabon: 'emocion', output: 'media', hint: 'Dibuja libremente lo que sientes o deseas' },
+  mind_map: { label: 'Mapa mental', icon: 'Network', minutes: 5, eslabon: 'pensamiento', output: 'structured', hint: 'Una idea central y sus ramas' },
+  quiz: { label: 'Quiz', icon: 'CircleHelp', minutes: 3, eslabon: 'pensamiento', output: 'structured', hint: 'Preguntas para fijar lo aprendido' },
+  music: { label: 'Música', icon: 'Music', minutes: 5, eslabon: 'emocion', output: 'none', hint: 'Una pieza para cambiar de estado' },
+  audio: { label: 'Audio', icon: 'Mic', minutes: 3, eslabon: 'emocion', output: 'media', hint: 'Escucha un audio o grábate' },
+  photo: { label: 'Fotografía', icon: 'Camera', minutes: 2, eslabon: 'resultado', output: 'media', hint: 'Captura una evidencia' },
+  agenda: { label: 'Agenda', icon: 'CalendarClock', minutes: 2, eslabon: 'accion', output: 'structured', hint: 'Agenda tu próxima acción' },
+  pomodoro: { label: 'Pomodoro', icon: 'Hourglass', minutes: 25, eslabon: 'accion', output: 'none', hint: 'Bloques de foco y descanso' },
+  contract: { label: 'Contrato', icon: 'Signature', minutes: 2, eslabon: 'accion', output: 'structured', hint: 'Un compromiso firmado contigo' },
+  weekly_review: { label: 'Revisión semanal', icon: 'ClipboardCheck', minutes: 10, eslabon: 'resultado', output: 'structured', hint: 'Victorias, aprendizajes y prioridades' },
+  tracking: { label: 'Seguimiento', icon: 'ChartLine', minutes: 1, eslabon: 'resultado', output: 'structured', hint: 'Registra una métrica de tu progreso' },
+  stretching: { label: 'Estiramiento', icon: 'PersonStanding', minutes: 4, eslabon: 'emocion', output: 'none', hint: 'Una secuencia guiada' },
   next_step: { label: 'Próximo paso', icon: 'ArrowRight', minutes: 2, eslabon: 'accion', output: 'text', hint: 'La acción concreta que sigue' },
   moment: { label: 'Otro Moment', icon: 'Layers', minutes: 0, eslabon: 'accion', output: 'none', hint: 'Reutiliza un Moment como bloque' },
 };
@@ -84,6 +121,8 @@ const baseBlock = {
   seconds: z.number().int().min(5).max(7200).optional(),
   /** Autor y obra de la técnica (Regla: toda rutina cita su fuente). */
   source: z.string().trim().max(160).optional(),
+  /** Retos de varios días: día al que pertenece el bloque (1..N). */
+  day: z.number().int().min(1).max(365).optional(),
 };
 
 export const ActionBlockSchema = z.discriminatedUnion('type', ACTION_TYPES.map((t) =>
@@ -91,7 +130,7 @@ export const ActionBlockSchema = z.discriminatedUnion('type', ACTION_TYPES.map((
 ) as unknown as [z.ZodDiscriminatedUnionOption<'type'>, ...z.ZodDiscriminatedUnionOption<'type'>[]]);
 
 export type ActionBlock = {
-  id: string; type: ActionType; title: string; minutes: number; seconds?: number; source?: string;
+  id: string; type: ActionType; title: string; minutes: number; seconds?: number; source?: string; day?: number;
   config: Record<string, unknown>;
 };
 
@@ -135,6 +174,18 @@ export function defaultBlock(type: ActionType): ActionBlock {
     affirmation: { text: 'Soy una persona que termina lo que empieza.' },
     goal: { prompt: '¿Qué quieres lograr esta semana?' },
     rest: { instruction: 'Suelta los hombros y descansa la vista.' },
+    canvas: { prompt: 'Dibuja cómo te sientes ahora, sin pensarlo mucho.' },
+    mind_map: { center: 'Mi meta principal', branches: 4 },
+    quiz: { questions: [{ q: '¿Qué idea quieres recordar?', options: ['Esta', 'Otra'], answer: 0 }] },
+    music: { query: 'música para concentrarse sin letra' },
+    audio: { mode: 'record' },
+    photo: { prompt: 'Toma una foto de algo que hoy te hizo avanzar.' },
+    agenda: { prompt: '¿Cuándo vas a hacer tu próximo paso?' },
+    pomodoro: {},
+    contract: { commitment: 'Me comprometo a dar un paso cada día durante esta semana.' },
+    weekly_review: {},
+    tracking: { metric: 'Vasos de agua', unit: 'vasos', target: 8 },
+    stretching: { sequence: ['Cuello: inclina a cada lado', 'Hombros: círculos hacia atrás', 'Espalda: estírate hacia arriba'] },
     next_step: { instruction: 'La acción más pequeña que puedes hacer hoy.' },
     moment: { slug: 'brian_tracy_5min' },
   };

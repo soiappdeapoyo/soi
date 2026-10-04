@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Check, Volume2 } from 'lucide-react';
 import { Input, Textarea } from '@/components/ui/input';
 import { SoiPlayer } from '@/components/media/soi-player';
+import { V2Runner } from './block-runners-v2';
 import type { ActionBlock } from '@/config/actions';
 import { cn } from '@/lib/utils';
 
@@ -17,9 +18,21 @@ export type BlockOutput = {
   count?: number;
   done?: boolean;
   skipped?: boolean;
+  /** Ruta privada en run-media (foto, dibujo, audio grabado). */
+  media?: string;
+  answers?: number[];
+  score?: number;
+  value?: number;
+  date?: string;
+  time?: string;
+  when?: string;
+  signedAt?: string;
+  fields?: Record<string, string>;
 };
 
 export type RunnerProps = {
+  elapsed: number;
+  runId: string | null;
   block: ActionBlock;
   output: BlockOutput;
   setOutput: (o: BlockOutput) => void;
@@ -32,7 +45,7 @@ export type RunnerProps = {
 export const MOODS = ['😞', '😕', '😐', '🙂', '😄'] as const;
 
 /** Bloques que avanzan solos cuando se acaba el tiempo. El resto espera a que la persona toque "Siguiente". */
-export const AUTO_ADVANCE = new Set(['breathing', 'meditation', 'visualization', 'timer', 'rest']);
+export const AUTO_ADVANCE = new Set(['breathing', 'meditation', 'visualization', 'timer', 'rest', 'pomodoro', 'stretching']);
 
 const lead = 'text-[17px] leading-relaxed text-soi-ink text-pretty';
 
@@ -199,7 +212,7 @@ export function BlockRunner(p: RunnerProps) {
         </div>
       );
     default:
-      return null;
+      return <V2Runner block={b} output={output} setOutput={setOutput} next={p.next} running={p.running} elapsed={p.elapsed} runId={p.runId} />;
   }
 }
 

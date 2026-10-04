@@ -38,7 +38,7 @@ export function MomentFlowCard({ m, creator, href, badge }: { m: MomentFlow; cre
           </span>
         )}
         <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{m.required_minutes} min</span>
-        {!m.official && <span className="inline-flex items-center gap-1"><Repeat className="h-3.5 w-3.5" aria-hidden="true" />{m.executions_count.toLocaleString('es')} {m.executions_count === 1 ? 'ejecución' : 'ejecuciones'}</span>}
+        {(!m.official || m.executions_count > 0) && <span className="inline-flex items-center gap-1"><Repeat className="h-3.5 w-3.5" aria-hidden="true" />{m.executions_count.toLocaleString('es')} {m.executions_count === 1 ? 'ejecución' : 'ejecuciones'}</span>}
       </div>
     </Link>
   );

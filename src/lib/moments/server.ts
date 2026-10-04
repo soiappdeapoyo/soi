@@ -45,7 +45,8 @@ export async function resolveVideoBlocks(supabase: SupabaseClient, userId: strin
   const out: ActionBlock[] = [];
   for (const b of blocks) {
     const c = b.config as { videoId?: string; query?: string };
-    if (b.type !== 'video' || c.videoId || !c.query) { out.push(b); continue; }
+    // Video y música (si no trae audio propio) se resuelven igual: búsqueda → video concreto.
+    if ((b.type !== 'video' && b.type !== 'music') || c.videoId || !c.query || (b.config as { audioUrl?: string }).audioUrl) { out.push(b); continue; }
     const { data: cached } = await supabase.from('agent_knowledge').select('metadata, created_at')
       .eq('user_id', userId).eq('category', 'video_cache').eq('title', c.query)
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -100,4 +101,38 @@ export async function forkOfficial(supabase: SupabaseClient, userId: string, m: 
   }).select('id').single();
   if (error) throw new Error(error.message);
   return data.id as string;
+}
+
+export type Enrollment = { id: string; started_on: string; completed: Record<string, string>; status: 'active' | 'completed' | 'left' };
+
+/** Inscripción de la persona en un reto (o null). */
+export async function getEnrollment(supabase: SupabaseClient, userId: string, m: MomentFlow): Promise<Enrollment | null> {
+  let q = supabase.from('challenge_enrollments').select('id, started_on, completed, status').eq('user_id', userId);
+  q = m.official ? q.eq('moment_slug', m.slug!) : q.eq('moment_id', m.id);
+  const { data } = await q.maybeSingle();
+  return (data as Enrollment | null) ?? null;
+}
+
+/** Inscribe (idempotente). Volver a un reto abandonado lo reactiva sin borrar el progreso. */
+export async function enroll(supabase: SupabaseClient, userId: string, m: MomentFlow): Promise<Enrollment | null> {
+  const existing = await getEnrollment(supabase, userId, m);
+  if (existing) {
+    if (existing.status === 'left') await supabase.from('challenge_enrollments').update({ status: 'active' }).eq('id', existing.id);
+    return { ...existing, status: existing.status === 'left' ? 'active' : existing.status };
+  }
+  const { data } = await supabase.from('challenge_enrollments').insert({
+    user_id: userId, ...(m.official ? { moment_slug: m.slug } : { moment_id: m.id }),
+  }).select('id, started_on, completed, status').single();
+  return (data as Enrollment | null) ?? null;
+}
+
+/** Ejecuciones de los Moments oficiales: solo totales agregados (RPC), nunca quién. */
+export async function officialCounts(supabase: SupabaseClient): Promise<Map<string, number>> {
+  const { data } = await supabase.rpc('official_moment_stats');
+  return new Map(((data ?? []) as { slug: string; executions: number }[]).map((r) => [r.slug, Number(r.executions)]));
+}
+
+/** Rellena executions_count en los oficiales de una lista. */
+export function withOfficialCounts<T extends MomentFlow>(list: T[], counts: Map<string, number>): T[] {
+  return list.map((m) => (m.official && m.slug ? { ...m, executions_count: counts.get(m.slug) ?? 0 } : m));
 }

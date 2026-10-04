@@ -116,23 +116,25 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
       inputSchema: z.object({
         title: z.string().min(3).max(80).describe('Nombre evocador, p. ej. "Reconectar"'),
         objective: z.string().min(3).max(300).describe('El cambio emocional, mental o conductual que busca'),
-        kind: MomentKindSchema.describe('recovery para ansiedad, tristeza o falta de enfoque; growth para metas; learning si parte de un libro o video; daily si se repetirá'),
+        kind: MomentKindSchema.describe('recovery para ansiedad, tristeza o falta de enfoque; growth para metas; learning si parte de un libro o video; daily si se repetirá; challenge para retos de varios días (usa day en cada bloque)'),
         reason: z.string().max(160).describe('Por qué este Moment ahora, en una frase cálida'),
         source: z.string().min(2).max(200).describe('Autores en los que se basa, p. ej. "Diseñado por SOI · basado en Brian Tracy y Joe Dispenza"'),
         blocks: z.array(z.object({
           type: z.enum(ACTION_TYPES.filter((t) => t !== 'moment') as [ActionType, ...ActionType[]]),
           title: z.string().min(2).max(80),
           minutes: z.number().int().min(1).max(30),
-          config: z.record(z.unknown()).describe('breathing:{inhale,exhale} meditation:{guide} timer:{instruction} writing:{prompt} visualization:{scene} checklist:{items[]} video:{query} walk:{instruction} gratitude:{count} reading:{book,pages} reflection:{question} affirmation:{text,repeat} goal:{prompt} emotion_log:{question} rest:{instruction,variant} celebration:{message} next_step:{instruction}'),
+          config: z.record(z.unknown()).describe('breathing:{inhale,exhale} meditation:{guide} timer:{instruction} writing:{prompt} visualization:{scene} checklist:{items[]} video:{query} walk:{instruction} gratitude:{count} reading:{book,pages} reflection:{question} affirmation:{text,repeat} goal:{prompt} emotion_log:{question} rest:{instruction,variant} celebration:{message} next_step:{instruction} canvas:{prompt} mind_map:{center,branches} quiz:{questions:[{q,options[],answer,explain}]} music:{query} audio:{mode:"record",prompt} photo:{prompt} agenda:{prompt,defaultTime:"HH:MM"} pomodoro:{focus,rest,cycles} contract:{commitment,consequence} weekly_review:{} tracking:{metric,unit,target} stretching:{sequence[],secondsEach}'),
+          day: z.number().int().min(1).max(30).optional().describe('Solo en retos (kind challenge): día al que pertenece el bloque'),
           source: z.string().max(160).optional().describe('Autor y obra de la técnica, si aplica'),
-        })).min(2).max(8),
+        })).min(2).max(20),
+        durationDays: z.number().int().min(2).max(30).optional().describe('Solo retos: cuántos días dura'),
       }),
       execute: async (m) => {
         const { blocks, errors } = parseBlocks(m.blocks.map((b, i) => ({ ...b, id: `b${i + 1}` })));
         if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
         const { data, error } = await supabase.from('soi_blueprints').insert({
           creator_id: userId, title: m.title, objective: m.objective, kind: m.kind, source: m.source,
-          blocks, steps: [], status: 'private',
+          blocks, steps: [], status: 'private', ...(m.kind === 'challenge' && m.durationDays ? { duration_days: m.durationDays } : {}),
         }).select('id, required_minutes').single();
         if (error) return { ok: false as const, errors: ['No se pudo guardar el Moment.'] };
         return {

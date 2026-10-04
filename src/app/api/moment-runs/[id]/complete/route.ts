@@ -6,6 +6,7 @@ import { registerRitualDay } from '@/lib/streak';
 import { remember } from '@/lib/ai/rag';
 import { rpcError } from '@/lib/social/guard';
 import { todayISO } from '@/lib/utils';
+import { challengeLength } from '@/lib/moments/challenge';
 
 const Body = z.object({
   moodAfter: z.number().int().min(1).max(5).optional(),
@@ -13,7 +14,8 @@ const Body = z.object({
   helped: z.boolean().optional(),
 });
 
-type Outputs = Record<string, { text?: string; skipped?: boolean; type?: string } | undefined>;
+type Out = { text?: string; skipped?: boolean; type?: string; items?: string[]; value?: number; when?: string; signedAt?: string; fields?: Record<string, string> };
+type Outputs = Record<string, Out | undefined>;
 
 /**
  * Cerrar la ejecución: resultados (ánimo después) y aprendizaje ("¿qué funcionó?").
@@ -26,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return new Response('Datos inválidos', { status: 400 });
 
-  const { data: run } = await supabase.from('moment_runs').select('outputs, moment_id, moment_slug').eq('id', id).eq('user_id', user.id).maybeSingle();
+  const { data: run } = await supabase.from('moment_runs').select('outputs, moment_id, moment_slug, challenge_day, completed_at').eq('id', id).eq('user_id', user.id).maybeSingle();
   if (!run) return Response.json({ ok: false, message: 'No encontrado.' }, { status: 404 });
 
   const { error } = await supabase.rpc('complete_moment_run', {
@@ -54,6 +56,49 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       });
     }
   }
+  // Acciones v2 → memoria, recordatorios y próximos pasos.
+  for (const o of Object.values(outputs)) {
+    if (!o || o.skipped) continue;
+    if (o.type === 'agenda' && o.text?.trim() && o.when) {
+      await remember(supabase, {
+        user_id: user.id, category: 'accion', title: 'Recordatorio', content: o.text.trim().slice(0, 200),
+        tags: ['recordatorio'], status: 'en_progreso', metadata: { eslabon_soi: 'accion', remind_at: o.when, ...ref }, withEmbedding: false,
+      });
+    }
+    if (o.type === 'contract' && o.signedAt && o.fields?.commitment) {
+      await remember(supabase, {
+        user_id: user.id, category: 'accion', title: 'Contrato conmigo', content: `${o.fields.commitment}${o.fields.consequence ? ` · Si no: ${o.fields.consequence}` : ''} — firmado por ${o.text ?? ''}`.slice(0, 1000),
+        tags: ['contrato'], status: 'en_progreso', metadata: { eslabon_soi: 'accion', signed_at: o.signedAt, ...ref },
+      });
+    }
+    if (o.type === 'weekly_review') {
+      const f = o.fields ?? {};
+      const prios = (o.items ?? []).map((x) => x.trim()).filter(Boolean);
+      const content = [f.wins && `Victorias: ${f.wins}`, f.lessons && `Aprendí: ${f.lessons}`, f.letgo && `Dejo ir: ${f.letgo}`, prios.length && `Prioridades: ${prios.join('; ')}`].filter(Boolean).join('\n');
+      if (content) {
+        await remember(supabase, { user_id: user.id, category: 'resultado', title: 'Revisión semanal', content: content.slice(0, 3000), tags: ['revision_semanal'], metadata: { eslabon_soi: 'resultado', ...ref } });
+      }
+      for (const p of prios.slice(0, 3)) {
+        await remember(supabase, {
+          user_id: user.id, category: 'accion', title: p.slice(0, 120), content: p, tags: ['action_card'], status: 'en_progreso',
+          metadata: { eslabon_soi: 'accion', minutes: 10, source: 'weekly_review', ...ref }, withEmbedding: false,
+        });
+      }
+    }
+    if (o.type === 'tracking' && typeof o.value === 'number' && o.text) {
+      await remember(supabase, {
+        user_id: user.id, category: 'resultado', title: o.text.slice(0, 80), content: `${o.value} ${o.fields?.unit ?? ''}`.trim(),
+        tags: ['seguimiento'], metadata: { eslabon_soi: 'resultado', metric: o.text, value: o.value, unit: o.fields?.unit ?? '', ...ref }, withEmbedding: false,
+      });
+    }
+    if (o.type === 'mind_map' && o.text && (o.items ?? []).some((x) => x.trim())) {
+      await remember(supabase, {
+        user_id: user.id, category: 'pensamiento', title: `Mapa mental: ${o.text}`.slice(0, 120),
+        content: (o.items ?? []).filter((x) => x.trim()).join(' · ').slice(0, 1000), tags: ['mapa_mental'], metadata: { eslabon_soi: 'pensamiento', ...ref },
+      });
+    }
+  }
+
   // Aprendizaje → memoria transversal (el agente lo recordará).
   if (parsed.data.learning) {
     await remember(supabase, {
@@ -62,7 +107,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
   }
 
+  // Reto: marca el día como completado (un día por día de calendario; sin castigo si faltó alguno).
+  let challenge: { day: number; completed: number; finished: boolean } | null = null;
+  const today = todayISO(profile?.timezone ?? undefined);
+  if (run.challenge_day && !run.completed_at) {
+    let q = supabase.from('challenge_enrollments').select('id, completed, status').eq('user_id', user.id);
+    q = run.moment_id ? q.eq('moment_id', run.moment_id) : q.eq('moment_slug', run.moment_slug);
+    const { data: e } = await q.maybeSingle();
+    if (e) {
+      const completed = { ...(e.completed as Record<string, string>) };
+      if (!Object.values(completed).includes(today)) completed[String(run.challenge_day)] = today;
+      const { data: m } = run.moment_id
+        ? await supabase.from('soi_blueprints').select('duration_days, blocks').eq('id', run.moment_id).maybeSingle()
+        : { data: null };
+      const total = m ? challengeLength((m.blocks as { day?: number }[]) ?? [], m.duration_days as number) : 1;
+      const finished = Object.keys(completed).length >= total;
+      await supabase.from('challenge_enrollments').update({ completed, status: finished ? 'completed' : 'active' }).eq('id', e.id);
+      challenge = { day: run.challenge_day as number, completed: Object.keys(completed).length, finished };
+    }
+  }
+
   await recordMomentum(supabase, user.id, 'moment_completed', { eslabon: 'accion', metadata: ref });
-  const streak = await registerRitualDay(supabase, user.id, todayISO(profile?.timezone ?? undefined));
-  return Response.json({ ok: true, streak });
+  const streak = await registerRitualDay(supabase, user.id, today);
+  return Response.json({ ok: true, streak, challenge });
 }

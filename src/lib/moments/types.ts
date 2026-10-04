@@ -19,6 +19,7 @@ export type MomentFlow = {
   blocks: ActionBlock[];
   source: string;
   required_minutes: number;
+  duration_days: number;
   tier: 'free' | 'premium';
   price_cents: number;
   currency: string;
@@ -66,6 +67,7 @@ export function toMomentFlow(row: Record<string, unknown>): MomentFlow {
     blocks: (row.blocks as ActionBlock[]) ?? [],
     source: row.source as string,
     required_minutes: (row.required_minutes as number) ?? 1,
+    duration_days: (row.duration_days as number) ?? 1,
     tier: (row.tier as 'free' | 'premium') ?? 'free',
     price_cents: (row.price_cents as number) ?? 0,
     currency: (row.currency as string) ?? 'usd',

@@ -1,144 +1,109 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { Plus } from 'lucide-react';
+import { Bell, Bookmark, Compass } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
-import { buttonClass } from '@/components/ui/button';
-import { MomentFlowCard } from '@/components/moments/moment-flow-card';
-import { Empty } from '@/components/social/feed-sections';
-import { creatorsById, type CreatorLite } from '@/lib/social/queries';
-import { MOMENT_FIELDS, toMomentFlow, type MomentFlow } from '@/lib/moments/types';
-import { recommendMoment } from '@/lib/moments/server';
+import { loadForYou, loadFollowing, unreadNotifications } from '@/lib/social/posts';
+import { recommendMoment, officialCounts, withOfficialCounts, getMoment } from '@/lib/moments/server';
+import { MODE_KINDS } from '@/lib/moments/recommend';
 import { loadToday } from '@/lib/today';
 import { OFFICIAL_MOMENTS } from '@/config/official-moments';
-import { MOMENT_KINDS, MomentKindSchema, type MomentKind } from '@/config/actions';
-import { MODE_KINDS } from '@/lib/moments/recommend';
+import { FeedList } from '@/components/feed/feed-list';
+import { MomentFlowCard } from '@/components/moments/moment-flow-card';
+import type { MomentFlow } from '@/lib/moments/types';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Impulso' };
 
-
 /**
- * Impulso: el feed no muestra publicaciones, muestra Moments — secuencias de acciones que producen resultados.
- * Hoy recomendado (según tu estado) · Tendencia (ejecuciones de la semana) · Nuevos. Filtro por tipo.
- * Paginado con "Ver más": sin scroll infinito ni métricas de vanidad.
+ * Impulso — la portada social de SOI (estilo Substack Home).
+ * Para ti (interés + recencia) · Siguiendo (cronológico). Publicaciones con texto, imágenes y Moments como componente.
+ * Arriba, una franja de Moments recomendados según tu estado: inspirarse siempre desemboca en hacer.
  */
-export default async function ImpulsoPage({ searchParams }: { searchParams: Promise<{ tipo?: string; antes?: string }> }) {
-  const sp = await searchParams;
-  const tipo = MomentKindSchema.safeParse(sp.tipo).success ? (sp.tipo as MomentKind) : null;
+export default async function ImpulsoPage({ searchParams }: { searchParams: Promise<{ vista?: string; compartir?: string }> }) {
+  const { vista, compartir } = await searchParams;
+  const following = vista === 'siguiendo';
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
+  const { profile, access } = await getAccessMap(user.id);
+
+  const [feed, unread, today] = await Promise.all([
+    following ? loadFollowing(supabase, user.id) : loadForYou(supabase, user.id, 0),
+    unreadNotifications(supabase, user.id),
+    loadToday(supabase, user.id, profile, access.daily_ritual),
+  ]);
+  const kinds = MODE_KINDS[today.decision.mode];
+  const rec = await recommendMoment(supabase, user.id, kinds);
+  const rail: MomentFlow[] = [];
+  const add = (m: MomentFlow | null | undefined) => { if (m && !rail.some((x) => x.id === m.id)) rail.push(m); };
+  add(rec);
+  OFFICIAL_MOMENTS.filter((m) => kinds.includes(m.kind)).forEach(add);
+  OFFICIAL_MOMENTS.forEach(add);
+  const railC = withOfficialCounts(rail.slice(0, 4), await officialCounts(supabase));
+  const sharing = compartir ? await getMoment(supabase, compartir) : null;
+
+  const me = { name: profile?.display_name ?? 'Tú', avatarUrl: profile?.avatar_url ?? (user.user_metadata?.avatar_url as string | undefined) ?? null };
+  const cursor = following
+    ? ('next' in feed && feed.next ? { kind: 'before' as const, before: feed.next } : null)
+    : ('more' in feed && feed.more ? { kind: 'offset' as const, offset: feed.posts.length } : null);
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-6 md:py-8">
-      <header className="flex items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Impulso</h1>
-          <p className="text-soi-muted">Moments que transforman: ejecútalos, guárdalos y hazlos tuyos.</p>
-        </div>
-        <Link href="/m/nuevo" className={buttonClass('primary', 'sm')}><Plus className="h-4 w-4" aria-hidden="true" /> Crear</Link>
+    <div className="mx-auto max-w-2xl px-4 pb-6 pt-4 sm:px-5 md:pt-8">
+      <header className="flex items-center gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Impulso</h1>
+        <nav aria-label="Atajos" className="ml-auto flex items-center gap-1">
+          <Link href="/impulso/explorar" aria-label="Explorar Moments" className="press flex h-10 w-10 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink"><Compass className="h-5 w-5" aria-hidden="true" /></Link>
+          <Link href="/impulso/guardados" aria-label="Guardados" className="press flex h-10 w-10 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink"><Bookmark className="h-5 w-5" aria-hidden="true" /></Link>
+          <Link href="/actividad" aria-label={unread ? `Actividad: ${unread} sin leer` : 'Actividad'} className="press relative flex h-10 w-10 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink">
+            <Bell className="h-5 w-5" aria-hidden="true" />
+            {unread > 0 && <span className="nums absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-soi-accent-fill px-1 text-[10px] font-medium text-white">{unread > 9 ? '9+' : unread}</span>}
+          </Link>
+        </nav>
       </header>
 
-      <nav aria-label="Tipo de Moment" className="-mx-5 mt-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
-        <KindChip href="/impulso" active={!tipo} label="Para ti" />
-        {(Object.keys(MOMENT_KINDS) as MomentKind[]).map((k) => (
-          <KindChip key={k} href={`/impulso?tipo=${k}`} active={tipo === k} label={MOMENT_KINDS[k].label} />
+      <nav aria-label="Vista" className="mt-3 flex gap-5 border-b border-black/[0.06]">
+        {[{ href: '/impulso', label: 'Para ti', on: !following }, { href: '/impulso?vista=siguiendo', label: 'Siguiendo', on: following }].map((t) => (
+          <Link key={t.href} href={t.href} aria-current={t.on ? 'page' : undefined}
+            className={cn('-mb-px border-b-2 py-2.5 text-sm', t.on ? 'border-soi-ink font-medium text-soi-ink' : 'border-transparent text-soi-muted hover:text-soi-ink')}>
+            {t.label}
+          </Link>
         ))}
       </nav>
 
-      <div className="mt-5">
-        {tipo ? <ByKind supabase={supabase} kind={tipo} before={sp.antes} /> : <ParaTi supabase={supabase} userId={user.id} />}
+      {!following && railC.length > 0 && (
+        <section aria-label="Moments para ti" className="border-b border-black/[0.06] py-4">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-medium">Moments para ti</h2>
+            <Link href="/impulso/explorar" className="text-xs text-soi-muted hover:text-soi-ink">Ver todos</Link>
+          </div>
+          <ul className="-mx-4 mt-2 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-5 sm:px-5">
+            {railC.map((m) => <li key={m.id} className="w-[78%] shrink-0 snap-start sm:w-[46%]"><MomentFlowCard m={m} /></li>)}
+          </ul>
+        </section>
+      )}
+
+      <div className="pt-4">
+        {!access.community && (
+          <p className="mb-4 rounded-[14px] bg-soi-sidebar p-3 text-sm text-soi-muted">
+            Puedes leer Impulso. Para publicar, comentar e interactuar, <Link href="/planes" className="text-soi-accent underline underline-offset-4">pasa a SOI+</Link>.
+          </p>
+        )}
+        <FeedList
+          key={following ? 'f' : 'y'}
+          initial={feed.posts}
+          cursor={cursor}
+          query={following ? 'vista=siguiendo' : ''}
+          me={me}
+          composer={access.community}
+          initialMoment={sharing ? { id: sharing.id, title: sharing.title } : null}
+          empty={
+            <p className="py-10 text-center text-soi-muted">
+              {following ? <>Todavía no sigues a nadie. Descubre personas en <Link href="/impulso" className="text-soi-accent underline underline-offset-4">Para ti</Link>.</> : 'Aún no hay publicaciones. Comparte tu primer Moment.'}
+            </p>
+          }
+        />
       </div>
     </div>
-  );
-}
-
-function KindChip({ href, active, label }: { href: string; active: boolean; label: string }) {
-  return (
-    <Link href={href} aria-current={active ? 'page' : undefined}
-      className={cn('press flex h-9 shrink-0 items-center rounded-lg px-3 text-sm', active ? 'bg-soi-ink text-white' : 'bg-white text-soi-ink shadow-ring hover:shadow-soft')}>
-      {label}
-    </Link>
-  );
-}
-
-type Sb = Awaited<ReturnType<typeof getSessionUser>>['supabase'];
-
-function Section({ title, hint, items, creators, badge }: { title: string; hint?: string; items: MomentFlow[]; creators: Map<string, CreatorLite>; badge?: string }) {
-  if (!items.length) return null;
-  return (
-    <section className="mb-8" aria-label={title}>
-      <h2 className="text-sm font-medium text-soi-muted">{title}</h2>
-      {hint && <p className="mb-2 text-xs text-soi-subtle">{hint}</p>}
-      <ul className="mt-2 flex flex-col gap-3">
-        {items.map((m) => <li key={m.id}><MomentFlowCard m={m} creator={m.creator_id ? creators.get(m.creator_id) : undefined} badge={badge} /></li>)}
-      </ul>
-    </section>
-  );
-}
-
-async function ParaTi({ supabase, userId }: { supabase: Sb; userId: string }) {
-  const { profile, access } = await getAccessMap(userId);
-  const { decision } = await loadToday(supabase, userId, profile, access.daily_ritual);
-  const kinds = MODE_KINDS[decision.mode];
-
-  const [recommended, { data: trendingRows }, { data: fresh }, { data: forKinds }] = await Promise.all([
-    recommendMoment(supabase, userId, kinds),
-    supabase.rpc('trending_blueprints', { p_days: 7, p_limit: 5 }),
-    supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('status', 'published').order('created_at', { ascending: false }).limit(5),
-    supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('status', 'published').in('kind', kinds).order('executions_count', { ascending: false }).limit(3),
-  ]);
-  const trendingIds = ((trendingRows ?? []) as { blueprint_id: string; recent_implementations: number }[]).filter((r) => Number(r.recent_implementations) > 0).map((r) => r.blueprint_id);
-  const { data: trendingData } = trendingIds.length
-    ? await supabase.from('soi_blueprints').select(MOMENT_FIELDS).in('id', trendingIds)
-    : { data: [] as Record<string, unknown>[] };
-  const byId = new Map((trendingData ?? []).map((r) => [r.id as string, toMomentFlow(r)]));
-  const trending = trendingIds.map((id) => byId.get(id)).filter(Boolean) as MomentFlow[];
-
-  const recs: MomentFlow[] = [];
-  const add = (m: MomentFlow | null | undefined) => { if (m && !recs.some((x) => x.id === m.id)) recs.push(m); };
-  add(recommended);
-  (forKinds ?? []).map(toMomentFlow).forEach(add);
-  OFFICIAL_MOMENTS.filter((m) => kinds.includes(m.kind)).forEach(add);
-
-  const seen = new Set([...recs, ...trending].map((m) => m.id));
-  const nuevos = (fresh ?? []).map(toMomentFlow).filter((m) => !seen.has(m.id));
-  const all = [...recs, ...trending, ...nuevos];
-  const creators = await creatorsById(supabase, all.map((m) => m.creator_id).filter(Boolean) as string[]);
-
-  if (!all.length) return <Empty text="Aún no hay Moments publicados. Crea el primero o empieza con uno oficial." />;
-  return (
-    <>
-      <Section title="Hoy recomendado" hint={decision.headline} items={recs.slice(0, 3)} creators={creators} />
-      <Section title="Tendencia" hint="Los que más personas ejecutaron esta semana." items={trending} creators={creators} badge="Tendencia" />
-      <Section title="Nuevos" items={nuevos} creators={creators} badge="Nuevo" />
-    </>
-  );
-}
-
-async function ByKind({ supabase, kind, before }: { supabase: Sb; kind: MomentKind; before?: string }) {
-  let q = supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('status', 'published').eq('kind', kind)
-    .order('created_at', { ascending: false }).limit(12);
-  if (before) q = q.lt('created_at', before);
-  const { data } = await q;
-  const published = (data ?? []).map(toMomentFlow);
-  const official = before ? [] : OFFICIAL_MOMENTS.filter((m) => m.kind === kind);
-  const items = [...official, ...published];
-  const creators = await creatorsById(supabase, published.map((m) => m.creator_id).filter(Boolean) as string[]);
-  if (!items.length) return <Empty text={`Todavía no hay Moments de ${MOMENT_KINDS[kind].label.toLowerCase()}. ¿Creas el primero?`} />;
-  const last = published.at(-1);
-  return (
-    <>
-      <p className="mb-3 text-sm text-soi-muted">{MOMENT_KINDS[kind].hint}</p>
-      <ul className="flex flex-col gap-3">
-        {items.map((m) => <li key={m.id}><MomentFlowCard m={m} creator={m.creator_id ? creators.get(m.creator_id) : undefined} /></li>)}
-      </ul>
-      {published.length === 12 && last && (
-        <div className="mt-5 text-center">
-          <Link href={`/impulso?tipo=${kind}&antes=${encodeURIComponent(last.created_at)}`} className={buttonClass('outline', 'sm')}>Ver más</Link>
-        </div>
-      )}
-    </>
   );
 }

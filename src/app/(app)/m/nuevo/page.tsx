@@ -25,7 +25,7 @@ export default async function NuevoMomentPage({ searchParams }: { searchParams: 
   if (editar) {
     const m = await getMoment(supabase, editar);
     if (!m || m.creator_id !== user.id) redirect('/m/nuevo');
-    initial = { id: m.id, title: m.title, objective: m.objective, kind: m.kind, source: m.source, blocks: (await fullBlocks(supabase, m)) ?? m.blocks };
+    initial = { id: m.id, title: m.title, objective: m.objective, kind: m.kind, source: m.source, blocks: (await fullBlocks(supabase, m)) ?? m.blocks, durationDays: m.duration_days };
   } else if (idea) {
     const { data } = await supabase.from('soi_moments').select('title, insight, actions, source_reference, category').eq('id', idea).eq('creator_id', user.id).maybeSingle();
     const i = data as Pick<SoiMoment, 'title' | 'insight' | 'actions' | 'source_reference'> | null;

@@ -73,7 +73,7 @@ function build(id: RoutineId): MomentFlow {
   return {
     id, slug: id, official: true, creator_id: null, author: r.author,
     title: r.label, objective: OBJECTIVE[id], kind: KIND[id], eslabon: r.eslabon,
-    blocks, source: `${r.author} — ${r.source}`, required_minutes: r.totalMinutes,
+    blocks, source: `${r.author} — ${r.source}`, required_minutes: r.totalMinutes, duration_days: 1,
     tier: 'free', price_cents: 0, currency: 'usd', status: 'published', version: 1,
     parent_id: null, parent_slug: null, executions_count: 0, forks_count: 0,
     implementations_count: 0, completions_count: 0, is_demo: false, created_at: '2026-01-01T00:00:00.000Z',

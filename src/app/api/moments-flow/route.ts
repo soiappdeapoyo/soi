@@ -1,6 +1,7 @@
 import { getSessionUser } from '@/lib/supabase/server';
 import { MomentInput, validBlocks, textOfBlocks, dbError } from '@/lib/moments/input';
 import { moderateFields } from '@/lib/social/guard';
+import { OFFICIAL_MOMENTS } from '@/config/official-moments';
 
 /** Crear un Moment (constructor). Privado por defecto; publicar exige perfil de creador (RLS). */
 export async function POST(req: Request) {
@@ -19,7 +20,20 @@ export async function POST(req: Request) {
   const { data, error } = await supabase.from('soi_blueprints').insert({
     creator_id: user.id, title: m.title, objective: m.objective, kind: m.kind, eslabon: m.eslabon, source: m.source,
     blocks, steps: [], status: m.status, tier: m.tier, price_cents: m.tier === 'premium' ? m.priceCents : 0,
+    duration_days: m.kind === 'challenge' ? m.durationDays : 1,
   }).select('id').single();
   if (error) return dbError(error.message);
   return Response.json({ ok: true, id: data.id });
+}
+
+/** Moments que se pueden adjuntar a una publicación: los tuyos, los oficiales y los publicados recientes. */
+export async function GET() {
+  const { supabase, user } = await getSessionUser();
+  if (!user) return new Response('No autorizado', { status: 401 });
+  const [{ data: own }, { data: published }] = await Promise.all([
+    supabase.from('soi_blueprints').select('id, title, kind, required_minutes, status').eq('creator_id', user.id).neq('status', 'archived').order('updated_at', { ascending: false }).limit(20),
+    supabase.from('soi_blueprints').select('id, title, kind, required_minutes, status').eq('status', 'published').neq('creator_id', user.id).order('executions_count', { ascending: false }).limit(10),
+  ]);
+  const official = OFFICIAL_MOMENTS.map((m) => ({ id: m.slug, title: `${m.title} · ${m.author}`, kind: m.kind, required_minutes: m.required_minutes, status: 'published' }));
+  return Response.json({ own: own ?? [], official, published: published ?? [] });
 }

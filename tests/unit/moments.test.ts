@@ -3,6 +3,8 @@ import { parseBlocks, defaultBlock, ACTION_TYPES, type ActionBlock } from '@/con
 import { OFFICIAL_MOMENTS, officialMoment } from '@/config/official-moments';
 import { flattenBlocks, totalMinutes, type MomentRef } from '@/lib/moments/flatten';
 import { improveByRules } from '@/lib/moments/improve-rules';
+import { pomodoroPhase } from '@/components/moments/block-runners-v2';
+import { blocksForDay, challengeLength, challengeState } from '@/lib/moments/challenge';
 
 const b = (id: string, type: ActionBlock['type'], minutes: number, config: Record<string, unknown> = {}): ActionBlock => ({ id, type, title: id, minutes, config });
 
@@ -84,5 +86,34 @@ describe('improveByRules (mejor versión sin IA)', () => {
   it('ajusta a los minutos disponibles', () => {
     const r = improveByRules(blocks, { skipped: [], moodBefore: null, moodAfter: null, helped: true, learning: null, availableMinutes: 14 });
     expect(r.blocks.reduce((a, x) => a + x.minutes, 0)).toBeLessThanOrEqual(15);
+  });
+});
+
+describe('pomodoroPhase', () => {
+  it('foco → descanso entre ciclos → foco → listo (sin descanso al final)', () => {
+    expect(pomodoroPhase(0, 25, 5, 2)).toMatchObject({ phase: 'focus', cycle: 1, left: 1500 });
+    expect(pomodoroPhase(1500, 25, 5, 2)).toMatchObject({ phase: 'rest', cycle: 1, left: 300 });
+    expect(pomodoroPhase(1800, 25, 5, 2)).toMatchObject({ phase: 'focus', cycle: 2 });
+    expect(pomodoroPhase(3300, 25, 5, 2)).toMatchObject({ phase: 'done' });
+  });
+});
+
+describe('retos de varios días', () => {
+  const blocks = [
+    { id: 'r', type: 'breathing', title: 'Respira', minutes: 1, config: {} },
+    { id: 'd1', type: 'writing', title: 'Día 1', minutes: 3, config: { prompt: 'x' }, day: 1 },
+    { id: 'd2', type: 'writing', title: 'Día 2', minutes: 3, config: { prompt: 'y' }, day: 2 },
+  ] as ActionBlock[];
+  it('los bloques sin día se repiten; los demás pertenecen a su día', () => {
+    expect(blocksForDay(blocks, 1).map((x) => x.id)).toEqual(['r', 'd1']);
+    expect(blocksForDay(blocks, 2).map((x) => x.id)).toEqual(['r', 'd2']);
+    expect(challengeLength(blocks, 7)).toBe(7);
+    expect(challengeLength(blocks, 1)).toBe(2);
+  });
+  it('avanza un día por día de calendario y no castiga los días sin practicar', () => {
+    expect(challengeState({}, 3, '2026-10-05')).toMatchObject({ currentDay: 1, availableToday: true });
+    expect(challengeState({ 1: '2026-10-05' }, 3, '2026-10-05')).toMatchObject({ currentDay: 2, doneToday: true, availableToday: false });
+    expect(challengeState({ 1: '2026-10-01' }, 3, '2026-10-05')).toMatchObject({ currentDay: 2, availableToday: true });
+    expect(challengeState({ 1: 'a', 2: 'b', 3: 'c' }, 3, '2026-10-05')).toMatchObject({ finished: true, currentDay: null });
   });
 });

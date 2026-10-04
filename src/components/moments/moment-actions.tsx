@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Copy, Pencil, Play } from 'lucide-react';
+import { Copy, Pencil, Play, Share2 } from 'lucide-react';
 import { Button, buttonClass } from '@/components/ui/button';
 import { formatPrice } from '@/config/creators';
 import { track } from '@/components/providers/analytics';
@@ -15,10 +15,11 @@ type Props = {
   status: 'private' | 'draft' | 'published' | 'archived';
   canPublish: boolean;
   premium: { priceCents: number; currency: string; purchased: boolean } | null;
+  startLabel?: string;
 };
 
 /** Comenzar · Guardar mi versión · Comprar · (dueño) Editar, publicar y archivar. */
-export function MomentActions({ id, own, status, canPublish, premium }: Props) {
+export function MomentActions({ id, own, status, canPublish, premium, startLabel }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const locked = premium && !premium.purchased && !own;
@@ -57,9 +58,10 @@ export function MomentActions({ id, own, status, canPublish, premium }: Props) {
       {locked ? (
         <Button size="lg" onClick={buy} disabled={busy}>{busy ? 'Abriendo pago…' : `Obtener por ${formatPrice(premium!.priceCents, premium!.currency)}`}</Button>
       ) : (
-        <Link href={`/m/${id}/play`} className={buttonClass('primary', 'lg')}><Play className="h-4 w-4" aria-hidden="true" /> Comenzar</Link>
+        <Link href={`/m/${id}/play`} className={buttonClass('primary', 'lg')}><Play className="h-4 w-4" aria-hidden="true" /> {startLabel ?? 'Comenzar'}</Link>
       )}
       <div className="flex flex-wrap gap-2">
+        {!locked && <Link href={`/impulso?compartir=${id}`} className={buttonClass('outline', 'sm')}><Share2 className="h-4 w-4" aria-hidden="true" /> Compartir en Impulso</Link>}
         {own ? (
           <>
             <Link href={`/m/nuevo?editar=${id}`} className={buttonClass('outline', 'sm')}><Pencil className="h-4 w-4" aria-hidden="true" /> Editar</Link>

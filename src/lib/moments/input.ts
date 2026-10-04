@@ -13,6 +13,7 @@ export const MomentInput = z.object({
   status: z.enum(['private', 'draft', 'published']).default('private'),
   tier: z.enum(['free', 'premium']).default('free'),
   priceCents: z.number().int().min(0).max(BLUEPRINT_PRICE_MAX_CENTS).default(0),
+  durationDays: z.number().int().min(1).max(365).default(1),
 }).refine((m) => (m.tier === 'free' ? m.priceCents === 0 : m.priceCents >= BLUEPRINT_PRICE_MIN_CENTS), {
   message: 'Un Moment premium cuesta al menos 1 USD; uno gratuito no tiene precio.',
 });

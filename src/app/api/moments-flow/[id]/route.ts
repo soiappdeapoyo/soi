@@ -10,6 +10,7 @@ const Patch = z.object({
   kind: MomentKindSchema.optional(),
   blocks: z.array(z.unknown()).min(1).max(20).optional(),
   status: z.enum(['private', 'draft', 'published', 'archived']).optional(),
+  durationDays: z.number().int().min(1).max(365).optional(),
 });
 
 /** Editar, publicar, despublicar o archivar un Moment propio. */
@@ -40,6 +41,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { error } = await supabase.from('soi_blueprints').update({
     ...(p.title ? { title: p.title } : {}), ...(p.objective ? { objective: p.objective } : {}),
     ...(p.kind ? { kind: p.kind } : {}), ...(blocks ? { blocks } : {}), ...(p.status ? { status: p.status } : {}),
+    ...(p.durationDays ? { duration_days: p.durationDays } : {}),
     updated_at: new Date().toISOString(),
   }).eq('id', id).eq('creator_id', user.id);
   if (error) return dbError(error.message);

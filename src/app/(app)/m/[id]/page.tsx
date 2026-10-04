@@ -3,7 +3,10 @@ import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ArrowLeft, BadgeCheck, GitBranch, Lock } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
-import { getMoment, fullBlocks } from '@/lib/moments/server';
+import { getMoment, fullBlocks, getEnrollment, officialCounts } from '@/lib/moments/server';
+import { challengeLength, challengeState } from '@/lib/moments/challenge';
+import { getProfile } from '@/lib/billing/check-access';
+import { cn, todayISO } from '@/lib/utils';
 import { creatorsById } from '@/lib/social/queries';
 import { ACTIONS, MOMENT_KINDS, blockSeconds } from '@/config/actions';
 import { officialMoment } from '@/config/official-moments';
@@ -35,7 +38,12 @@ export default async function MomentPage({ params, searchParams }: { params: Pro
     m.parent_id ? supabase.from('soi_blueprints').select('id, title').eq('id', m.parent_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const creator = m.creator_id ? creators.get(m.creator_id) : undefined;
+  const isChallenge = m.kind === 'challenge';
+  const [enrollment, profile] = isChallenge ? await Promise.all([getEnrollment(supabase, user.id, m), getProfile(user.id)]) : [null, null];
   const blocks = full ?? m.blocks;
+  const totalDays = isChallenge ? challengeLength(blocks, m.duration_days) : 0;
+  const st = isChallenge ? challengeState(enrollment?.completed ?? {}, totalDays, todayISO(profile?.timezone ?? undefined)) : null;
+  const startLabel = !st ? undefined : !enrollment || enrollment.status === 'left' ? 'Unirme al reto' : st.finished ? 'Repasar el reto' : st.availableToday ? `Hacer el día ${st.currentDay}` : 'Ver mi progreso';
   const preview = !full;
   const parentTitle = (parent as { title?: string } | null)?.title ?? (m.parent_slug ? officialMoment(m.parent_slug)?.title : null);
   const parentHref = m.parent_id ? `/m/${m.parent_id}` : m.parent_slug ? `/m/${m.parent_slug}` : null;
@@ -63,6 +71,26 @@ export default async function MomentPage({ params, searchParams }: { params: Pro
         </p>
       )}
 
+      {isChallenge && st && (
+        <section aria-labelledby="days" className="mt-6">
+          <h2 id="days" className="nums mb-2 text-sm font-medium text-soi-muted">Reto de {totalDays} días · {st.completedCount} completados</h2>
+          <ol className="grid grid-cols-7 gap-1.5 rounded-[14px] bg-soi-sidebar p-1.5">
+            {Array.from({ length: totalDays }, (_, i) => {
+              const d = i + 1;
+              const done = Boolean(enrollment?.completed?.[String(d)]);
+              const current = st.currentDay === d;
+              return (
+                <li key={d} aria-label={`Día ${d}${done ? ', completado' : current ? ', el que sigue' : ''}`}
+                  className={cn('nums flex aspect-square items-center justify-center rounded-lg text-xs', done ? 'bg-soi-accent text-white' : current ? 'bg-white text-soi-ink shadow-[0_0_0_1.5px_var(--color-soi-accent)]' : 'bg-white/60 text-soi-subtle shadow-ring')}>
+                  {d}
+                </li>
+              );
+            })}
+          </ol>
+          {enrollment && !st.availableToday && !st.finished && <p className="mt-2 text-sm text-soi-muted">Hoy ya practicaste. Mañana sigue el día {st.currentDay}.</p>}
+        </section>
+      )}
+
       <section aria-labelledby="flow" className="mt-6">
         <h2 id="flow" className="mb-2 text-sm font-medium text-soi-muted">El flujo</h2>
         <ol className="flex flex-col gap-1.5 rounded-[20px] bg-soi-sidebar p-1.5">
@@ -72,7 +100,7 @@ export default async function MomentPage({ params, searchParams }: { params: Pro
                 <Icon name={ACTIONS[b.type]?.icon ?? 'Sparkles'} className="h-4 w-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[15px]">{b.title}</span>
+                <span className="block text-[15px]">{isChallenge && <span className="nums mr-1.5 text-xs text-soi-accent">{b.day ? `Día ${b.day}` : 'Cada día'}</span>}{b.title}</span>
                 <span className="block text-xs text-soi-muted">{ACTIONS[b.type]?.label}{b.source ? ` · ${b.source}` : ''}</span>
               </span>
               <span className="nums shrink-0 text-xs text-soi-muted">{fmt(blockSeconds(b))}</span>
@@ -83,7 +111,9 @@ export default async function MomentPage({ params, searchParams }: { params: Pro
         <p className="mt-2 text-xs text-soi-muted">Fuente: {m.source}</p>
       </section>
 
-      {!m.official && m.status === 'published' && (
+      {m.official ? (
+        <p className="nums mt-4 text-sm text-soi-muted">{(await officialCounts(supabase)).get(m.slug!)?.toLocaleString('es') ?? 0} ejecuciones en SOI</p>
+      ) : m.status === 'published' && (
         <p className="nums mt-4 text-sm text-soi-muted">
           {m.executions_count.toLocaleString('es')} {m.executions_count === 1 ? 'ejecución' : 'ejecuciones'} · {m.forks_count} {m.forks_count === 1 ? 'versión personal' : 'versiones personales'}
         </p>
@@ -96,6 +126,7 @@ export default async function MomentPage({ params, searchParams }: { params: Pro
           status={m.status}
           canPublish={Boolean(creatorProfile)}
           premium={m.tier === 'premium' ? { priceCents: m.price_cents, currency: m.currency, purchased: Boolean(purchase) } : null}
+          startLabel={startLabel}
         />
       </div>
     </div>

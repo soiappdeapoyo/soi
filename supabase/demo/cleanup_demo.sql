@@ -2,7 +2,7 @@
 -- LIMPIEZA DEL DEMO — elimina los 8 usuarios demo y todo su contenido.
 -- Uso: supabase db query --linked -f supabase/demo/cleanup_demo.sql
 --
--- Borrar los usuarios elimina en cascada: perfiles, posts y reacciones de la comunidad, perfiles de creador,
+-- Borrar los usuarios elimina en cascada: perfiles, posts y reacciones de la comunidad, publicaciones de Impulso, perfiles de creador,
 -- Moments, Blueprints (y las implementaciones o guardados que usuarios reales hicieran de ellos), memoria y momentum.
 -- Los Moments reales que apuntaban a un Blueprint demo conservan su contenido (blueprint_id pasa a NULL).
 --
