@@ -27,8 +27,6 @@ function configuredProviders() {
   return ALL_PROVIDERS.filter((p) => hasKey(p.name));
 }
 
-const RETRYABLE = [408, 429, 500, 502, 503, 504];
-
 // Proveedor sano cacheado 5 min. En producción: Upstash Redis / Vercel KV.
 let cachedProvider: { name: ProviderName; until: number } | null = null;
 
@@ -74,12 +72,6 @@ async function orderedProviders(): Promise<Provider[]> {
 
 function forget(provider: ProviderName) {
   if (cachedProvider?.name === provider) cachedProvider = null;
-}
-
-function isRetryable(error: unknown) {
-  const e = error as { status?: number; statusCode?: number };
-  const status = e?.status ?? e?.statusCode;
-  return !status || RETRYABLE.includes(status);
 }
 
 export class AllProvidersFailedError extends Error {
@@ -152,11 +144,25 @@ export async function streamWithFallback(
     } catch (error: unknown) {
       logFailure(provider.name, error);
       attempts.push({ provider: provider.name, error: describeError(error) });
-      if (isRetryable(error)) continue;
-      throw error;
+      forget(provider.name);
+      // Cualquier fallo de un proveedor (incluida una clave inválida o un modelo retirado) pasa al siguiente.
     }
   }
   throw new AllProvidersFailedError(attempts);
+}
+
+/** Prueba cada proveedor configurado con una llamada mínima (para /api/ai/diagnostico). Nunca expone claves. */
+export async function diagnoseProviders() {
+  return Promise.all(ALL_PROVIDERS.map(async (p) => {
+    if (!hasKey(p.name)) return { provider: p.name, model: MODELS[p.name], configured: false, ok: false, error: null as string | null, ms: 0 };
+    const t0 = Date.now();
+    try {
+      await generateText({ model: p.model(), prompt: 'Responde solo: ok', maxOutputTokens: 16, abortSignal: AbortSignal.timeout(12_000) });
+      return { provider: p.name, model: MODELS[p.name], configured: true, ok: true, error: null, ms: Date.now() - t0 };
+    } catch (error) {
+      return { provider: p.name, model: MODELS[p.name], configured: true, ok: false, error: describeError(error).slice(0, 400), ms: Date.now() - t0 };
+    }
+  }));
 }
 
 /** Generación estructurada con cascada (router, onboarding, ritual, análisis, moderación, adaptación). */
