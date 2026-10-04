@@ -35,7 +35,7 @@ pensamiento→afirmacion/manifestacion, emocion→meditacion/suenos, accion→ru
 Si el usuario pide validación sin acción o se contradice, usa anti_sycophant.
 Si hay ideación suicida, autolesión o violencia: agent='crisis' sin excepción.`,
       prompt: `Historial reciente:\n${history.slice(-4).join('\n')}\n\nMensaje: ${message}`,
-      timeoutMs: 6000,
+      timeoutMs: 12_000,
     });
     return object;
   } catch {

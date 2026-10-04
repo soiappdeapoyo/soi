@@ -12,6 +12,13 @@ import { groq } from '@ai-sdk/groq';
 import { createDeepSeek } from '@ai-sdk/deepseek';
 import type { z } from 'zod/v3';
 import { MODELS, hasKey } from './models';
+import { relaxTools } from './relax-schema';
+
+/**
+ * Groq en modo estricto exige que todo campo del esquema sea obligatorio (rompe los `.optional()`/`.default()`).
+ * Sin modo estricto respeta el esquema igual y validamos con zod del lado del servidor.
+ */
+const PROVIDER_OPTIONS = { groq: { strictJsonSchema: false } };
 
 export type ProviderName = 'gemini' | 'groq' | 'deepseek';
 type Provider = { name: ProviderName; model: () => LanguageModel };
@@ -43,7 +50,8 @@ function logFailure(provider: ProviderName, error: unknown) {
 
 async function healthCheck(p: Provider): Promise<boolean> {
   try {
-    await generateText({ model: p.model(), prompt: 'ok', maxOutputTokens: 16, abortSignal: AbortSignal.timeout(6000) });
+    // Sin reintentos: si el tiempo se agota durante la espera de un reintento solo veríamos "Delay was aborted".
+    await generateText({ model: p.model(), prompt: 'ok', maxOutputTokens: 64, maxRetries: 0, abortSignal: AbortSignal.timeout(10_000) });
     return true;
   } catch (error) {
     logFailure(p.name, error);
@@ -58,13 +66,14 @@ async function orderedProviders(): Promise<Provider[]> {
     return [];
   }
   if (cachedProvider && cachedProvider.until > Date.now()) {
+    // El sano va primero, pero los demás siguen como respaldo (antes se descartaban).
     const idx = providers.findIndex((p) => p.name === cachedProvider!.name);
-    if (idx >= 0) return providers.slice(idx);
+    if (idx >= 0) return [...providers.slice(idx), ...providers.slice(0, idx)];
   }
   for (let i = 0; i < providers.length; i++) {
     if (await healthCheck(providers[i]!)) {
       cachedProvider = { name: providers[i]!.name, until: Date.now() + 5 * 60_000 };
-      return providers.slice(i);
+      return [...providers.slice(i), ...providers.slice(0, i)];
     }
   }
   return providers;
@@ -124,7 +133,8 @@ export async function streamWithFallback(
         model: provider.model(),
         instructions,
         messages,
-        tools,
+        tools: tools ? relaxTools(tools) : undefined,
+        providerOptions: PROVIDER_OPTIONS,
         stopWhen: isStepCount(5),
         onError: ({ error }) => {
           logFailure(provider.name, error);
@@ -177,7 +187,9 @@ export async function objectWithFallback<T extends z.ZodTypeAny>(opts: {
         output: Output.object({ schema: opts.schema }),
         instructions: opts.instructions,
         prompt: opts.prompt,
-        abortSignal: opts.timeoutMs ? AbortSignal.timeout(opts.timeoutMs) : undefined,
+        providerOptions: PROVIDER_OPTIONS,
+        // Con tiempo límite, sin reintentos: si un proveedor no responde, pasamos al siguiente.
+        ...(opts.timeoutMs ? { maxRetries: 0, abortSignal: AbortSignal.timeout(opts.timeoutMs) } : {}),
       });
       return { object: output as z.infer<T>, provider: provider.name };
     } catch (error) {

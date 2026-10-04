@@ -127,14 +127,14 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
           day: z.number().int().min(1).max(30).optional().describe('Solo en retos (kind challenge): día al que pertenece el bloque'),
           source: z.string().max(160).optional().describe('Autor y obra de la técnica, si aplica'),
         })).min(2).max(20),
-        durationDays: z.number().int().min(2).max(30).optional().describe('Solo retos: cuántos días dura'),
+        durationDays: z.number().int().optional().describe('Solo retos (kind challenge): cuántos días dura, de 2 a 30'),
       }),
       execute: async (m) => {
         const { blocks, errors } = parseBlocks(m.blocks.map((b, i) => ({ ...b, id: `b${i + 1}` })));
         if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
         const { data, error } = await supabase.from('soi_blueprints').insert({
           creator_id: userId, title: m.title, objective: m.objective, kind: m.kind, source: m.source,
-          blocks, steps: [], status: 'private', ...(m.kind === 'challenge' && m.durationDays ? { duration_days: m.durationDays } : {}),
+          blocks, steps: [], status: 'private', ...(m.kind === 'challenge' && m.durationDays && m.durationDays >= 2 ? { duration_days: Math.min(30, m.durationDays) } : {}),
         }).select('id, required_minutes').single();
         if (error) return { ok: false as const, errors: ['No se pudo guardar el Moment.'] };
         return {
