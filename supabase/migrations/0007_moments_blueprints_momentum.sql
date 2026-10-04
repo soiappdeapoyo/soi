@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS public.creator_profiles (
 
 -- ---------- Blueprints ----------
 CREATE TABLE IF NOT EXISTS public.soi_blueprints (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   creator_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   moment_id UUID,
   title TEXT NOT NULL CHECK (char_length(title) BETWEEN 3 AND 120),
@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_bp_creator ON public.soi_blueprints (creator_id);
 
 -- ---------- Moments ----------
 CREATE TABLE IF NOT EXISTS public.soi_moments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   creator_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   author_name TEXT,
   title TEXT NOT NULL CHECK (char_length(title) BETWEEN 3 AND 120),
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS public.moment_interactions (
 
 -- ---------- Implementaciones y compras ----------
 CREATE TABLE IF NOT EXISTS public.blueprint_implementations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   blueprint_id UUID NOT NULL REFERENCES public.soi_blueprints(id) ON DELETE CASCADE,
   adapted_steps JSONB NOT NULL DEFAULT '[]',      -- versión adaptada por la IA a la realidad de la persona
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS public.blueprint_implementations (
 CREATE INDEX IF NOT EXISTS idx_impl_bp_started ON public.blueprint_implementations (blueprint_id, started_at DESC);
 
 CREATE TABLE IF NOT EXISTS public.blueprint_purchases (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   blueprint_id UUID NOT NULL REFERENCES public.soi_blueprints(id) ON DELETE RESTRICT,
   creator_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS public.blueprint_purchases (
 
 -- ---------- Momentum ----------
 CREATE TABLE IF NOT EXISTS public.momentum_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   kind TEXT NOT NULL CHECK (kind IN (
     'return', 'action_completed', 'ritual_completed', 'routine_completed', 'evidence_saved',
