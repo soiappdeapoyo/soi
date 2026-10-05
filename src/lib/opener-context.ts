@@ -8,6 +8,7 @@ import { anticipate, type OpenerInput } from '@/lib/opener';
 import { getMoment, recommendMoment } from '@/lib/moments/server';
 import { challengeLength, challengeState } from '@/lib/moments/challenge';
 import { officialMoment } from '@/config/official-moments';
+import { loadDayPlan } from '@/lib/day-plan';
 
 const KINDS_FOR: Record<MomentumState, MomentKind[]> = {
   anxiety: ['recovery'],
@@ -29,7 +30,7 @@ export async function openerContext(
   const [{ data: runs }, checkin, { data: enrollments }] = await Promise.all([
     supabase.from('moment_runs').select('moment_id, moment_slug, started_at, completed_at, mood_before, mood_after, helped')
       .eq('user_id', userId).gte('started_at', since).order('started_at', { ascending: false }).limit(120),
-    todayCheckin(supabase, userId),
+    todayCheckin(supabase, userId, profile?.timezone),
     supabase.from('challenge_enrollments').select('moment_id, moment_slug, completed').eq('user_id', userId).eq('status', 'active').limit(5),
   ]);
   const progress = summarizeRuns((runs ?? []) as RunRow[], profile?.streak_current ?? 0);
@@ -48,7 +49,15 @@ export async function openerContext(
     }
   }
 
-  // 2) El Moment que más le ha ayudado, si encaja con cómo llega hoy; si no, el recomendado para ese estado.
+  // 2) Lo que la persona planeó en "Mi día": su propia decisión pesa más que cualquier recomendación.
+  const plan = await loadDayPlan(supabase, userId, profile?.timezone ?? 'America/Mexico_City');
+  const planned = plan.items.find((i) => i.id === plan.next && !i.done);
+  if (planned?.moment) {
+    const m = planned.moment;
+    return { ...ctx, proposal: { id: m.id, title: m.title, minutes: m.required_minutes, cover: m.cover, planned: true } };
+  }
+
+  // 3) El Moment que más le ha ayudado, si encaja con cómo llega hoy; si no, el recomendado para ese estado.
   const { state } = anticipate({ ...base, ...ctx });
   const kinds = KINDS_FOR[state];
   if (progress.best) {

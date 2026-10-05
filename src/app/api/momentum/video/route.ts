@@ -1,3 +1,5 @@
+import { getProfile } from '@/lib/billing/check-access';
+import { startOfTodayISO } from '@/lib/utils';
 import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { recordMomentum } from '@/lib/momentum-server';
@@ -11,8 +13,8 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return new Response('Datos inválidos', { status: 400 });
 
-  const start = new Date();
-  start.setUTCHours(0, 0, 0, 0);
+  const profile = await getProfile(user.id);
+  const start = new Date(startOfTodayISO(profile?.timezone ?? undefined));
   const { count } = await supabase.from('momentum_events').select('id', { count: 'exact', head: true })
     .eq('user_id', user.id).eq('kind', 'video_watched').eq('metadata->>video_id', parsed.data.videoId).gte('created_at', start.toISOString());
   if (!count) {

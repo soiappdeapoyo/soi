@@ -75,13 +75,14 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     if (!voiceOn || !ttsAllowed) return;
     try {
       const { speak } = await import('@/lib/voice/tts');
-      await speak(text, { style, pauseMs: style === 'calm' ? 900 : 0 });
+      await speak(text, { style });
     } catch { /* TTS opcional */ }
   }, [voiceOn, ttsAllowed]);
   // Indicaciones breves (Inhala, Exhala, "Diez segundos más"…): no interrumpen una explicación en curso.
-  const cue = useCallback((text: string, style: VoiceStyle = 'breath') => {
+  // La respiración (estilo breath) siempre suena; las demás indicaciones no interrumpen.
+  const cue = useCallback((text: string, style: VoiceStyle = 'guide') => {
     if (!voiceOn || !ttsAllowed) return;
-    void import('@/lib/voice/tts').then(({ cue: c }) => c(text, style)).catch(() => {});
+    void import('@/lib/voice/tts').then(({ cue: c, cueNow }) => (style === 'breath' ? cueNow(text, style) : c(text, style))).catch(() => {});
   }, [voiceOn, ttsAllowed]);
   void voice;
 
@@ -142,12 +143,24 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   useEffect(() => {
     if (phase !== 'run') return;
     const { text, style } = blockSpeech(block);
-    void say(text, style);
+    if (block.type === 'breathing') {
+      // Respiración: la guía es "Inhala… / Exhala…" desde el primer segundo (las indicaciones se precargan).
+      void import('@/lib/voice/tts').then(({ prefetchSpeech, stopSpeaking }) => {
+        stopSpeaking();
+        prefetchSpeech('Inhala…', 'breath');
+        prefetchSpeech('Exhala…', 'breath');
+      }).catch(() => {});
+    } else {
+      void say(text, style);
+    }
     // El audio del siguiente paso se prepara mientras se vive este (sin espera al avanzar).
     const following = blocks[index + 1];
     if (following && voiceOn && ttsAllowed) {
       const n = blockSpeech(following);
-      void import('@/lib/voice/tts').then(({ prefetchSpeech }) => prefetchSpeech(n.text, n.style)).catch(() => {});
+      void import('@/lib/voice/tts').then(({ prefetchSpeech }) => {
+        if (following.type === 'breathing') { prefetchSpeech('Inhala…', 'breath'); prefetchSpeech('Exhala…', 'breath'); }
+        else prefetchSpeech(n.text, n.style);
+      }).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, phase]);

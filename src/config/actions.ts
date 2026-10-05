@@ -8,6 +8,7 @@ import type { Eslabon } from '@/config/agents';
  */
 
 const text = (max: number) => z.string().trim().min(1).max(max);
+const FRAME = z.string().regex(/^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/[A-Za-z0-9_\-/]+\.jpg$/);
 
 export const ACTION_CONFIG = {
   breathing: z.object({ inhale: z.number().int().min(2).max(8).default(4), exhale: z.number().int().min(2).max(10).default(6) }),
@@ -56,7 +57,12 @@ export const ACTION_CONFIG = {
   contract: z.object({ commitment: text(400), consequence: z.string().trim().max(300).optional() }),
   weekly_review: z.object({ focus: z.string().trim().max(200).optional() }),
   tracking: z.object({ metric: text(80), unit: z.string().trim().max(20).default(''), target: z.number().min(0).max(100000).optional() }),
-  stretching: z.object({ sequence: z.array(text(120)).min(1).max(8), secondsEach: z.number().int().min(15).max(180).default(40) }),
+  stretching: z.object({
+    sequence: z.array(text(120)).min(1).max(8),
+    secondsEach: z.number().int().min(15).max(180).default(40),
+    /** Guía visual por estiramiento (la resuelve el servidor): animación de free-exercise-db o un Short de YouTube. */
+    guides: z.array(z.object({ frames: z.array(FRAME).max(2).optional(), videoId: z.string().regex(/^[A-Za-z0-9_-]{6,20}$/).optional() })).max(8).optional(),
+  }),
   // Biblioteca como acciones: libros (Open Library), documentos PDF y ejercicios (free-exercise-db).
   book: z.object({
     title: text(300),
@@ -79,7 +85,9 @@ export const ACTION_CONFIG = {
     exerciseId: z.string().regex(/^[A-Za-z0-9_-]{2,120}$/).optional(),
     /** Búsqueda (en inglés) para que el servidor elija el ejercicio cuando lo diseña la IA. */
     query: z.string().trim().max(80).optional(),
-    frames: z.array(z.string().regex(/^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/[A-Za-z0-9_\-/]+\.jpg$/)).max(2).optional(),
+    frames: z.array(FRAME).max(2).optional(),
+    /** Si no hay animación en la librería: un Short o video de YouTube. */
+    videoId: z.string().regex(/^[A-Za-z0-9_-]{6,20}$/).optional(),
     sets: z.number().int().min(1).max(10).default(3),
     reps: z.number().int().min(1).max(100).optional(),
     seconds: z.number().int().min(5).max(300).optional(),

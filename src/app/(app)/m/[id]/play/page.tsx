@@ -42,7 +42,7 @@ export default async function PlayMomentPage({ params }: { params: Promise<{ id:
     challenge = { day: st.currentDay!, total };
     toPlay = blocksForDay(blocks, st.currentDay!);
   }
-  const ready = await resolveVideoBlocks(supabase, user.id, await resolveLibraryBlocks(toPlay), access.youtube_embed);
+  const ready = await resolveVideoBlocks(supabase, user.id, await resolveLibraryBlocks(toPlay, { youtube: access.youtube_embed }), access.youtube_embed);
 
   return (
     <MomentPlayer

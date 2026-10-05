@@ -10,6 +10,9 @@ import { IdeasSection } from '@/components/social/feed-sections';
 import { ProfileTabs, type ProfileTab } from '@/components/profile/profile-tabs';
 import { MomentFlowCard } from '@/components/moments/moment-flow-card';
 import { MyMomentsGrid } from '@/components/moments/my-moments-grid';
+import { DayPlanner } from '@/components/moments/day-planner';
+import { loadDayPlan, refOf, suggestForPart } from '@/lib/day-plan';
+import { OFFICIAL_MOMENTS } from '@/config/official-moments';
 import { summarizeRuns, type Progress, type RunRow } from '@/lib/rewards';
 import type { MomentFlow } from '@/lib/moments/types';
 import { Flame, TrendingUp } from 'lucide-react';
@@ -17,11 +20,12 @@ import { BookSearch } from '@/components/library/book-search';
 import { PdfUpload } from '@/components/library/pdf-upload';
 import { ExerciseAnimation } from '@/components/library/exercise-animation';
 import { buttonClass } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, dateInTz } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Mi Vida' };
 
 const TABS: ProfileTab[] = [
+  { id: 'dia', label: 'Mi día' },
   { id: 'moments', label: 'Moments' },
   { id: 'biblioteca', label: 'Biblioteca' },
   { id: 'ideas', label: 'Ideas' },
@@ -34,7 +38,8 @@ const TABS: ProfileTab[] = [
  */
 export default async function MiVidaPage({ searchParams }: { searchParams: Promise<{ tab?: string; filtro?: string; ordenar?: string }> }) {
   const { tab: t, filtro, ordenar } = await searchParams;
-  const tab = TABS.some((x) => x.id === t) ? t! : 'moments';
+  // Sin pestaña: Mi día (o Moments si se llega con un filtro de la colección).
+  const tab = TABS.some((x) => x.id === t) ? t! : filtro || ordenar ? 'moments' : 'dia';
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
 
@@ -46,6 +51,7 @@ export default async function MiVidaPage({ searchParams }: { searchParams: Promi
       </header>
       <ProfileTabs tabs={TABS} active={tab} base="/mi-vida" />
       <div className="pt-5">
+        {tab === 'dia' && <DayTab supabase={supabase} userId={user.id} />}
         {tab === 'moments' && <MomentsTab supabase={supabase} userId={user.id} filter={(MY_FILTERS.some((f) => f.id === filtro) ? filtro : 'todos') as MyMomentsFilter} tidy={ordenar === '1'} />}
         {tab === 'biblioteca' && <LibraryTab supabase={supabase} userId={user.id} />}
         {tab === 'ideas' && <IdeasSection supabase={supabase} userId={user.id} />}
@@ -77,7 +83,7 @@ async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; us
   const stale = [...data.mine, ...data.saved].filter(isStale);
   const tooMany = (ownIds.size >= 6 && stale.length >= 4) || stale.length >= 8;
   const quickPick = [...stale].sort((a, b) => a.required_minutes - b.required_minutes)[0];
-  const week = weekDots((runs ?? []) as RunRow[]);
+  const week = weekDots((runs ?? []) as RunRow[], profile?.timezone ?? 'America/Mexico_City');
   const older = (legacy ?? []) as unknown as { id: string; status: string; completed_steps: number[]; adapted_steps: unknown[]; blueprint: { title: string } | null }[];
 
   return (
@@ -90,7 +96,7 @@ async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; us
           <p className="mt-1 text-sm text-soi-muted">No necesitas más Moments: necesitas vivir uno. El que empiezas hoy vale más que diez guardados.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href={`/m/${quickPick.id}/play`} className={buttonClass('primary', 'sm')}>Elige uno por mí · {quickPick.required_minutes} min</Link>
-            <Link href="/mi-vida?ordenar=1" scroll={false} className={buttonClass('outline', 'sm')}>Ordenar mi colección</Link>
+            <Link href="/mi-vida?tab=moments&ordenar=1" scroll={false} className={buttonClass('outline', 'sm')}>Ordenar mi colección</Link>
           </div>
         </section>
       )}
@@ -116,7 +122,7 @@ async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; us
         </div>
         <nav aria-label="Filtrar Moments" className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] sm:-mx-5 sm:px-5 [&::-webkit-scrollbar]:hidden">
           {MY_FILTERS.map((f) => (
-            <Link key={f.id} href={f.id === 'todos' ? '/mi-vida' : `/mi-vida?filtro=${f.id}`} scroll={false} aria-current={filter === f.id ? 'page' : undefined}
+            <Link key={f.id} href={f.id === 'todos' ? '/mi-vida?tab=moments' : `/mi-vida?tab=moments&filtro=${f.id}`} scroll={false} aria-current={filter === f.id ? 'page' : undefined}
               className={cn('press h-8 shrink-0 rounded-full px-3.5 text-sm leading-8', filter === f.id ? 'bg-soi-ink text-white' : 'bg-soi-sidebar text-soi-ink shadow-ring')}>
               {f.label}
             </Link>
@@ -286,11 +292,13 @@ function Node({ n }: { n: LifeNode }) {
 }
 
 /** Los últimos 7 días: cuáles tuvieron al menos un Moment completado (de más antiguo a hoy). */
-function weekDots(runs: RunRow[]) {
-  const days = new Set(runs.filter((r) => r.completed_at).map((r) => (r.completed_at as string).slice(0, 10)));
+function weekDots(runs: RunRow[], timeZone: string) {
+  // Fechas en la zona horaria de la persona: el domingo en la noche sigue siendo domingo (no lunes en UTC).
+  const days = new Set(runs.filter((r) => r.completed_at).map((r) => dateInTz(r.completed_at as string, timeZone)));
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.now() - (6 - i) * 86_400_000);
-    return { key: d.toISOString().slice(0, 10), label: d.toLocaleDateString('es', { weekday: 'narrow' }), done: days.has(d.toISOString().slice(0, 10)) };
+    const key = dateInTz(d, timeZone);
+    return { key, label: new Intl.DateTimeFormat('es', { weekday: 'narrow', timeZone }).format(d), done: days.has(key) };
   });
 }
 
@@ -329,4 +337,20 @@ function WeekCard({ progress: p, week }: { progress: Progress; week: { key: stri
       ) : null}
     </section>
   );
+}
+
+async function DayTab({ supabase, userId }: { supabase: Sb; userId: string }) {
+  const profile = await getProfile(userId);
+  const tz = profile?.timezone ?? 'America/Mexico_City';
+  const [plan, mine] = await Promise.all([loadDayPlan(supabase, userId, tz), loadMyMoments(supabase, userId)]);
+  const inPlan = new Set(plan.items.map((i) => i.ref));
+  const suggestions = await suggestForPart(supabase, userId, plan.part, inPlan);
+  const seen = new Set<string>();
+  const options = [...mine.mine, ...mine.saved, ...mine.bought, ...OFFICIAL_MOMENTS].filter((m) => {
+    const r = refOf(m);
+    if (seen.has(r)) return false;
+    seen.add(r);
+    return true;
+  });
+  return <DayPlanner initial={plan.items} options={options} suggestions={suggestions} />;
 }

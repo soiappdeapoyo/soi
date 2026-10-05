@@ -25,7 +25,7 @@ export type OpenerInput = {
   dominantEmotion?: string | null;
   goal?: string | null;
   progress?: Progress | null;
-  proposal?: Omit<OpenerProposal, 'why' | 'label'> & { helpedBefore?: boolean; lift?: number | null; challengeDay?: number | null } | null;
+  proposal?: Omit<OpenerProposal, 'why' | 'label'> & { helpedBefore?: boolean; lift?: number | null; challengeDay?: number | null; planned?: boolean } | null;
 };
 
 export type OpenerPractice = { kind: 'ritual'; href: string; label: string; detail: string; reason: string; locked: false };
@@ -126,10 +126,12 @@ export function buildOpener(i: OpenerInput): Opener {
   let invite: string;
   if (i.proposal) {
     const pr = i.proposal;
-    const why = pr.challengeDay ? 'Un día a la vez.' : pr.helpedBefore ? 'La última vez te hizo bien.' : STATE_WHY[state];
+    const why = pr.challengeDay ? 'Un día a la vez.' : pr.planned ? 'Es lo que planeaste en Mi día.' : pr.helpedBefore ? 'La última vez te hizo bien.' : STATE_WHY[state];
     proposal = { id: pr.id, title: pr.title, minutes: pr.minutes, cover: pr.cover, why, label: pr.challengeDay ? `Hacer el día ${pr.challengeDay}` : 'Empezar ahora' };
     invite = pr.challengeDay
       ? `Hoy toca el día ${pr.challengeDay} de «${pr.title}». ¿Lo hacemos?`
+      : pr.planned
+        ? `Lo siguiente en tu día es «${pr.title}». ¿Lo hacemos?`
       : `¿Hacemos «${pr.title}» ahora?${pr.helpedBefore ? ' La última vez te hizo bien.' : ''}`;
   } else if (i.ritualAvailable && i.lastRitualDate !== i.today && i.hour >= 5 && i.hour < 12) {
     invite = 'Tu ritual de hoy está listo. ¿Empezamos?';

@@ -5,6 +5,8 @@ import { Camera, Check, Circle, Download, Eraser, Mic, Square, Upload } from 'lu
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { SoiPlayer } from '@/components/media/soi-player';
+import { GuideVideo } from '@/components/media/guide-video';
+import { ExerciseAnimation } from '@/components/library/exercise-animation';
 import { compressImage, signedUrl, uploadMedia } from '@/lib/media/upload';
 import type { ActionBlock } from '@/config/actions';
 import type { BlockOutput } from './block-runners';
@@ -508,8 +510,9 @@ function TrackingRunner({ block, output, setOutput }: V2Props) {
 
 /* ---------------- Estiramiento ---------------- */
 function StretchingRunner({ block, elapsed, cue }: V2Props) {
-  const c = cfg<{ sequence: string[]; secondsEach: number }>(block);
+  const c = cfg<{ sequence: string[]; secondsEach: number; guides?: { frames?: string[]; videoId?: string }[] }>(block);
   const i = Math.min(c.sequence.length - 1, Math.floor(elapsed / c.secondsEach));
+  const guide = c.guides?.[i];
   const left = c.secondsEach - (elapsed % c.secondsEach);
   const prev = useRef(i);
   useEffect(() => {
@@ -520,6 +523,11 @@ function StretchingRunner({ block, elapsed, cue }: V2Props) {
   return (
     <div className="flex flex-col items-center gap-3 text-center" aria-live="polite">
       <p className="nums text-sm text-soi-muted">{i + 1} de {c.sequence.length}</p>
+      {guide?.frames?.length ? (
+        <ExerciseAnimation key={`f${i}`} frames={guide.frames} name={c.sequence[i]!} className="aspect-[4/3] w-full max-w-xs rounded-[20px] shadow-ring" />
+      ) : guide?.videoId ? (
+        <GuideVideo key={`v${i}`} id={guide.videoId} title={c.sequence[i]!} />
+      ) : null}
       <p key={i} className="animate-step-in text-balance text-2xl font-medium">{c.sequence[i]}</p>
       <p className="nums text-4xl font-light">{fmt(left)}</p>
       {c.sequence[i + 1] && <p className="text-sm text-soi-muted">Después: {c.sequence[i + 1]}</p>}

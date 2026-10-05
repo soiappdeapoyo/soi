@@ -3,30 +3,25 @@ import type { UserProfile } from '@/types/database';
 import type { Eslabon } from '@/config/agents';
 import { decideToday, type MomentumState, type TodayDecision } from './momentum';
 import { loadMomentum } from './momentum-server';
-import { todayISO } from './utils';
+import { startOfTodayISO, todayISO } from './utils';
 
 export type PendingAction = { id: string; title: string; minutes: number; area: string | null };
 export type WatchedVideo = { id: string; title: string; channel: string };
 
-function startOfDayUTC() {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  return d.toISOString();
-}
 
 /** Check-in más reciente de hoy (o null). */
-export async function todayCheckin(supabase: SupabaseClient, userId: string): Promise<MomentumState | null> {
+export async function todayCheckin(supabase: SupabaseClient, userId: string, timeZone?: string | null): Promise<MomentumState | null> {
   const { data } = await supabase.from('momentum_events').select('metadata').eq('user_id', userId).eq('kind', 'checkin')
-    .gte('created_at', startOfDayUTC()).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    .gte('created_at', startOfTodayISO(timeZone ?? undefined)).order('created_at', { ascending: false }).limit(1).maybeSingle();
   return ((data?.metadata as { state?: MomentumState } | null)?.state) ?? null;
 }
 
 /** Todo lo que "Hoy" necesita para que el Director decida. */
 export async function loadToday(supabase: SupabaseClient, userId: string, profile: UserProfile | null, ritualAvailable: boolean) {
-  const since = startOfDayUTC();
+  const since = startOfTodayISO(profile?.timezone ?? undefined);
   const [momentum, checkin, { data: actions }, { data: impl }, { data: videos }, { data: reflections }] = await Promise.all([
     loadMomentum(supabase, userId, profile?.streak_current ?? 0),
-    todayCheckin(supabase, userId),
+    todayCheckin(supabase, userId, profile?.timezone),
     supabase.from('agent_knowledge').select('id, title, metadata').eq('user_id', userId).eq('category', 'accion')
       .contains('tags', ['action_card']).eq('status', 'en_progreso').order('created_at', { ascending: false }).limit(3),
     supabase.from('blueprint_implementations').select('id, adapted_steps, completed_steps, blueprint:soi_blueprints(title)')

@@ -1,3 +1,4 @@
+import { startOfTodayISO } from './utils';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Eslabon } from '@/config/agents';
 import { computeMomentum, type MomentumEvent, type MomentumKind } from './momentum';
@@ -14,9 +15,8 @@ export async function recordMomentum(
 }
 
 /** "Regreso diario": un evento `return` como máximo por día. */
-export async function recordDailyReturn(supabase: SupabaseClient, userId: string) {
-  const start = new Date();
-  start.setUTCHours(0, 0, 0, 0);
+export async function recordDailyReturn(supabase: SupabaseClient, userId: string, timeZone?: string | null) {
+  const start = new Date(startOfTodayISO(timeZone ?? undefined));
   const { count } = await supabase.from('momentum_events').select('id', { count: 'exact', head: true })
     .eq('user_id', userId).eq('kind', 'return').gte('created_at', start.toISOString());
   if (!count) await recordMomentum(supabase, userId, 'return');

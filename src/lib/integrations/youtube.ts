@@ -1,12 +1,13 @@
 export type YouTubeVideo = { id: string; title: string; channel: string; thumbnail: string };
 
-export async function searchYouTube(query: string, max = 3): Promise<YouTubeVideo[]> {
+export async function searchYouTube(query: string, max = 3, opts?: { short?: boolean }): Promise<YouTubeVideo[]> {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) return [];
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
   url.search = new URLSearchParams({
     part: 'snippet', q: query, type: 'video', maxResults: String(max),
     relevanceLanguage: 'es', safeSearch: 'strict', videoEmbeddable: 'true', key,
+    ...(opts?.short ? { videoDuration: 'short' } : {}),
   }).toString();
   const res = await fetch(url, { next: { revalidate: 86_400 } });
   if (!res.ok) return [];

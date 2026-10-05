@@ -3,7 +3,7 @@ import { experimental_generateSpeech as generateSpeech } from 'ai';
 import { google } from '@ai-sdk/google';
 import { Mp3Encoder } from '@breezystack/lamejs';
 import { createAdminClient } from '@/lib/supabase/server';
-import { VOICE_STYLES, guideVoice, type VoiceStyle } from '@/config/voices';
+import { VOICE_STYLES, VOICE_STYLE_VERSION, guideVoice, type VoiceStyle } from '@/config/voices';
 
 /** Modelo de voz configurable (los proveedores cambian de modelo: una variable, sin deploy de código). */
 export const TTS_MODEL = process.env.AI_MODEL_TTS || 'gemini-3.8-flash-tts';
@@ -15,7 +15,7 @@ export function normalizeSpeech(text: string) {
 }
 
 export function voiceKey(text: string, voice: string, style: VoiceStyle) {
-  return createHash('sha256').update(`${TTS_MODEL}|${voice}|${style}|${text}`).digest('hex');
+  return createHash('sha256').update(`${TTS_MODEL}|v${VOICE_STYLE_VERSION}|${voice}|${style}|${text}`).digest('hex');
 }
 
 /** WAV (RIFF) → PCM de 16 bits. Gemini devuelve 24 kHz mono. */

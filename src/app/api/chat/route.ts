@@ -92,8 +92,8 @@ export async function POST(req: Request) {
     canAccess(user.id, 'daily_ritual'),
     isCrisis ? Promise.resolve(null) : loadMomentum(supabase, user.id, profile?.streak_current ?? 0),
     isCrisis ? Promise.resolve('') : creatorMethodPrompt(supabase, user.id),
-    isCrisis ? Promise.resolve() : recordDailyReturn(supabase, user.id),
-    isCrisis ? Promise.resolve(null) : todayCheckin(supabase, user.id),
+    isCrisis ? Promise.resolve() : recordDailyReturn(supabase, user.id, profile?.timezone),
+    isCrisis ? Promise.resolve(null) : todayCheckin(supabase, user.id, profile?.timezone),
     isCrisis ? Promise.resolve({ data: [] }) : supabase.from('library_items').select('id, kind, title, author, status, external_id')
       .eq('user_id', user.id).order('updated_at', { ascending: false }).limit(25),
   ]);

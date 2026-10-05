@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BookOpen, Check, ExternalLink, Pause, Play } from 'lucide-react';
 import { Button, buttonClass } from '@/components/ui/button';
 import { ExerciseAnimation } from '@/components/library/exercise-animation';
+import { GuideVideo } from '@/components/media/guide-video';
 import { ESLABON_LABEL } from '@/config/agents';
 import type { ActionBlock } from '@/config/actions';
 import type { BookSummary } from '@/lib/library/ai';
@@ -121,7 +122,7 @@ export function DocumentRunner({ block: b, output, setOutput }: P) {
  * Entre series, descanso guiado. Al terminar, una pequeña celebración (recompensa inmediata).
  */
 export function ExerciseRunner({ block: b, output, setOutput, say }: P) {
-  const c = b.config as { name: string; frames?: string[]; sets: number; reps?: number; seconds?: number; rest: number };
+  const c = b.config as { name: string; frames?: string[]; videoId?: string; sets: number; reps?: number; seconds?: number; rest: number };
   const sets = c.sets ?? 3;
   const done = output.count ?? 0;
   const [phase, setPhase] = useState<'work' | 'rest'>('work');
@@ -153,7 +154,8 @@ export function ExerciseRunner({ block: b, output, setOutput, say }: P) {
 
   return (
     <div className="flex flex-col items-center gap-4 text-center">
-      {c.frames?.length ? <ExerciseAnimation frames={c.frames} name={c.name} className="aspect-[4/3] w-full max-w-sm rounded-[20px] shadow-ring" /> : null}
+      {c.frames?.length ? <ExerciseAnimation frames={c.frames} name={c.name} className="aspect-[4/3] w-full max-w-sm rounded-[20px] shadow-ring" />
+        : c.videoId ? <GuideVideo id={c.videoId} title={c.name} /> : null}
       <p className="text-lg font-medium">{c.name}</p>
       <ol className="flex gap-1.5" aria-label={`${done} de ${sets} series`}>
         {Array.from({ length: sets }, (_, i) => (

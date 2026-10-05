@@ -133,9 +133,14 @@ export async function speak(text: string, opts?: Opts & { voice?: string }) {
   }
 }
 
-/** Indicación breve (Inhala, Exhala…): no interrumpe una explicación en curso. */
-export function cue(text: string, style: VoiceStyle = 'breath') {
+/** Indicación breve de cortesía ("Diez segundos más"): no interrumpe una explicación en curso. */
+export function cue(text: string, style: VoiceStyle = 'guide') {
   if (speaking) return;
+  void speak(text, { style });
+}
+
+/** Indicación que SIEMPRE suena (Inhala / Exhala): corta lo que esté sonando y se reproduce de inmediato. */
+export function cueNow(text: string, style: VoiceStyle = 'breath') {
   void speak(text, { style });
 }
 

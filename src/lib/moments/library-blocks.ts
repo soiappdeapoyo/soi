@@ -2,24 +2,76 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { exerciseSeconds, type ActionBlock } from '@/config/actions';
 import { allExercises, filterExercises } from '@/lib/library/exercises';
 import { searchBooks } from '@/lib/library/openlibrary';
+import { searchYouTube } from '@/lib/integrations/youtube';
+import type { Exercise } from '@/lib/library/exercises';
+
+/** Palabras del estiramiento (en español) → músculo de free-exercise-db (ya traducido en MUSCLE_ES). */
+const BODY: [RegExp, string][] = [
+  [/cuello|cervical/, 'Cuello'], [/trapecio/, 'Trapecios'], [/hombro/, 'Hombros'],
+  [/espalda baja|lumbar/, 'Espalda baja'], [/espalda|columna|dorsal/, 'Espalda media'],
+  [/pecho|pectoral/, 'Pecho'], [/tr[ií]ceps|brazo/, 'Tríceps'], [/b[ií]ceps/, 'Bíceps'], [/antebrazo|mu[ñn]eca/, 'Antebrazos'],
+  [/abdom|torso|core|costado|lateral/, 'Abdomen'], [/isquio|femoral|posterior|tocar.*pies|punta.*pies/, 'Isquiotibiales'],
+  [/cu[aá]driceps|muslo/, 'Cuádriceps'], [/gl[uú]te/, 'Glúteos'], [/cadera|aductor|mariposa|ingle/, 'Aductores'],
+  [/pantorrilla|gemelo|tobillo/, 'Pantorrillas'],
+];
+
+const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/** Animación de estiramiento para un texto como "Cuello: inclina a cada lado". Varía entre candidatos. */
+export function stretchFor(item: string, stretches: Exercise[], i = 0): string[] | null {
+  const text = norm(item);
+  const hit = BODY.find(([re]) => re.test(text) || re.test(item.toLowerCase()));
+  if (!hit) return null;
+  const candidates = stretches.filter((e) => e.muscles.includes(hit[1]) && e.frames.length);
+  const pick = candidates[i % Math.max(1, candidates.length)];
+  return pick ? pick.frames.slice(0, 2) : null;
+}
+
+/** Short de YouTube (caché global en content_cache: una búsqueda por texto para todas las personas). */
+async function shortFor(query: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const key = `yt:short:${norm(query).slice(0, 160)}`;
+  const { data } = await admin.from('content_cache').select('value').eq('key', key).maybeSingle();
+  if (data) return ((data.value as { id?: string | null }).id) ?? null;
+  const v = (await searchYouTube(query, 1, { short: true }).catch(() => []))[0];
+  await admin.from('content_cache').upsert({ key, value: { id: v?.id ?? null } });
+  return v?.id ?? null;
+}
 
 /**
  * Libros y ejercicios que diseña la IA llegan por nombre (no conoce los ids):
  * ejercicio `query` → ejercicio concreto de free-exercise-db (id + animación);
  * libro sin `key` → obra de Open Library (clave, portada y autor). Si no hay resultado, el bloque queda como está.
  */
-export async function resolveLibraryBlocks(blocks: ActionBlock[]): Promise<ActionBlock[]> {
-  const needsExercises = blocks.some((b) => b.type === 'exercise' && !(b.config as { exerciseId?: string }).exerciseId);
+export async function resolveLibraryBlocks(blocks: ActionBlock[], opts: { youtube?: boolean } = {}): Promise<ActionBlock[]> {
+  const needsExercises = blocks.some((b) => (b.type === 'exercise' && !(b.config as { exerciseId?: string }).exerciseId)
+    || (b.type === 'stretching' && !(b.config as { guides?: unknown[] }).guides));
   const exercises = needsExercises ? await allExercises() : [];
   return Promise.all(blocks.map(async (b) => {
     if (b.type === 'exercise') {
       const c = b.config as { exerciseId?: string; query?: string; name?: string; frames?: string[] };
-      if (c.exerciseId) return b;
+      if (c.exerciseId || (c as { videoId?: string }).videoId) return b;
       const hit = filterExercises(exercises, { q: c.query ?? c.name ?? '', limit: 1 })[0];
-      if (!hit) return b;
+      if (!hit) {
+        // Sin animación en la librería: un Short que muestre el movimiento.
+        const videoId = opts.youtube ? await shortFor(`${c.name ?? c.query} cómo hacer ejercicio`) : null;
+        return videoId ? { ...b, config: { ...c, videoId } } : b;
+      }
       const config = { ...c, exerciseId: hit.id, frames: hit.frames.slice(0, 2), query: undefined };
       const secs = exerciseSeconds(config as never);
       return { ...b, config, minutes: Math.max(1, Math.round(secs / 60)), seconds: secs };
+    }
+    if (b.type === 'stretching') {
+      const c = b.config as { sequence: string[]; guides?: unknown[] };
+      if (c.guides) return b;
+      const stretches = exercises.filter((e) => e.kind === 'estiramiento');
+      const guides = await Promise.all(c.sequence.map(async (item, i) => {
+        const frames = stretchFor(item, stretches, i);
+        if (frames) return { frames };
+        const videoId = opts.youtube ? await shortFor(`${item} estiramiento`) : null;
+        return videoId ? { videoId } : {};
+      }));
+      return { ...b, config: { ...c, guides } };
     }
     if (b.type === 'book') {
       const c = b.config as { key?: string; title: string; author?: string };

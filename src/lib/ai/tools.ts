@@ -135,7 +135,7 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
         const errors = parsed.errors;
         // Documentos: solo PDFs de la biblioteca de la persona. Libros y ejercicios se resuelven por nombre.
         const docsOk = await ownsDocuments(userId, parsed.blocks);
-        const blocks = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'));
+        const blocks = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'), { youtube: access.youtube });
         if (!docsOk) errors.push('Un bloque document usaba un PDF que no está en la biblioteca de la persona; se quitó.');
         if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
         const { data, error } = await supabase.from('soi_blueprints').insert({
