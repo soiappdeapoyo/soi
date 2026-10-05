@@ -152,6 +152,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
               onSpeak={speakText}
               practice={m.id === OPENER_ID ? opener?.practice : null}
               proposal={m.id === OPENER_ID ? opener?.proposal : null}
+              onSend={(text) => { stickRef.current = true; sendMessage({ text }); }}
               onReflected={(text, video) => {
                 stickRef.current = true;
                 sendMessage({ text: `Mi reflexión de «${video.title}»: ${text}` });

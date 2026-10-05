@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { ArrowRight, BookOpen, Dumbbell, FileText, Link2, Plus } from 'lucide-react';
+import { ArrowRight, BookOpen, Brain, Dumbbell, FileText, Heart, Link2, Plus, Sparkles } from 'lucide-react';
+import { GuidedCreate } from '@/components/library/guided-create';
+import { GUIDED_LABEL, type GuidedKind } from '@/lib/guided';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/billing/check-access';
 import { loadLifeGraph, type LifeNode } from '@/lib/life-graph';
@@ -160,7 +162,7 @@ async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; us
   );
 }
 
-type LibraryRow = { id: string; kind: 'book' | 'pdf' | 'exercise'; title: string; author: string | null; cover_url: string | null; status: string; external_id: string | null; file_size: number | null; metadata: { frames?: string[]; muscles?: string[] } };
+type LibraryRow = { id: string; kind: 'book' | 'pdf' | 'exercise' | GuidedKind; title: string; author: string | null; cover_url: string | null; status: string; external_id: string | null; file_size: number | null; metadata: { frames?: string[]; muscles?: string[]; intention?: string } };
 const READ_STATUS: Record<string, string> = { want: 'Quiero leer', reading: 'Leyendo', done: 'Leído', saved: '' };
 
 async function LibraryTab({ supabase, userId }: { supabase: Sb; userId: string }) {
@@ -171,9 +173,35 @@ async function LibraryTab({ supabase, userId }: { supabase: Sb; userId: string }
   const books = rows.filter((r) => r.kind === 'book').sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
   const pdfs = rows.filter((r) => r.kind === 'pdf');
   const exercises = rows.filter((r) => r.kind === 'exercise');
+  const guided = rows.filter((r) => r.kind === 'meditation' || r.kind === 'affirmations' || r.kind === 'manifestation');
 
   return (
     <div className="flex flex-col gap-8">
+      <section aria-labelledby="lib-guided">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 id="lib-guided" className="flex items-center gap-1.5 text-sm font-medium text-soi-muted"><Sparkles className="h-4 w-4" aria-hidden="true" /> Meditaciones, afirmaciones y manifestaciones</h2>
+          <GuidedCreate />
+        </div>
+        {guided.length ? (
+          <ul className="flex flex-col gap-1.5">
+            {guided.map((g) => (
+              <li key={g.id}>
+                <Link href={`/mi-vida/recursos/${g.id}`} className="press flex items-center gap-3 rounded-[14px] bg-white p-3 shadow-ring hover:shadow-soft">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-soi-accent-soft text-soi-accent">
+                    {g.kind === 'meditation' ? <Brain className="h-5 w-5" aria-hidden="true" /> : g.kind === 'affirmations' ? <Heart className="h-5 w-5" aria-hidden="true" /> : <Sparkles className="h-5 w-5" aria-hidden="true" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px]">{g.title}</span>
+                    <span className="block truncate text-xs text-soi-muted">{GUIDED_LABEL[g.kind as GuidedKind]}{g.metadata.intention ? ` · ${g.metadata.intention}` : ''}</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-soi-subtle" aria-hidden="true" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">Pídele a SOI una meditación, afirmaciones o una manifestación escritas para ti. También se guardan aquí las que crea al diseñar tus Moments.</p>}
+      </section>
+
       <section aria-labelledby="lib-books">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 id="lib-books" className="flex items-center gap-1.5 text-sm font-medium text-soi-muted"><BookOpen className="h-4 w-4" aria-hidden="true" /> Libros</h2>

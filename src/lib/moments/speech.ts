@@ -31,10 +31,15 @@ export function blockSpeech(b: Pick<ActionBlock, 'type' | 'title' | 'config'>): 
     case 'gratitude': parts.push(`Escribe ${num(c.count, 3)} cosas por las que agradeces hoy.`); break;
     case 'reading': parts.push(`Lee ${c.pages ? `${num(c.pages, 10)} páginas de ` : ''}${str(c.book)}.`); break;
     case 'affirmation': {
-      const t = str(c.text);
+      const items = list(c.items);
+      const t = items[0] ?? str(c.text);
       if (t) parts.push(`Repite conmigo: ${sentence(t)}`);
       slow = true; break;
     }
+    case 'manifestation':
+      parts.push(`Lo que vas a manifestar: ${sentence(str(c.desire))}`, `Asúmelo así: ${sentence(str(c.assumption))}`,
+        'Cierra los ojos.', str(c.scene), str(c.feeling) ? `Quédate en esa sensación: ${sentence(str(c.feeling))}` : '');
+      slow = true; break;
     case 'celebration': parts.push(str(c.message)); break;
     case 'mind_map': parts.push(`En el centro escribe: ${sentence(str(c.center))} Agrega ${num(c.branches, 4)} ramas.`); break;
     case 'audio': case 'music': parts.push(str(c.prompt)); break;

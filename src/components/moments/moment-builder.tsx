@@ -16,12 +16,13 @@ import { CREATOR_REVENUE_SHARE, formatPrice } from '@/config/creators';
 import { cn } from '@/lib/utils';
 import { AudioField, QuizEditor } from './builder-fields';
 import { BookField, DocumentField, ExerciseField } from './builder-library-fields';
+import { GuidedField } from './guided-field';
 
 type Field = { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'lines' | 'select' | 'time' | 'audio' | 'quiz' | 'book' | 'document' | 'exercise'; options?: { value: string; label: string }[]; min?: number; max?: number };
 
 const FIELDS: Record<ActionType, Field[]> = {
   breathing: [{ key: 'inhale', label: 'Inhalar (s)', kind: 'number', min: 2, max: 8 }, { key: 'exhale', label: 'Exhalar (s)', kind: 'number', min: 2, max: 10 }],
-  meditation: [{ key: 'guide', label: 'Guía', kind: 'textarea' }],
+  meditation: [{ key: 'guide', label: 'Guion de la meditación (la voz lo lee completo)', kind: 'textarea' }],
   timer: [{ key: 'instruction', label: 'Instrucción', kind: 'textarea' }],
   writing: [{ key: 'prompt', label: 'Pregunta para escribir', kind: 'text' }],
   visualization: [{ key: 'scene', label: 'Escena', kind: 'textarea' }],
@@ -31,12 +32,13 @@ const FIELDS: Record<ActionType, Field[]> = {
   gratitude: [{ key: 'count', label: 'Cuántas cosas', kind: 'number', min: 1, max: 5 }],
   reading: [{ key: 'book', label: 'Libro', kind: 'text' }, { key: 'pages', label: 'Páginas', kind: 'number', min: 1, max: 100 }],
   reflection: [{ key: 'question', label: 'Pregunta', kind: 'text' }],
-  affirmation: [{ key: 'text', label: 'Afirmación', kind: 'text' }, { key: 'repeat', label: 'Repeticiones', kind: 'number', min: 1, max: 10 }],
+  affirmation: [{ key: 'text', label: 'Afirmación principal', kind: 'text' }, { key: 'items', label: 'Afirmaciones (una por línea)', kind: 'lines' }, { key: 'repeat', label: 'Repeticiones', kind: 'number', min: 1, max: 10 }],
   goal: [{ key: 'prompt', label: 'Pregunta', kind: 'text' }],
   emotion_log: [{ key: 'question', label: 'Pregunta', kind: 'text' }],
   rest: [{ key: 'instruction', label: 'Instrucción', kind: 'text' }, { key: 'variant', label: 'Tipo', kind: 'select', options: [{ value: 'rest', label: 'Descanso' }, { value: 'stretching', label: 'Estiramiento' }] }],
   celebration: [{ key: 'message', label: 'Mensaje', kind: 'text' }],
   next_step: [{ key: 'instruction', label: 'Instrucción', kind: 'text' }],
+  manifestation: [{ key: 'desire', label: 'Qué manifestar', kind: 'text' }, { key: 'assumption', label: 'Asunción (en presente)', kind: 'text' }, { key: 'scene', label: 'Escena del deseo cumplido', kind: 'textarea' }, { key: 'feeling', label: 'Cómo se siente', kind: 'text' }, { key: 'action', label: 'Paso de hoy', kind: 'text' }],
   book: [{ key: 'book', label: 'Libro', kind: 'book' }],
   document: [{ key: 'document', label: 'Documento', kind: 'document' }],
   exercise: [{ key: 'exercise', label: 'Ejercicio', kind: 'exercise' }],
@@ -269,6 +271,13 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                       <option value="all">Cada día</option>
                       {Array.from({ length: durationDays }, (_, d) => <option key={d + 1} value={d + 1}>Día {d + 1}</option>)}
                     </Select>
+                  </div>
+                )}
+                {(b.type === 'meditation' || b.type === 'affirmation' || b.type === 'manifestation') && (
+                  <div className="mt-2">
+                    <GuidedField kind={b.type === 'affirmation' ? 'affirmations' : b.type} minutes={b.minutes}
+                      intention={[title, objective, b.title].filter(Boolean).join('. ')}
+                      onApply={(g) => setBlocks((bs) => bs.map((x, j) => (j === i ? { ...x, title: g.title?.slice(0, 120) || x.title, source: g.source?.slice(0, 160) ?? x.source, config: g.config } : x)))} />
                   </div>
                 )}
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">

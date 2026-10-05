@@ -4,7 +4,7 @@ import type { Eslabon } from '@/config/agents';
 /**
  * Biblioteca de acciones: las piezas con las que se componen los SOI Moments.
  * Cada tipo tiene su runner ejecutable en `src/components/moments/blocks/`.
- * 31 acciones (núcleo, v2 y biblioteca: libro, documento, ejercicio) + 2 estructurales (próximo paso y Moment anidado).
+ * 32 acciones (núcleo, v2 y biblioteca: libro, documento, ejercicio) + 2 estructurales (próximo paso y Moment anidado).
  */
 
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -12,10 +12,11 @@ const FRAME = z.string().regex(/^https:\/\/raw\.githubusercontent\.com\/yuhonas\
 
 export const ACTION_CONFIG = {
   breathing: z.object({ inhale: z.number().int().min(2).max(8).default(4), exhale: z.number().int().min(2).max(10).default(6) }),
-  meditation: z.object({ guide: text(600) }),
+  /** Guion completo de la meditación (lo genera el agente Calma o lo escribe el creador); la voz lo lee. */
+  meditation: z.object({ guide: text(4000), itemId: z.string().uuid().optional() }),
   timer: z.object({ instruction: text(400) }),
   writing: z.object({ prompt: text(300) }),
-  visualization: z.object({ scene: text(400) }),
+  visualization: z.object({ scene: text(1500) }),
   checklist: z.object({ items: z.array(text(120)).min(1).max(10) }),
   video: z.object({
     videoId: z.string().min(3).max(32).optional(),
@@ -28,7 +29,13 @@ export const ACTION_CONFIG = {
   gratitude: z.object({ count: z.number().int().min(1).max(5).default(3) }),
   reading: z.object({ book: text(160), pages: z.number().int().min(1).max(100).optional() }),
   reflection: z.object({ question: text(300) }),
-  affirmation: z.object({ text: text(240), repeat: z.number().int().min(1).max(10).default(3) }),
+  affirmation: z.object({
+    text: text(240),
+    /** Varias afirmaciones personales (agente Voz Interior); `text` es la principal. */
+    items: z.array(text(200)).max(10).optional(),
+    repeat: z.number().int().min(1).max(10).default(3),
+    itemId: z.string().uuid().optional(),
+  }),
   goal: z.object({ prompt: text(240) }),
   emotion_log: z.object({ question: z.string().trim().max(200).default('¿Cómo te sientes ahora?') }),
   rest: z.object({ instruction: text(300), variant: z.enum(['rest', 'stretching']).default('rest') }),
@@ -62,6 +69,15 @@ export const ACTION_CONFIG = {
     secondsEach: z.number().int().min(15).max(180).default(40),
     /** Guía visual por estiramiento (la resuelve el servidor): animación de free-exercise-db o un Short de YouTube. */
     guides: z.array(z.object({ frames: z.array(FRAME).max(2).optional(), videoId: z.string().regex(/^[A-Za-z0-9_-]{6,20}$/).optional() })).max(8).optional(),
+  }),
+  /** Manifestación (agente Asunción, Neville Goddard): qué manifestar, la asunción y la escena del deseo cumplido. */
+  manifestation: z.object({
+    desire: text(200),
+    assumption: text(240),
+    scene: text(1200),
+    feeling: z.string().trim().max(200).optional(),
+    action: z.string().trim().max(240).optional(),
+    itemId: z.string().uuid().optional(),
   }),
   // Biblioteca como acciones: libros (Open Library), documentos PDF y ejercicios (free-exercise-db).
   book: z.object({
@@ -133,6 +149,7 @@ export const ACTIONS: Record<ActionType, { label: string; icon: string; minutes:
   weekly_review: { label: 'Revisión semanal', icon: 'ClipboardCheck', minutes: 10, eslabon: 'resultado', output: 'structured', hint: 'Victorias, aprendizajes y prioridades' },
   tracking: { label: 'Seguimiento', icon: 'ChartLine', minutes: 1, eslabon: 'resultado', output: 'structured', hint: 'Registra una métrica de tu progreso' },
   stretching: { label: 'Estiramiento', icon: 'PersonStanding', minutes: 4, eslabon: 'emocion', output: 'none', hint: 'Una secuencia guiada' },
+  manifestation: { label: 'Manifestación', icon: 'Sparkles', minutes: 5, eslabon: 'pensamiento', output: 'none', hint: 'Qué manifestar, tu asunción y la escena del deseo cumplido' },
   book: { label: 'Libro', icon: 'BookMarked', minutes: 5, eslabon: 'pensamiento', output: 'none', hint: 'Ideas clave de un libro o unas páginas para leer' },
   document: { label: 'Documento', icon: 'FileText', minutes: 10, eslabon: 'pensamiento', output: 'none', hint: 'Un PDF: artículo, guía o ebook' },
   exercise: { label: 'Ejercicio', icon: 'Dumbbell', minutes: 4, eslabon: 'accion', output: 'none', hint: 'Calistenia, gimnasio o estiramiento con animación' },
@@ -232,6 +249,7 @@ export function defaultBlock(type: ActionType): ActionBlock {
     weekly_review: {},
     tracking: { metric: 'Vasos de agua', unit: 'vasos', target: 8 },
     stretching: { sequence: ['Cuello: inclina a cada lado', 'Hombros: círculos hacia atrás', 'Espalda: estírate hacia arriba'] },
+    manifestation: { desire: 'Lo que deseo vivir', assumption: 'Ya lo estoy viviendo.', scene: 'Imagina una escena breve que solo podría pasar si tu deseo ya se cumplió.' },
     exercise: { name: 'Lagartijas', exerciseId: 'Pushups', frames: ['https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/0.jpg', 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/1.jpg'], reps: 10 },
     next_step: { instruction: 'La acción más pequeña que puedes hacer hoy.' },
     moment: { slug: 'brian_tracy_5min' },

@@ -10,11 +10,12 @@ import { PracticeCard, type Practice } from './practice-card';
 import { ActionCardView, type ActionCardResult } from './action-card-view';
 import { MomentProposal, type MomentProposalResult } from './moment-proposal';
 import { OpenerProposal } from './opener-proposal';
+import { GuidedCard, type GuidedResult } from './guided-card';
 import type { OpenerProposal as OpenerProposalData } from '@/lib/opener';
 import { cn } from '@/lib/utils';
 
 type Reflect = (text: string, video: SoiVideo) => void;
-type Props = { message: UIMessage; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null; proposal?: OpenerProposalData | null; onReflected?: Reflect };
+type Props = { message: UIMessage; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null; proposal?: OpenerProposalData | null; onReflected?: Reflect; onSend?: (text: string) => void };
 
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -29,7 +30,7 @@ export function messageText(message: UIMessage) {
   return message.parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
 }
 
-function ToolResult({ part, onReflected }: { part: ToolPart; onReflected?: Reflect }) {
+function ToolResult({ part, onReflected, onSend }: { part: ToolPart; onReflected?: Reflect; onSend?: (text: string) => void }) {
   const name = part.type.slice('tool-'.length);
   const out = part.output;
   if (name === 'youtubeSearch') {
@@ -46,7 +47,12 @@ function ToolResult({ part, onReflected }: { part: ToolPart; onReflected?: Refle
   if (name === 'suggestPractice') return <PracticeCard practice={out as Practice} />;
   if (name === 'createMoment') {
     const r = out as MomentProposalResult | { ok: false };
-    return r.ok ? <MomentProposal m={r} /> : null;
+    return r.ok ? <MomentProposal m={r} onSend={onSend} /> : null;
+  }
+  if (name === 'createGuidedContent') {
+    const r = out as GuidedResult | { ok: false; locked: boolean };
+    if (!r.ok) return r.locked ? <p className="mt-2 flex items-center gap-2 text-sm text-soi-muted"><Lock className="h-4 w-4" aria-hidden="true" /> Meditaciones y manifestaciones escritas para ti son parte de <Link href="/planes" className="underline">SOI+</Link></p> : null;
+    return <GuidedCard g={r} onSend={onSend} />;
   }
   // Conversaciones anteriores a los Moments ejecutables.
   if (name === 'createActionCard') return <ActionCardView card={out as ActionCardResult} />;
@@ -84,7 +90,7 @@ function ToolResult({ part, onReflected }: { part: ToolPart; onReflected?: Refle
  * Chat (DESIGN.md §4): el mensaje del usuario aparece al instante (sin animación de entrada);
  * el streaming del asistente no anima tokens: solo crece el texto.
  */
-export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal, onReflected }: Props) {
+export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal, onReflected, onSend }: Props) {
   const mine = message.role === 'user';
   const text = messageText(message);
   const tools = message.parts.filter((p) => p.type.startsWith('tool-') && (p as ToolPart).state === 'output-available') as ToolPart[];
@@ -99,7 +105,7 @@ export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal
           </div>
         ) : null}
 
-        {tools.map((t) => <ToolResult key={t.toolCallId} part={t} onReflected={onReflected} />)}
+        {tools.map((t) => <ToolResult key={t.toolCallId} part={t} onReflected={onReflected} onSend={onSend} />)}
 
         {practice && <PracticeCard practice={practice} />}
         {proposal && <OpenerProposal p={proposal} />}

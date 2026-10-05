@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 const STATUS = [{ v: 'want', l: 'Quiero leer' }, { v: 'reading', l: 'Leyendo' }, { v: 'done', l: 'Leído' }] as const;
 
 /** Estado de lectura (libros) y quitar de la biblioteca. */
-export function LibraryItemActions({ id, kind, status, back }: { id: string; kind: 'book' | 'pdf' | 'exercise'; status: string; back: string }) {
+export function LibraryItemActions({ id, kind, status, back }: { id: string; kind: 'book' | 'pdf' | 'exercise' | 'meditation' | 'affirmations' | 'manifestation'; status: string; back: string }) {
   const router = useRouter();
   const [current, setCurrent] = useState(status);
   const [busy, setBusy] = useState(false);

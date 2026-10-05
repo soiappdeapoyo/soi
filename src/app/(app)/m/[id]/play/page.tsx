@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import Link from 'next/link';
-import { getMoment, playableBlocks, resolveVideoBlocks, canRun, enroll } from '@/lib/moments/server';
+import { getMoment, playableBlocks, resolveVideoBlocks, canRun, enroll, fullBlocks } from '@/lib/moments/server';
+import { enrichGuidedBlocks } from '@/lib/moments/enrich';
 import { resolveLibraryBlocks } from '@/lib/moments/library-blocks';
 import { blocksForDay, challengeLength, challengeState } from '@/lib/moments/challenge';
 import { buttonClass } from '@/components/ui/button';
@@ -20,6 +21,14 @@ export default async function PlayMomentPage({ params }: { params: Promise<{ id:
   if (!m) notFound();
 
   const { access, profile } = await getAccessMap(user.id);
+  // Moments propios sin contenido guiado ("medita" con solo tiempo): los agentes lo completan una vez y se guarda.
+  if (!m.official && m.creator_id === user.id && access.routine_execution) {
+    const raw = await fullBlocks(supabase, m);
+    if (raw) {
+      const { blocks: enriched, changed } = await enrichGuidedBlocks(supabase, user.id, profile, raw, `${m.title}. ${m.objective}`);
+      if (changed) await supabase.from('soi_blueprints').update({ blocks: enriched, updated_at: new Date().toISOString() }).eq('id', m.id).eq('creator_id', user.id);
+    }
+  }
   const [blocks, allowed] = await Promise.all([playableBlocks(supabase, m), canRun(supabase, user.id, m, access.routine_execution)]);
   if (!blocks) redirect(`/m/${id}`); // premium sin comprar: el detalle ofrece obtenerlo
   // Retos: se juega solo el día que toca (un día por día de calendario). Entrar al reproductor inscribe.

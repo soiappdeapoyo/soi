@@ -88,13 +88,18 @@ export function BlockRunner(p: RunnerProps) {
       const c = cfg<{ inhale: number; exhale: number }>(b);
       return <BreathHalo running={p.running} inhale={c.inhale} exhale={c.exhale} onPhase={(ph) => p.cue(ph === 'in' ? 'Inhala…' : 'Exhala…', 'breath')} />;
     }
-    case 'meditation':
+    case 'meditation': {
+      // Guion completo (agente Calma o el creador): la voz lo lee; aquí se puede seguir con la vista.
+      const paragraphs = cfg<{ guide: string }>(b).guide.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
       return (
         <div className="flex flex-col gap-4">
           <BreathHalo running={p.running} label=" " />
-          <p className={cn(lead, 'text-center')}>{cfg<{ guide: string }>(b).guide}</p>
+          <div className={cn('max-h-[38dvh] space-y-3 overflow-y-auto text-center', paragraphs.length > 1 && 'text-left')}>
+            {paragraphs.map((t, i) => <p key={i} className={lead}>{t}</p>)}
+          </div>
         </div>
       );
+    }
     case 'visualization':
       return <p className={cn(lead, 'text-center')}>{cfg<{ scene: string }>(b).scene}<br /><span className="text-[15px] text-soi-muted">Cierra los ojos y siéntelo como si ya fuera real.</span></p>;
     case 'timer':
@@ -173,20 +178,51 @@ export function BlockRunner(p: RunnerProps) {
       );
     }
     case 'affirmation': {
-      const c = cfg<{ text: string; repeat: number }>(b);
-      const count = output.count ?? 0;
+      // Una o varias afirmaciones personales (agente Voz Interior). Se dicen en voz alta, una a una.
+      const c = cfg<{ text: string; items?: string[]; repeat: number }>(b);
+      const list = c.items?.length ? c.items : [c.text];
+      const total = list.length * c.repeat;
+      const count = Math.min(output.count ?? 0, total);
+      const current = list[count % list.length]!;
+      const advance = () => {
+        const n = Math.min(total, count + 1);
+        setOutput({ ...output, type: b.type, count: n, done: n >= total });
+        if (n < total) p.say(list[n % list.length]!);
+      };
       return (
         <div className="flex flex-col items-center gap-5 text-center">
-          <p className="text-balance text-2xl font-medium leading-snug">«{c.text}»</p>
-          <p className="nums text-sm text-soi-muted">Dila en voz alta · {Math.min(count, c.repeat)}/{c.repeat}</p>
+          <p key={count} className="animate-step-in text-balance text-2xl font-medium leading-snug">«{count >= total ? list[list.length - 1] : current}»</p>
+          <p className="nums text-sm text-soi-muted">Dila en voz alta · {count}/{total}</p>
           <div className="flex gap-2">
-            <button type="button" onClick={() => setOutput({ ...output, type: b.type, count: Math.min(c.repeat, count + 1), done: count + 1 >= c.repeat })}
-              disabled={count >= c.repeat} className="press h-10 rounded-lg bg-soi-ink px-4 text-sm text-white disabled:opacity-40">
-              {count >= c.repeat ? 'Hecho' : 'La dije'}
+            <button type="button" onClick={advance} disabled={count >= total} className="press h-10 rounded-lg bg-soi-ink px-4 text-sm text-white disabled:opacity-40">
+              {count >= total ? 'Hecho' : 'La dije'}
             </button>
-            <button type="button" onClick={() => p.say(c.text)} aria-label="Escuchar la afirmación"
+            <button type="button" onClick={() => p.say(current)} aria-label="Escuchar la afirmación"
               className="press flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-ring"><Volume2 className="h-4 w-4" aria-hidden="true" /></button>
           </div>
+          {list.length > 1 && (
+            <ol className="w-full max-w-sm space-y-1 text-left text-sm text-soi-muted">
+              {list.map((a, i) => <li key={i} className={cn('flex gap-2', i < Math.floor(count / c.repeat) && 'text-soi-subtle line-through')}><span className="nums">{i + 1}.</span>{a}</li>)}
+            </ol>
+          )}
+        </div>
+      );
+    }
+    case 'manifestation': {
+      // Agente Asunción (Neville Goddard): qué manifestar, la asunción y la escena del deseo cumplido.
+      const c = cfg<{ desire: string; assumption: string; scene: string; feeling?: string; action?: string }>(b);
+      return (
+        <div className="flex flex-col gap-4 text-center">
+          <p className="text-sm text-soi-muted">Lo que vas a manifestar</p>
+          <p className="-mt-3 text-lg font-medium">{c.desire}</p>
+          <p className="text-balance text-2xl font-semibold leading-snug text-soi-accent">«{c.assumption}»</p>
+          <div className="rounded-[20px] bg-soi-sidebar p-4 text-left">
+            <p className="text-xs font-medium text-soi-muted">Cierra los ojos y vive esta escena, como si ya fuera real</p>
+            <p className={cn(lead, 'mt-1')}>{c.scene}</p>
+            {c.feeling && <p className="mt-2 text-sm text-soi-muted">Siente: {c.feeling}</p>}
+          </div>
+          {c.action && <p className="text-sm"><span className="font-medium">Tu paso de hoy:</span> {c.action}</p>}
+          <DoneToggle done={Boolean(output.done)} onChange={(done) => setOutput({ ...output, type: b.type, done })} label="Lo sentí real" />
         </div>
       );
     }

@@ -62,7 +62,9 @@ export function buildSystemPrompt(agentId: AgentId, ctx: PromptContext = {}): st
     : '';
 
   const tools = `HERRAMIENTAS:
-- updateProfile, scheduleReminder, suggestPractice, createMoment y captureIdea: disponibles.
+- updateProfile, scheduleReminder, suggestPractice, createMoment, createGuidedContent y captureIdea: disponibles.
+- Meditar, manifestar o afirmar SIEMPRE con contenido: en un Moment usa bloques meditation (guion), manifestation (deseo, asunción, escena) o affirmation (varias afirmaciones); nunca un temporizador vacío que solo diga "medita" o "manifiesta". Si la persona pide solo una meditación, afirmaciones o una manifestación, usa createGuidedContent.
+- Después de createMoment o createGuidedContent, pregunta en una frase breve si le hace sentido para hoy. Si dice que no, pregunta qué cambiar o diseña otro distinto (otro enfoque, no el mismo con otro nombre).
 - webSearch: solo para datos verificables (no para técnicas).
 - youtubeSearch: ${ctx.tools?.youtube ? 'disponible' : 'NO disponible (plan Free). Si ayudaría un video, menciona que es parte de SOI+.'}
 - saveEvidence: ${ctx.tools?.evidence ? 'disponible' : 'NO disponible (plan Free). Sugiere anotar la evidencia y menciona SOI+.'}`;

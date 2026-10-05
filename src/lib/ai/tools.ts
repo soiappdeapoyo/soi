@@ -9,6 +9,9 @@ import { recordMomentum } from '@/lib/momentum-server';
 import { ActionCardSchema, EslabonSchema } from '@/lib/action-card';
 import { ACTION_TYPES, MomentKindSchema, parseBlocks, type ActionType } from '@/config/actions';
 import { ownsDocuments, resolveLibraryBlocks } from '@/lib/moments/library-blocks';
+import { enrichGuidedBlocks } from '@/lib/moments/enrich';
+import { generateGuided, personalContext, saveGuided } from './content-agents';
+import type { UserProfile } from '@/types/database';
 
 type Ctx = {
   supabase: SupabaseClient;
@@ -18,6 +21,13 @@ type Ctx = {
 };
 
 export function buildTools({ supabase, userId, authorName, access }: Ctx) {
+  // Perfil para personalizar el contenido de los agentes (con el cliente de esta conversación; si falla, sin perfil).
+  const profileOf = async (): Promise<UserProfile | null> => {
+    try {
+      const { data } = await supabase.from('user_profiles').select('*').eq('user_id', userId).maybeSingle();
+      return (data as UserProfile | null) ?? null;
+    } catch { return null; }
+  };
   return {
     youtubeSearch: tool({
       description: 'Busca videos de YouTube en español (meditaciones guiadas, charlas de los autores de SOI).',
@@ -135,7 +145,9 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
         const errors = parsed.errors;
         // Documentos: solo PDFs de la biblioteca de la persona. Libros y ejercicios se resuelven por nombre.
         const docsOk = await ownsDocuments(userId, parsed.blocks);
-        const blocks = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'), { youtube: access.youtube });
+        const resolved = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'), { youtube: access.youtube });
+        // Meditaciones, afirmaciones y manifestaciones con contenido real (agentes generadores), no solo tiempo.
+        const { blocks } = await enrichGuidedBlocks(supabase, userId, await profileOf(), resolved, `${m.title}. ${m.objective}`);
         if (!docsOk) errors.push('Un bloque document usaba un PDF que no está en la biblioteca de la persona; se quitó.');
         if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
         const { data, error } = await supabase.from('soi_blueprints').insert({
@@ -148,6 +160,29 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
           minutes: data.required_minutes as number, blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })),
           locked: access.routines === false,
         };
+      },
+    }),
+
+    createGuidedContent: tool({
+      description: 'Escribe con el agente correspondiente una meditación guiada completa, afirmaciones personales o una manifestación (qué manifestar, asunción y escena del deseo cumplido), personalizada con las metas, deseos y emociones de la persona. Se guarda en su biblioteca y se puede escuchar con voz o usar en un Moment.',
+      inputSchema: z.object({
+        kind: z.enum(['meditation', 'affirmations', 'manifestation']),
+        intention: z.string().min(2).max(300).describe('Para qué la quiere, en sus palabras'),
+        minutes: z.number().int().min(1).max(30).optional().describe('Solo meditación: duración'),
+      }),
+      execute: async ({ kind, intention, minutes }) => {
+        if (access.routines === false) return { ok: false as const, locked: true as const };
+        try {
+          const profile = await profileOf();
+          const g = await generateGuided(kind, await personalContext(supabase, userId, profile, intention), intention, minutes ?? 5);
+          const itemId = await saveGuided(supabase, userId, g, intention, minutes);
+          const preview = g.kind === 'meditation' ? g.content.script.slice(0, 220)
+            : g.kind === 'affirmations' ? g.content.affirmations.slice(0, 3).join(' · ')
+            : `${g.content.assumption} — ${g.content.scene.slice(0, 160)}`;
+          return { ok: true as const, id: itemId, kind, title: g.content.title, preview, source: g.content.source };
+        } catch {
+          return { ok: false as const, locked: false as const };
+        }
       },
     }),
 
