@@ -5,7 +5,7 @@ import { objectWithFallback } from './fallback';
 export const RouterSchema = z.object({
   agent: z.enum([
     'manifestacion', 'afirmacion', 'meditacion', 'suenos',
-    'riqueza', 'rutinas', 'brian_tracy', 'evidencias',
+    'riqueza', 'rutinas', 'brian_tracy', 'napoleon_hill', 'evidencias',
     'anti_sycophant', 'crisis',
   ]),
   confidence: z.number().min(0).max(1),
@@ -32,6 +32,7 @@ export async function classifyIntent(message: string, history: string[] = []): P
 Aplicas el principio: pensamientos → emociones → acciones → resultados.
 Detecta el eslabón más débil y elige el agente adecuado:
 pensamiento→afirmacion/manifestacion, emocion→meditacion/suenos, accion→rutinas/brian_tracy/riqueza, resultado→evidencias.
+napoleon_hill (capa de coaching superior) cuando el problema es propósito, logro, decisión, persistencia o empezar a crear riqueza, aunque no lo nombre: "no sé qué quiero hacer con mi vida", "tengo una meta pero no tengo disciplina", "quiero hacerme rico y no sé por dónde empezar", "no dejo de cambiar de objetivo", "ayúdame a decidir", "crea una afirmación para mi objetivo".
 Si el usuario pide validación sin acción o se contradice, usa anti_sycophant.
 Si hay ideación suicida, autolesión o violencia: agent='crisis' sin excepción.`,
       prompt: `Historial reciente:\n${history.slice(-4).join('\n')}\n\nMensaje: ${message}`,

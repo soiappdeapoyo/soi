@@ -44,7 +44,7 @@ describe('Mi día', () => {
   it('el saludo propone lo planeado en Mi día', () => {
     const o = buildOpener({ name: 'Ana', hour: 15, today: '2026-10-04', onboardingCompleted: true, lastRitualDate: '2026-10-04', ritualAvailable: true, weakestLink: null, lastConversationTitle: null,
       proposal: { id: 'm1', title: 'Pausa de tarde', minutes: 5, cover: null, planned: true } });
-    expect(o.text).toContain('Lo siguiente en tu día es «Pausa de tarde». ¿Lo hacemos?');
+    expect(o.text).toContain('En tu día sigue «Pausa de tarde».');
     expect(o.proposal?.why).toBe('Es lo que planeaste en Mi día.');
   });
 });

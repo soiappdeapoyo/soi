@@ -5,6 +5,7 @@ export const AGENTS = {
   suenos: { id: 'suenos', label: 'Sueños', icon: 'Moon', color: '#7B6FB0', eslabon: 'emocion', sources: ['Neville Goddard', 'Carl Jung'] },
   riqueza: { id: 'riqueza', label: 'Riqueza', icon: 'TrendingUp', color: '#C9A227', eslabon: 'accion', sources: ['Napoleon Hill', 'Brian Tracy'] },
   rutinas: { id: 'rutinas', label: 'Rutinas', icon: 'Clock', color: '#5DADE2', eslabon: 'accion', sources: ['Brian Tracy', 'Hal Elrod', 'Robin Sharma', 'Joe Dispenza'] },
+  napoleon_hill: { id: 'napoleon_hill', label: 'Napoleon Hill', icon: 'Crown', color: '#B8860B', eslabon: 'accion', sources: ['Napoleon Hill'] },
   brian_tracy: { id: 'brian_tracy', label: 'Brian Tracy', icon: 'Target', color: '#E67E22', eslabon: 'accion', sources: ['Brian Tracy'] },
   evidencias: { id: 'evidencias', label: 'Evidencias', icon: 'Star', color: '#F1C40F', eslabon: 'resultado', sources: [] },
   anti_sycophant: { id: 'anti_sycophant', label: 'Verdad', icon: 'Compass', color: '#8B8B8B', eslabon: 'pensamiento', sources: [] },
@@ -17,7 +18,7 @@ export const AGENT_IDS = Object.keys(AGENTS) as [AgentId, ...AgentId[]];
 
 /** Agentes visibles en el sidebar (sección PRÁCTICAS). */
 export const PRACTICE_AGENTS: AgentId[] = [
-  'manifestacion', 'afirmacion', 'meditacion', 'suenos', 'riqueza', 'rutinas', 'brian_tracy',
+  'napoleon_hill', 'manifestacion', 'afirmacion', 'meditacion', 'suenos', 'riqueza', 'rutinas', 'brian_tracy',
 ];
 
 /** Eslabón roto → agente que interviene (Consecuencia arquitectónica). */

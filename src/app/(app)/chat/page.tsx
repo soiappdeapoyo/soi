@@ -45,7 +45,7 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
     lastConversationTitle: (last?.title as string | undefined) ?? null,
   };
   // Lo que SOI ya sabe (progreso, check-in, retos, lo que más te ayuda) para anticipar y proponer.
-  const known = agent ? {} : await openerContext(supabase, user.id, profile, base, access.routine_execution);
+  const known = agent ? {} : await openerContext(supabase, user.id, profile, { hour: base.hour, today: base.today }, access.routine_execution);
   const opener = buildOpener({ ...base, ...known, agent });
 
   return (

@@ -5,6 +5,7 @@ import { objectWithFallback } from './fallback';
 import { recall } from './rag';
 import { AGENT_SPECS } from './prompts/agent-specs';
 import type { AffirmationsContent, GuidedContent, GuidedKind, ManifestationContent, MeditationContent } from '@/lib/guided';
+import type { HillMemory } from './prompts/napoleon-hill';
 
 export { blockConfigFor } from '@/lib/guided';
 export type { GuidedContent, GuidedKind } from '@/lib/guided';
@@ -57,7 +58,7 @@ export async function personalContext(supabase: SupabaseClient, userId: string, 
   ].join('\n');
 }
 
-function agentInstructions(agent: 'meditacion' | 'afirmacion' | 'manifestacion', task: string) {
+function agentInstructions(agent: 'meditacion' | 'afirmacion' | 'manifestacion' | 'napoleon_hill', task: string) {
   const s = AGENT_SPECS[agent];
   return `Eres ${s.agentName}, agente de ${s.category} de SOI (app de bienestar en español latinoamericano neutro).
 Tu única base de conocimiento: ${s.knowledge.join(' ')}
@@ -101,6 +102,23 @@ export async function generateManifestation(ctx: string, intention: string): Pro
     timeoutMs: 25_000,
   });
   return { ...object, scene: object.scene.trim().slice(0, 1200) };
+}
+
+/**
+ * Autosugestión (Napoleon Hill): declaración del deseo — qué, cuánto, para cuándo, qué dará a cambio y el plan —
+ * más afirmaciones para repetir con emoción mañana y noche. Se guarda como afirmaciones (primera = la declaración).
+ */
+export async function generateAutosuggestion(ctx: string, intention: string, hill: HillMemory | null): Promise<AffirmationsContent> {
+  const known = hill ? `Propósito: ${clean(hill.definite_chief_aim, 200)} · Meta: ${clean(hill.target, 120)} · Para: ${clean(hill.deadline, 40)} · A cambio: ${clean(hill.exchange, 160)} · Plan: ${clean(hill.plan, 240)}` : 'Aún sin propósito definido';
+  const { object } = await objectWithFallback({
+    schema: AffirmationsSchema,
+    instructions: agentInstructions('napoleon_hill', `Crea una autosugestión según Napoleon Hill (Think and Grow Rich, parafraseado):
+la PRIMERA afirmación es la declaración del deseo en primera persona y presente, con qué, cuánto, para cuándo, qué darás a cambio y tu plan (máx. 30 palabras, para que quepa en una tarjeta);
+luego 4 a 6 afirmaciones breves para repetir en voz alta con emoción, al despertar y antes de dormir. Sin promesas de riqueza garantizada.`),
+    prompt: `Intención: ${clean(intention, 300)}\nMemoria de Hill: ${known}\nContexto de la persona:\n${ctx}`,
+    timeoutMs: 25_000,
+  });
+  return { ...object, title: object.title.startsWith('Autosugestión') ? object.title : `Autosugestión: ${object.title}`, source: 'Napoleon Hill — Think and Grow Rich (1937)', affirmations: object.affirmations.map((x) => x.trim().slice(0, 200)).filter(Boolean).slice(0, 7) };
 }
 
 export async function generateGuided(kind: GuidedKind, ctx: string, intention: string, minutes = 5): Promise<GuidedContent> {

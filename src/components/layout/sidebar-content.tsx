@@ -38,7 +38,7 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
       </Link>
 
       <Link
-        href="/chat"
+        href="/chat?nueva=1"
         className={buttonClass('outline', compact ? 'icon' : 'md', cn(compact ? 'mx-auto' : 'h-10 w-full justify-start px-2.5 text-sm font-normal'))}
         aria-label="Nueva conversación"
       >

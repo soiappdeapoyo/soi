@@ -1,14 +1,17 @@
 import type { AgentId, Eslabon } from '@/config/agents';
 import type { MomentumState } from '@/lib/momentum';
-import { pickCelebration, daySeed, type Progress } from '@/lib/rewards';
+import type { Progress } from '@/lib/rewards';
+import { partOfDay, type DayPart } from '@/lib/day-plan';
 
 /**
- * Saludo con el que SOI abre cada conversación nueva (sin bloques ni formularios).
- * Determinista e instantáneo (sin esperar al modelo ni gastar consultas), pero agéntico y breve (2–3 frases):
- * un gesto de reconocimiento sin cifras, lo que intuye de cómo llegas y una invitación concreta con un toque.
- * Tono de compañera, nunca de máquina: no menciona puntajes ni números de ánimo.
+ * Saludo con el que SOI abre cada conversación. Determinista e instantáneo, con arquitectura de copiloto:
+ * DETECTAR (qué hora es, qué hiciste) → RECORDAR (evidencia concreta, en tus palabras) → SUGERIR (con el porqué)
+ * → ACOMPAÑAR (pregunta cómo llegas; no lo supone). Sin frases motivacionales genéricas ni puntajes.
  */
 export type OpenerProposal = { id: string; title: string; minutes: number; cover: string | null; why: string; label: string };
+
+/** Un recuerdo concreto: qué Moment, qué día y, si lo escribió, sus palabras. */
+export type OpenerMemory = { title: string; dayLabel: string; learning?: string | null; helped?: boolean | null; evening?: boolean };
 
 export type OpenerInput = {
   name: string;
@@ -20,12 +23,14 @@ export type OpenerInput = {
   ritualAvailable: boolean;
   weakestLink: Eslabon | null;
   lastConversationTitle: string | null;
-  /** Lo nuevo: lo que SOI ya sabe. Todo opcional para no romper llamadas antiguas. */
   checkin?: MomentumState | null;
-  dominantEmotion?: string | null;
   goal?: string | null;
   progress?: Progress | null;
-  proposal?: Omit<OpenerProposal, 'why' | 'label'> & { helpedBefore?: boolean; lift?: number | null; challengeDay?: number | null; planned?: boolean } | null;
+  /** Días distintos con un Moment completado esta semana (en su zona horaria). */
+  weekDays?: number;
+  /** Lo último que vivió (evidencia). */
+  lastRun?: OpenerMemory | null;
+  proposal?: (Omit<OpenerProposal, 'why' | 'label'> & { challengeDay?: number | null; planned?: boolean; memory?: OpenerMemory | null }) | null;
 };
 
 export type OpenerPractice = { kind: 'ritual'; href: string; label: string; detail: string; reason: string; locked: false };
@@ -40,28 +45,23 @@ const AGENT_OPENERS: Partial<Record<AgentId, string>> = {
   riqueza: 'Hablemos de tu relación con el dinero y tus metas. ¿Qué te gustaría que cambiara este año?',
   brian_tracy: 'Empecemos por lo importante. ¿Cuál es esa tarea que llevas días posponiendo?',
   anti_sycophant: 'Aquí te voy a hablar con cariño y con honestidad. ¿Qué quieres mirar de frente?',
+  napoleon_hill: 'Empecemos por lo esencial: ¿qué quieres exactamente, y qué estás haciendo hoy para conseguirlo?',
 };
 
-const STATE_PHRASE: Record<MomentumState, string> = {
-  anxiety: 'con la mente acelerada',
-  low_energy: 'con poca energía',
-  high_energy: 'con ganas de avanzar',
-  confusion: 'con muchas cosas en la cabeza',
+const CHECKIN_REPLIES: OpenerReply[] = [
+  { label: 'Con energía', text: 'Hoy llego con energía.' },
+  { label: 'Neutral', text: 'Hoy llego neutral.' },
+  { label: 'Con algo de carga', text: 'Hoy llego con algo de carga.' },
+];
+
+const CHECKIN_SAID: Record<MomentumState, string> = {
+  high_energy: 'Me dijiste que hoy llegas con energía.',
+  low_energy: 'Me dijiste que hoy llegas con poca energía; vamos sin exigirte.',
+  anxiety: 'Me dijiste que hoy llegas con ansiedad; vamos con calma.',
+  confusion: 'Me dijiste que hoy llegas con muchas cosas en la cabeza.',
 };
 
-const STATE_WHY: Record<MomentumState, string> = {
-  anxiety: 'Para bajar el ritmo.',
-  low_energy: 'Corto y sin exigirte.',
-  high_energy: 'Para aprovechar tu energía.',
-  confusion: 'Para elegir una sola cosa.',
-};
-
-const REPLIES: Record<MomentumState, OpenerReply> = {
-  anxiety: { label: 'Me siento con ansiedad', text: 'Hoy me siento con ansiedad.' },
-  low_energy: { label: 'Tengo poca energía', text: 'Hoy tengo poca energía.' },
-  high_energy: { label: 'Tengo energía', text: 'Hoy tengo energía y quiero avanzar.' },
-  confusion: { label: 'Estoy sin claridad', text: 'Hoy me siento sin claridad, con muchas cosas en la cabeza.' },
-};
+const PART_INTRO: Record<DayPart, string> = { manana: 'Para empezar la mañana', tarde: 'Para esta tarde', noche: 'Para cerrar el día' };
 
 export function greetingForHour(hour: number) {
   if (hour >= 5 && hour < 12) return 'Buenos días';
@@ -73,89 +73,92 @@ function dayGap(from: string, to: string) {
   return Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
 }
 
-const ANXIOUS = /ansie|estr[eé]s|miedo|preocup|nervio|angust/i;
-const LOW = /triste|cansa|agota|desmotiv|apat|vac[ií]o|sol[oa]/i;
+const quote = (t: string, max = 90) => {
+  const s = t.trim().replace(/\s+/g, ' ');
+  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
+};
 
-/**
- * Lo que SOI anticipa (con humildad: "imagino"). Prioridad: el check-in de hoy, el ánimo con el que
- * llega a sus Moments, y la emoción dominante según la hora. Devuelve el estado y la evidencia que lo sugiere.
- */
-export function anticipate(i: OpenerInput): { state: MomentumState; evidence: string } {
-  if (i.checkin) return { state: i.checkin, evidence: 'por lo que me contaste hoy' };
-  const mood = i.progress?.recentMood ?? null;
-  const night = i.hour >= 20 || i.hour < 5;
-  if (mood !== null && mood <= 2.5) {
-    const emo = i.dominantEmotion ?? '';
-    return { state: ANXIOUS.test(emo) ? 'anxiety' : 'low_energy', evidence: 'por cómo has llegado a tus últimos Moments' };
-  }
-  if (i.dominantEmotion && ANXIOUS.test(i.dominantEmotion) && (night || (mood !== null && mood < 3.5))) {
-    return { state: 'anxiety', evidence: `${night ? 'a esta hora y ' : ''}porque la ${i.dominantEmotion.toLowerCase()} ha aparecido seguido` };
-  }
-  if (i.dominantEmotion && LOW.test(i.dominantEmotion)) {
-    return { state: 'low_energy', evidence: `porque estos días ha aparecido ${i.dominantEmotion.toLowerCase()}` };
-  }
-  if (mood !== null && mood >= 4) return { state: 'high_energy', evidence: 'porque vienes llegando con buen ánimo' };
-  if (i.progress && i.progress.weekRuns >= 3) return { state: 'high_energy', evidence: 'por el ritmo que traes esta semana' };
-  if (i.hour >= 5 && i.hour < 10) return { state: 'high_energy', evidence: 'porque la mañana es tu mejor momento para empezar' };
-  if (night) return { state: 'low_energy', evidence: 'porque es el final del día' };
-  return { state: 'low_energy', evidence: 'por la hora del día' };
+/** "Ayer", "Hoy" o "El jueves". */
+const when = (dayLabel: string) => (dayLabel === 'ayer' ? 'Ayer' : dayLabel === 'hoy' ? 'Hoy' : `El ${dayLabel}`);
+
+/** Evidencia concreta (o nada): lo que hizo ayer u hoy, o cuántos días practicó esta semana. */
+export function evidenceLine(i: Pick<OpenerInput, 'lastRun' | 'weekDays'>): string | null {
+  const r = i.lastRun;
+  if (r?.dayLabel === 'ayer') return r.evening ? `Ayer cerraste el día con «${r.title}».` : `Ayer hiciste «${r.title}».`;
+  if (r?.dayLabel === 'hoy') return `Hoy ya hiciste «${r.title}».`;
+  if ((i.weekDays ?? 0) >= 2) return `Esta semana ya practicaste ${i.weekDays} días.`;
+  return null;
+}
+
+/** Recuerdo que explica la sugerencia: cuándo lo hizo y, si lo escribió, sus palabras. */
+export function memoryLine(m: OpenerMemory | null | undefined): string {
+  if (!m) return '';
+  if (m.learning && m.learning.trim().length >= 6) return `${when(m.dayLabel)} lo hiciste y escribiste: «${quote(m.learning)}».`;
+  if (m.helped) return `${when(m.dayLabel)} lo hiciste y marcaste que te ayudó.`;
+  return '';
 }
 
 export function buildOpener(i: OpenerInput): Opener {
   const name = i.name.trim().split(/\s+/)[0] || '';
   const hello = `${greetingForHour(i.hour)}${name ? `, ${name}` : ''}.`;
-  const seed = daySeed(i.today);
+  const part = partOfDay(i.hour);
 
   if (i.agent && AGENT_OPENERS[i.agent]) {
     return { text: `${hello} ${AGENT_OPENERS[i.agent]}`, practice: null, proposal: null, replies: [] };
   }
 
-  const { state } = anticipate(i);
-  const p = i.progress ?? null;
   const missed = i.lastRitualDate ? dayGap(i.lastRitualDate, i.today) >= 2 : false;
-  const away = p?.daysSinceLastRun ?? null;
+  const away = i.progress?.daysSinceLastRun ?? null;
 
-  // Breve y humano: un gesto de reconocimiento (sin cifras), lo que intuye y una invitación.
-  const celebration = p ? pickCelebration(p, seed) : null;
-  const win = (away !== null && away >= 2) || missed
+  // 1) Detectar / recordar: un regreso, o evidencia concreta. Nada genérico.
+  // Si la propuesta ya trae el recuerdo de ese mismo Moment, no lo repetimos como evidencia.
+  const sameMemory = Boolean(i.proposal?.memory && i.lastRun && i.proposal.memory.title === i.lastRun.title && i.proposal.memory.dayLabel === i.lastRun.dayLabel);
+  const evidence = (away !== null && away >= 2) || missed
     ? 'Ayer no te vimos, pero aquí seguimos. ¿Retomamos?'
-    // Si la propuesta ya dirá "La última vez te hizo bien", no repetimos la misma idea.
-    : celebration && !(i.proposal?.helpedBefore && celebration.includes('bien')) ? celebration : null;
+    : sameMemory ? null : evidenceLine(i);
 
+  // 2) Cómo llega: solo lo que dijo hoy; con evidencia de ánimo bajo, "quizá" (nunca afirmarlo).
+  const said = i.checkin ? CHECKIN_SAID[i.checkin] : null;
+  const recentMood = i.progress?.recentMood ?? null;
+  const maybe = !i.checkin && recentMood !== null && recentMood <= 2.5
+    ? 'Viendo cómo has llegado a tus últimos Moments, quizá hoy te venga bien empezar suave.' : null;
+
+  // 3) Sugerir, con el porqué (la hora, tu plan o tu historia).
   let proposal: OpenerProposal | null = null;
-  let invite: string;
+  let suggest = '';
   if (i.proposal) {
     const pr = i.proposal;
-    const why = pr.challengeDay ? 'Un día a la vez.' : pr.planned ? 'Es lo que planeaste en Mi día.' : pr.helpedBefore ? 'La última vez te hizo bien.' : STATE_WHY[state];
-    proposal = { id: pr.id, title: pr.title, minutes: pr.minutes, cover: pr.cover, why, label: pr.challengeDay ? `Hacer el día ${pr.challengeDay}` : 'Empezar ahora' };
-    invite = pr.challengeDay
-      ? `Hoy toca el día ${pr.challengeDay} de «${pr.title}». ¿Lo hacemos?`
+    const memory = memoryLine(pr.memory);
+    const why = pr.challengeDay ? 'Un día a la vez.' : pr.planned ? 'Es lo que planeaste en Mi día.' : memory || `${PART_INTRO[part]}.`;
+    proposal = { id: pr.id, title: pr.title, minutes: pr.minutes, cover: pr.cover, why, label: pr.challengeDay ? `Hacer el día ${pr.challengeDay}` : 'Empezar' };
+    suggest = pr.challengeDay
+      ? `Hoy toca el día ${pr.challengeDay} de «${pr.title}».`
       : pr.planned
-        ? `Lo siguiente en tu día es «${pr.title}». ¿Lo hacemos?`
-      : `¿Hacemos «${pr.title}» ahora?${pr.helpedBefore ? ' La última vez te hizo bien.' : ''}`;
-  } else if (i.ritualAvailable && i.lastRitualDate !== i.today && i.hour >= 5 && i.hour < 12) {
-    invite = 'Tu ritual de hoy está listo. ¿Empezamos?';
-  } else {
-    invite = state === 'anxiety' ? '¿Respiramos un momento y me cuentas?' : '¿Qué te gustaría mover hoy?';
+        ? `En tu día sigue «${pr.title}».`
+        : `${PART_INTRO[part]}, te propongo «${pr.title}» (${pr.minutes} min).${memory ? ` ${memory}` : ''}`;
+  } else if (i.ritualAvailable && i.lastRitualDate !== i.today && part === 'manana') {
+    suggest = 'Tu ritual de hoy está listo: cuatro pasos cortos para empezar con intención.';
   }
 
-  const feel = i.onboardingCompleted || i.checkin
-    ? `Imagino que hoy llegas ${STATE_PHRASE[state]}.`
-    : 'Soy SOI y estoy aquí para acompañarte.';
+  // 4) Acompañar: autonomía. Si no sabemos cómo llega, se lo preguntamos.
+  const ask = i.checkin
+    ? (proposal ? '¿Lo hacemos?' : '¿Qué te gustaría mover hoy?')
+    : proposal || suggest ? '¿O cómo llegas hoy: con energía, neutral o con algo de carga?' : '¿Cómo llegas hoy: con energía, neutral o con algo de carga?';
 
-  const text = [hello, win, feel, invite].filter(Boolean).join(' ');
+  const intro = i.onboardingCompleted || i.checkin ? null : 'Soy SOI y estoy aquí para acompañarte.';
+  const text = [hello, intro, evidence, said ?? maybe, suggest, ask].filter(Boolean).join(' ');
 
   const replies: OpenerReply[] = [];
   if (proposal) replies.push({ label: proposal.label, href: `/m/${proposal.id}/play` });
-  replies.push(...(Object.keys(REPLIES) as MomentumState[]).filter((st) => st !== state).slice(0, 2).map((st) => REPLIES[st]));
-  replies.push({ label: 'Otra idea', text: 'Proponme otra cosa para ahora.' });
+  if (!i.checkin) replies.push(...CHECKIN_REPLIES);
+  else replies.push({ label: 'Otra idea', text: 'Proponme otra cosa para ahora.' });
   if (i.lastConversationTitle) replies.push({ label: `Seguir con «${i.lastConversationTitle.slice(0, 28)}»`, text: `Sigamos con lo que hablamos: ${i.lastConversationTitle}.` });
 
-  const practice = !proposal && i.ritualAvailable && i.lastRitualDate !== i.today && (missed || (i.hour >= 5 && i.hour < 12))
+  const practice = !proposal && i.ritualAvailable && i.lastRitualDate !== i.today && (missed || part === 'manana')
     ? ritualPractice(missed ? 'Volver con un paso pequeño.' : 'Empezar el día con intención.')
     : null;
 
-  return { text, practice, proposal, replies: replies.slice(0, 4) };
+  return { text, practice, proposal, replies: replies.slice(0, 5) };
 }
 
 function ritualPractice(reason: string): OpenerPractice {

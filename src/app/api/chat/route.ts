@@ -13,6 +13,8 @@ import { detectMomentumState, momentumDirectorPrompt } from '@/lib/momentum';
 import { loadMomentum, recordDailyReturn } from '@/lib/momentum-server';
 import { todayCheckin } from '@/lib/today';
 import { creatorMethodPrompt } from '@/lib/ai/creator-method';
+import { timeContextPrompt } from '@/lib/time-of-day';
+import { loadHillMemory } from '@/lib/ai/hill-memory';
 
 export const maxDuration = 60;
 
@@ -109,9 +111,12 @@ export async function POST(req: Request) {
   }) : null;
   const state = detected === 'anxiety' ? 'anxiety' : (checkin ?? detected);
   const director = momentum && state && agent !== 'crisis' ? momentumDirectorPrompt(state, momentum) : '';
+  const time = timeContextPrompt(profile?.timezone ?? 'America/Mexico_City');
+  const hill = agent === 'napoleon_hill' ? (await loadHillMemory(supabase, user.id)).memory : null;
   const system = [
+    time.prompt,
     buildSystemPrompt(agent, {
-      profile, memories, tools: toolAccess, weakestLink: route.weakestLink,
+      profile, memories, tools: toolAccess, weakestLink: route.weakestLink, hill,
       library: ((libraryRows ?? []) as { id: string; kind: 'book' | 'pdf' | 'exercise'; title: string; author: string | null; status: string; external_id: string | null }[])
         .map((r) => ({ id: r.id, kind: r.kind, title: r.title, author: r.author, status: r.status, externalId: r.external_id })),
     }),

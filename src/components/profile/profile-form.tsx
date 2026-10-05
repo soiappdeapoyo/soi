@@ -32,7 +32,8 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
       body: JSON.stringify({
         display_name: name, goals: lines(goals), blockers: lines(blockers), preferred_routine: routine,
         morning_time: morning, evening_time: evening, country,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        // Solo con zona automática; si la persona eligió una en Ajustes, se respeta.
+        ...(profile.timezone_auto === false ? {} : { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       }),
     });
     setStatus(res.ok ? 'saved' : 'error');

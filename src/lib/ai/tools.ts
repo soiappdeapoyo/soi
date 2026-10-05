@@ -10,7 +10,8 @@ import { ActionCardSchema, EslabonSchema } from '@/lib/action-card';
 import { ACTION_TYPES, MomentKindSchema, parseBlocks, type ActionType } from '@/config/actions';
 import { ownsDocuments, resolveLibraryBlocks } from '@/lib/moments/library-blocks';
 import { enrichGuidedBlocks } from '@/lib/moments/enrich';
-import { generateGuided, personalContext, saveGuided } from './content-agents';
+import { generateAutosuggestion, generateGuided, personalContext, saveGuided } from './content-agents';
+import { HillPatchSchema, loadHillMemory, saveHillMemory } from './hill-memory';
 import type { UserProfile } from '@/types/database';
 
 type Ctx = {
@@ -163,10 +164,16 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
       },
     }),
 
+    updateHillPlan: tool({
+      description: 'Napoleon Hill: guarda o actualiza la memoria longitudinal del propósito de la persona (propósito principal definido, meta, fecha, por qué, qué dará a cambio, plan, obstáculo, miedo, conocimiento que falta, mastermind, etapa del ciclo, compromisos). Úsala en silencio cuando la persona defina o cambie algo.',
+      inputSchema: HillPatchSchema,
+      execute: async (patch) => ({ ok: await saveHillMemory(supabase, userId, patch) }),
+    }),
+
     createGuidedContent: tool({
       description: 'Escribe con el agente correspondiente una meditación guiada completa, afirmaciones personales o una manifestación (qué manifestar, asunción y escena del deseo cumplido), personalizada con las metas, deseos y emociones de la persona. Se guarda en su biblioteca y se puede escuchar con voz o usar en un Moment.',
       inputSchema: z.object({
-        kind: z.enum(['meditation', 'affirmations', 'manifestation']),
+        kind: z.enum(['meditation', 'affirmations', 'manifestation', 'autosuggestion']).describe('autosuggestion: autosugestión de Napoleon Hill (declaración del deseo para mañana y noche)'),
         intention: z.string().min(2).max(300).describe('Para qué la quiere, en sus palabras'),
         minutes: z.number().int().min(1).max(30).optional().describe('Solo meditación: duración'),
       }),
@@ -174,12 +181,15 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
         if (access.routines === false) return { ok: false as const, locked: true as const };
         try {
           const profile = await profileOf();
-          const g = await generateGuided(kind, await personalContext(supabase, userId, profile, intention), intention, minutes ?? 5);
+          const ctx = await personalContext(supabase, userId, profile, intention);
+          const g = kind === 'autosuggestion'
+            ? { kind: 'affirmations' as const, content: await generateAutosuggestion(ctx, intention, (await loadHillMemory(supabase, userId)).memory) }
+            : await generateGuided(kind, ctx, intention, minutes ?? 5);
           const itemId = await saveGuided(supabase, userId, g, intention, minutes);
           const preview = g.kind === 'meditation' ? g.content.script.slice(0, 220)
             : g.kind === 'affirmations' ? g.content.affirmations.slice(0, 3).join(' · ')
             : `${g.content.assumption} — ${g.content.scene.slice(0, 160)}`;
-          return { ok: true as const, id: itemId, kind, title: g.content.title, preview, source: g.content.source };
+          return { ok: true as const, id: itemId, kind: g.kind, title: g.content.title, preview, source: g.content.source };
         } catch {
           return { ok: false as const, locked: false as const };
         }

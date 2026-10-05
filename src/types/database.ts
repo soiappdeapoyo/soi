@@ -25,6 +25,7 @@ export type UserProfile = {
   morning_time: string | null;
   evening_time: string | null;
   timezone: string | null;
+  timezone_auto?: boolean;
   country: string;
   available_minutes: number | null;
   weakest_link: Eslabon | null;

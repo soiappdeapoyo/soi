@@ -2,6 +2,7 @@ import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { SUPPORTED_COUNTRIES } from '@/config/crisis-resources';
 import { ROUTINE_IDS } from '@/config/routines';
+import { isValidTimezone } from '@/config/timezones';
 
 const Patch = z.object({
   display_name: z.string().min(1).max(60).optional(),
@@ -10,7 +11,8 @@ const Patch = z.object({
   preferred_routine: z.enum(ROUTINE_IDS).optional(),
   morning_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   evening_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  timezone: z.string().max(60).optional(),
+  timezone: z.string().max(60).refine(isValidTimezone, 'Zona horaria inválida').optional(),
+  timezone_auto: z.boolean().optional(),
   country: z.enum(SUPPORTED_COUNTRIES as [string, ...string[]]).optional(),
   tts_enabled: z.boolean().optional(),
   voice_preference: z.string().max(60).optional(),

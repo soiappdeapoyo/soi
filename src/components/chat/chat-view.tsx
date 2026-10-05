@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
+import { useRouter } from 'next/navigation';
 import { ArrowUp, Lock, Square } from 'lucide-react';
 import { AGENTS, isAgentId, type AgentId } from '@/config/agents';
 import { PAYWALL_MESSAGE } from '@/config/plans';
@@ -26,6 +27,12 @@ type Props = {
 
 const OPENER_ID = 'soi-opener';
 
+/** La conversación en curso vive en sessionStorage: se borra al cerrar la app (la próxima vez, chat nuevo). */
+const ACTIVE_KEY = 'soi:active-chat';
+function activeChat() { try { return sessionStorage.getItem(ACTIVE_KEY); } catch { return null; } }
+function rememberActiveChat(id: string) { try { sessionStorage.setItem(ACTIVE_KEY, id); } catch { /* sin almacenamiento */ } }
+function forgetActiveChat() { try { sessionStorage.removeItem(ACTIVE_KEY); } catch { /* sin almacenamiento */ } }
+
 /**
  * Chat sin fricción (DESIGN.md §4 · Chat):
  * - Sin bloques al inicio: SOI abre la conversación con un saludo personal y el cursor ya está en el campo.
@@ -33,6 +40,7 @@ const OPENER_ID = 'soi-opener';
  * - El mensaje del usuario aparece al instante; el streaming no anima tokens; "pensando" es un pulso de opacidad.
  */
 export function ChatView({ conversationId: initialId, initialMessages = [], agent, opener, paywalled: initialPaywalled, ttsAllowed }: Props) {
+  const router = useRouter();
   const convRef = useRef<string | undefined>(initialId);
   const [paywalled, setPaywalled] = useState(initialPaywalled);
   const [activeAgent, setActiveAgent] = useState<AgentId | undefined>(agent);
@@ -61,6 +69,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
       if (id && !convRef.current) {
         convRef.current = id;
         window.history.replaceState(null, '', `/chat/${id}`);
+        rememberActiveChat(id);
       }
       const a = res.headers.get('x-soi-agent');
       if (isAgentId(a)) setActiveAgent(a);
@@ -86,6 +95,17 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
       return null;
     }
   }, [error]);
+
+  // Mientras la app está abierta, volver a SOI desde otra sección regresa a la conversación en curso.
+  // Una sesión nueva de la app (o "Nueva conversación") empieza un chat nuevo.
+  useEffect(() => {
+    if (initialId) { rememberActiveChat(initialId); return; }
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('nueva')) { forgetActiveChat(); window.history.replaceState(null, '', '/chat'); return; }
+    if (agent) return;
+    const active = activeChat();
+    if (active) router.replace(`/chat/${active}`);
+  }, [initialId, agent, router]);
 
   // Foco directo en el campo (solo con puntero fino: en móvil no abrimos el teclado sin pedirlo).
   useEffect(() => {
@@ -124,6 +144,8 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
     track('chat_message_sent', { agent: agent ?? 'auto' });
     sendMessage({ text: input.trim() });
     setInput('');
+    // En el teléfono se sale del modo escritura (se cierra el teclado) para ver la respuesta.
+    if (window.matchMedia('(pointer: coarse)').matches) inputRef.current?.blur();
   }
 
   async function speakText(t: string) {
@@ -193,7 +215,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
         <form
           onSubmit={submit}
           onClick={() => inputRef.current?.focus()}
-          className="flex items-end gap-2 rounded-[20px] bg-white p-2 pl-4 shadow-soft transition-shadow duration-(--dur-fast) ease-out-strong focus-within:shadow-[0_0_0_1px_var(--color-soi-accent-fill),0_0_0_4px_rgb(42_120_214/0.12)]"
+          className="flex items-end gap-2 rounded-[20px] bg-white p-2 pl-4 shadow-soft"
         >
           <label htmlFor="chat-input" className="sr-only">Escribe tu mensaje</label>
           <textarea
