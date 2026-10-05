@@ -30,19 +30,29 @@ describe('buildOpener', () => {
   it('es agéntico: propone un Moment concreto con botón y respuestas rápidas', () => {
     const o = buildOpener({ ...base, checkin: 'anxiety', proposal: { id: 'x', title: 'Volver al cuerpo', minutes: 4, cover: null } });
     expect(o.text).toContain('Imagino que hoy llegas con la mente acelerada');
-    expect(o.text).toContain('Te propongo «Volver al cuerpo» (4 min)');
+    expect(o.text).toContain('¿Hacemos «Volver al cuerpo» ahora?');
     expect(o.replies.map((r) => r.label)).not.toContain('Me siento con ansiedad');
     expect(o.replies.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('si un Moment ya le ayudó, lo dice con su dato', () => {
+  it('si un Moment ya le ayudó, lo dice como compañera, sin cifras', () => {
     const o = buildOpener({ ...base, proposal: { id: 'x', title: 'Calma', minutes: 3, cover: null, helpedBefore: true, lift: 1.5 } });
-    expect(o.text).toContain('te subió el ánimo 1,5 puntos');
+    expect(o.text).toContain('La última vez te hizo bien.');
+    expect(o.text).not.toMatch(/punto|1,5|\d/);
+  });
+
+  it('es breve: saludo + 2 o 3 frases, sin puntajes', () => {
+    const progress = summarizeRuns([run(1, 2, 4), run(2, 3, 4), run(3, 2, 3)], 6, NOW);
+    const o = buildOpener({ ...base, progress, goal: 'Terminar mi portafolio', lastConversationTitle: 'mi trabajo', proposal: { id: 'x', title: 'Calma', minutes: 3, cover: null, helpedBefore: true, lift: 2 } });
+    expect(o.text.length).toBeLessThanOrEqual(220);
+    expect(o.text.split(/[.?!]\s/).length).toBeLessThanOrEqual(5);
+    expect(o.text).not.toMatch(/\d|punto|promedio|Momentum/);
+    expect(o.text.match(/bien/g)?.length ?? 0).toBeLessThanOrEqual(1);
   });
 
   it('celebra el progreso real (recompensa)', () => {
     const progress = summarizeRuns([run(1, 2, 4), run(2, 3, 4), run(3, 2, 3)], 6, NOW);
-    expect(buildOpener({ ...base, progress }).text).toMatch(/Mañana llegas a 7|más que la anterior|tu ánimo sube/);
+    expect(buildOpener({ ...base, progress }).text).toMatch(/hito|vas con todo|haciendo bien/);
   });
 
   it('racha sin castigo tras 2+ días', () => {
@@ -54,10 +64,9 @@ describe('buildOpener', () => {
     expect(buildOpener({ ...base, ritualAvailable: false }).practice).toBeNull();
   });
 
-  it('menciona la última conversación y ofrece seguirla', () => {
+  it('ofrece seguir la última conversación como respuesta rápida', () => {
     const o = buildOpener({ ...base, hour: 16, lastRitualDate: '2026-10-03', lastConversationTitle: 'mi miedo a hablar en público' });
-    expect(o.text).toContain('«mi miedo a hablar en público»');
-    expect(o.replies.some((r) => r.label.startsWith('Seguir con'))).toBe(true);
+    expect(o.replies.some((r) => r.label.startsWith('Seguir con') && r.text?.includes('mi miedo a hablar en público'))).toBe(true);
   });
 
   it('agente elegido en el sidebar tiene su propio saludo', () => {

@@ -62,19 +62,18 @@ export function summarizeRuns(runs: RunRow[], streak: number, now = Date.now()):
   };
 }
 
-/** Frase de celebración que cambia cada día (recompensa variable: no siempre la misma). */
+/**
+ * Un gesto breve de reconocimiento que cambia cada día (recompensa variable). Humano, sin puntajes:
+ * los números quedan para quien quiera verlos en Mi Vida, nunca en la conversación.
+ */
 export function pickCelebration(p: Progress, seed: number): string | null {
   const options: string[] = [];
   if (p.daysToMilestone !== null && p.daysToMilestone <= 2 && p.streak > 0) {
-    options.push(`Llevas ${p.streak} ${p.streak === 1 ? 'día' : 'días'} seguidos. ${p.daysToMilestone === 1 ? 'Mañana' : 'En 2 días'} llegas a ${p.nextMilestone} y ganas un escudo.`);
+    options.push(p.daysToMilestone === 1 ? 'Mañana cumples un hito en tu racha.' : 'Ya casi llegas a un hito en tu racha.');
   }
-  if (p.weekRuns > 0 && p.weekRuns > p.prevWeekRuns) {
-    options.push(`Esta semana ya viviste ${p.weekRuns} ${p.weekRuns === 1 ? 'Moment' : 'Moments'}, más que la anterior. Así se construye una identidad.`);
-  }
-  if (p.moodLift !== null && p.moodLift >= 0.5) {
-    options.push(`Un dato tuyo: después de cada Moment tu ánimo sube en promedio ${p.moodLift.toLocaleString('es')} ${p.moodLift === 1 ? 'punto' : 'puntos'}. Tu cerebro ya está aprendiendo que esto funciona.`);
-  }
-  if (p.streak >= 3 && !options.length) options.push(`${p.streak} días seguidos presentándote para ti.`);
+  if (p.weekRuns > 0 && p.weekRuns > p.prevWeekRuns) options.push('Esta semana vas con todo.');
+  if (p.moodLift !== null && p.moodLift >= 0.5) options.push('Se nota que tus Moments te están haciendo bien.');
+  if (p.streak >= 3 && !options.length) options.push('Qué bueno verte otra vez por aquí.');
   return options.length ? options[seed % options.length]! : null;
 }
 

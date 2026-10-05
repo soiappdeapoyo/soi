@@ -224,14 +224,15 @@ export function defaultBlock(type: ActionType): ActionBlock {
     weekly_review: {},
     tracking: { metric: 'Vasos de agua', unit: 'vasos', target: 8 },
     stretching: { sequence: ['Cuello: inclina a cada lado', 'Hombros: círculos hacia atrás', 'Espalda: estírate hacia arriba'] },
-    book: { title: 'Piense y hágase rico', author: 'Napoleon Hill', key: '/works/OL527464W', cover: 'https://covers.openlibrary.org/b/id/14542536-M.jpg' },
     exercise: { name: 'Lagartijas', exerciseId: 'Pushups', frames: ['https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/0.jpg', 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/1.jpg'], reps: 10 },
     next_step: { instruction: 'La acción más pequeña que puedes hacer hoy.' },
     moment: { slug: 'brian_tracy_5min' },
   };
-  // Documento no tiene valor por defecto válido (requiere elegir un PDF): se crea vacío y el constructor lo completa.
+  // Documento y libro no tienen valor por defecto: se crean vacíos y la persona elige el PDF o busca el libro.
   const config = type === 'document'
     ? { title: 'Documento' }
+    : type === 'book'
+      ? { title: '', mode: 'summary' }
     : ACTION_CONFIG[type].parse(defaults[type] ?? {}) as Record<string, unknown>;
   return { id: newBlockId(), type, title: ACTIONS[type].label, minutes: ACTIONS[type].minutes, config };
 }

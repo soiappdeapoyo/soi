@@ -23,58 +23,112 @@ function useDebounced<T>(fn: (q: string) => Promise<T>, q: string, min = 2) {
   return data;
 }
 
-/** Libro: búsqueda en Open Library + modo (ideas clave o leer páginas). */
+/**
+ * Libro: empieza con el buscador (Open Library). Elegido el libro: portada, cambiar, modo
+ * (ideas clave o leer páginas) y "Generar resumen" para ver aquí mismo lo que verá quien lo viva.
+ */
 export function BookField({ id, value, onChange }: Props) {
+  const chosen = Boolean(value.key || value.title);
+  const [searching, setSearching] = useState(!chosen);
   const [q, setQ] = useState('');
   const results = useDebounced(async (s) => {
     const r = await fetch(`/api/library/books/search?q=${encodeURIComponent(s)}`);
-    return ((await r.json().catch(() => ({ books: [] }))).books ?? []) as { key: string; title: string; author: string | null; coverUrl: string | null }[];
+    return ((await r.json().catch(() => ({ books: [] }))).books ?? []) as { key: string; title: string; author: string | null; year: number | null; coverUrl: string | null }[];
   }, q);
+  const [summary, setSummary] = useState<{ premise: string; ideas: { title: string; text: string }[] } | null>(null);
+  const [sumState, setSumState] = useState<'idle' | 'loading' | 'error'>('idle');
   const mode = (value.mode as string) ?? 'summary';
+
+  async function loadSummary() {
+    setSumState('loading');
+    const res = await fetch('/api/library/books/summary', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: value.key, title: value.title, author: (value.author as string | undefined) ?? null }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.ok) { setSumState('error'); return; }
+    setSummary(json.summary); setSumState('idle');
+  }
+
+  function pick(b: { key: string; title: string; author: string | null; coverUrl: string | null }) {
+    onChange({ title: b.title.slice(0, 300), author: b.author ?? undefined, key: b.key, cover: b.coverUrl ?? undefined });
+    setQ(''); setSearching(false); setSummary(null); setSumState('idle');
+  }
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-3">
-        {value.cover
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={value.cover as string} alt="" className="h-16 w-11 shrink-0 rounded-[4px] object-cover shadow-ring" />
-          : <span className="flex h-16 w-11 shrink-0 items-center justify-center rounded-[4px] bg-soi-tray text-soi-subtle"><BookOpen className="h-4 w-4" aria-hidden="true" /></span>}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{(value.title as string) || 'Elige un libro'}</p>
-          {value.author ? <p className="truncate text-xs text-soi-muted">{value.author as string}</p> : null}
+      {chosen && !searching ? (
+        <div className="flex items-center gap-3">
+          {value.cover
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={value.cover as string} alt="" className="h-16 w-11 shrink-0 rounded-[4px] object-cover shadow-ring" />
+            : <span className="flex h-16 w-11 shrink-0 items-center justify-center rounded-[4px] bg-soi-tray text-soi-subtle"><BookOpen className="h-4 w-4" aria-hidden="true" /></span>}
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-2 text-sm font-medium">{value.title as string}</p>
+            {value.author ? <p className="truncate text-xs text-soi-muted">{value.author as string}</p> : null}
+          </div>
+          <button type="button" onClick={() => setSearching(true)} className="press h-9 shrink-0 rounded-lg px-3 text-sm text-soi-accent hover:bg-black/[0.04]">Cambiar</button>
         </div>
-      </div>
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-soi-subtle" aria-hidden="true" />
-        <Input id={id} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar en Open Library" className="pl-9" aria-label="Buscar libro" />
-      </div>
-      {results && (
-        <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto rounded-lg bg-soi-sidebar p-1">
-          {results.length ? results.map((b) => (
-            <li key={b.key}>
-              <button type="button" onClick={() => { onChange({ title: b.title.slice(0, 300), author: b.author ?? undefined, key: b.key, cover: b.coverUrl ?? undefined }); setQ(''); }}
-                className="press flex w-full items-center gap-2 rounded-md bg-white p-1.5 text-left text-sm shadow-ring">
-                {b.coverUrl
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={b.coverUrl} alt="" className="h-10 w-7 shrink-0 rounded-[3px] object-cover" />
-                  : <span className="h-10 w-7 shrink-0 rounded-[3px] bg-soi-tray" />}
-                <span className="min-w-0 flex-1"><span className="block truncate">{b.title}</span><span className="block truncate text-xs text-soi-muted">{b.author}</span></span>
-              </button>
-            </li>
-          )) : <li className="p-2 text-sm text-soi-muted">Sin resultados.</li>}
-        </ul>
+      ) : (
+        <>
+          <Label htmlFor={id} className="text-xs text-soi-muted">Busca el libro</Label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-soi-subtle" aria-hidden="true" />
+            <Input id={id} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Título o autor" className="pl-9" autoFocus={!chosen} />
+          </div>
+          {results && (
+            <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-lg bg-soi-sidebar p-1" aria-label="Resultados">
+              {results.length ? results.map((b) => (
+                <li key={b.key}>
+                  <button type="button" onClick={() => pick(b)} className="press flex w-full items-center gap-2 rounded-md bg-white p-1.5 text-left text-sm shadow-ring">
+                    {b.coverUrl
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={b.coverUrl} alt="" className="h-12 w-8 shrink-0 rounded-[3px] object-cover" />
+                      : <span className="h-12 w-8 shrink-0 rounded-[3px] bg-soi-tray" />}
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 block">{b.title}</span>
+                      <span className="block truncate text-xs text-soi-muted">{[b.author, b.year].filter(Boolean).join(' · ')}</span>
+                    </span>
+                  </button>
+                </li>
+              )) : <li className="p-2 text-sm text-soi-muted">Sin resultados. Prueba con el título en otro idioma o el autor.</li>}
+            </ul>
+          )}
+          {chosen && <button type="button" onClick={() => setSearching(false)} className="press w-fit text-xs text-soi-muted">Mantener «{String(value.title)}»</button>}
+        </>
       )}
-      <div role="radiogroup" aria-label="Qué hacer con el libro" className="grid grid-cols-2 gap-1 rounded-lg bg-soi-sidebar p-1">
-        {([['summary', 'Ideas clave'], ['read', 'Leer páginas']] as const).map(([v, l]) => (
-          <button key={v} type="button" role="radio" aria-checked={mode === v} onClick={() => onChange({ mode: v })}
-            className={cn('press h-8 rounded-md text-sm', mode === v ? 'bg-white font-medium shadow-ring' : 'text-soi-muted')}>{l}</button>
-        ))}
-      </div>
-      {mode === 'read' && (
-        <div className="w-28">
-          <Label htmlFor={`${id}-pages`} className="text-xs text-soi-muted">Páginas</Label>
-          <Input id={`${id}-pages`} type="number" min={1} max={200} value={Number(value.pages ?? 10)} className="nums"
-            onChange={(e) => onChange({ pages: Math.max(1, Math.min(200, Number(e.target.value) || 1)) })} />
-        </div>
+
+      {chosen && !searching && (
+        <>
+          <div role="radiogroup" aria-label="Qué hacer con el libro" className="grid grid-cols-2 gap-1 rounded-lg bg-soi-sidebar p-1">
+            {([['summary', 'Ideas clave'], ['read', 'Leer páginas']] as const).map(([v, l]) => (
+              <button key={v} type="button" role="radio" aria-checked={mode === v} onClick={() => onChange({ mode: v })}
+                className={cn('press h-8 rounded-md text-sm', mode === v ? 'bg-white font-medium shadow-ring' : 'text-soi-muted')}>{l}</button>
+            ))}
+          </div>
+          {mode === 'read' ? (
+            <div className="w-28">
+              <Label htmlFor={`${id}-pages`} className="text-xs text-soi-muted">Páginas</Label>
+              <Input id={`${id}-pages`} type="number" min={1} max={200} value={Number(value.pages ?? 10)} className="nums"
+                onChange={(e) => onChange({ pages: Math.max(1, Math.min(200, Number(e.target.value) || 1)) })} />
+            </div>
+          ) : value.key ? (
+            summary ? (
+              <div className="rounded-lg bg-soi-sidebar p-3 text-sm">
+                <p className="text-soi-ink">{summary.premise}</p>
+                <ol className="mt-2 flex flex-col gap-1">
+                  {summary.ideas.map((idea, n) => <li key={n}><span className="nums mr-1 text-soi-accent">{n + 1}.</span><span className="font-medium">{idea.title}</span></li>)}
+                </ol>
+                <p className="mt-2 text-xs text-soi-muted">Así lo verá quien viva el Moment, con una práctica para aplicarlo.</p>
+              </div>
+            ) : (
+              <button type="button" onClick={loadSummary} disabled={sumState === 'loading'}
+                className="press inline-flex h-9 w-fit items-center gap-1.5 rounded-lg px-3 text-sm shadow-ring disabled:opacity-60">
+                {sumState === 'loading' ? 'Generando resumen…' : sumState === 'error' ? 'No se pudo. Reintentar' : 'Generar resumen'}
+              </button>
+            )
+          ) : null}
+        </>
       )}
     </div>
   );

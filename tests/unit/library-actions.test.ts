@@ -26,8 +26,8 @@ describe('acciones de biblioteca', () => {
     expect(blocks.map((b) => b.id)).toEqual(['a', 'b', 'c']);
     expect(errors).toHaveLength(2);
   });
-  it('el bloque por defecto de ejercicio y libro es válido', () => {
-    expect(parseBlocks([defaultBlock('exercise'), defaultBlock('book')]).errors).toEqual([]);
+  it('el bloque por defecto de ejercicio es válido', () => {
+    expect(parseBlocks([defaultBlock('exercise')]).errors).toEqual([]);
   });
   it('duración del ejercicio: series × trabajo + descansos', () => {
     expect(exerciseSeconds({ sets: 3, reps: 10, rest: 30 })).toBe(3 * 30 + 2 * 30);

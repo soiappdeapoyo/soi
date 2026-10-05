@@ -4,9 +4,9 @@ import { pickCelebration, daySeed, type Progress } from '@/lib/rewards';
 
 /**
  * Saludo con el que SOI abre cada conversación nueva (sin bloques ni formularios).
- * Determinista e instantáneo (sin esperar al modelo ni gastar consultas), pero agéntico:
- * 1) celebra un avance real (recompensa), 2) anticipa cómo llegas con lo que SOI ha aprendido de ti,
- * 3) propone algo concreto que puedes empezar con un toque, 4) lo conecta con tu meta, y deja respuestas rápidas.
+ * Determinista e instantáneo (sin esperar al modelo ni gastar consultas), pero agéntico y breve (2–3 frases):
+ * un gesto de reconocimiento sin cifras, lo que intuye de cómo llegas y una invitación concreta con un toque.
+ * Tono de compañera, nunca de máquina: no menciona puntajes ni números de ánimo.
  */
 export type OpenerProposal = { id: string; title: string; minutes: number; cover: string | null; why: string; label: string };
 
@@ -50,10 +50,10 @@ const STATE_PHRASE: Record<MomentumState, string> = {
 };
 
 const STATE_WHY: Record<MomentumState, string> = {
-  anxiety: 'Primero bajamos el ritmo; con el cuerpo en calma todo lo demás se ve distinto.',
-  low_energy: 'Es corto y no te exige: solo empezar ya cambia tu estado.',
-  high_energy: 'Aprovechemos esta energía antes de que se disperse.',
-  confusion: 'Te ayuda a elegir una sola cosa y soltar el resto por hoy.',
+  anxiety: 'Para bajar el ritmo.',
+  low_energy: 'Corto y sin exigirte.',
+  high_energy: 'Para aprovechar tu energía.',
+  confusion: 'Para elegir una sola cosa.',
 };
 
 const REPLIES: Record<MomentumState, OpenerReply> = {
@@ -110,52 +110,43 @@ export function buildOpener(i: OpenerInput): Opener {
     return { text: `${hello} ${AGENT_OPENERS[i.agent]}`, practice: null, proposal: null, replies: [] };
   }
 
-  const { state, evidence } = anticipate(i);
+  const { state } = anticipate(i);
   const p = i.progress ?? null;
   const missed = i.lastRitualDate ? dayGap(i.lastRitualDate, i.today) >= 2 : false;
   const away = p?.daysSinceLastRun ?? null;
 
-  // 1) Recompensa: un avance real (o un regreso, que también cuenta).
+  // Breve y humano: un gesto de reconocimiento (sin cifras), lo que intuye y una invitación.
+  const celebration = p ? pickCelebration(p, seed) : null;
   const win = (away !== null && away >= 2) || missed
-    ? 'Ayer no te vimos, pero aquí seguimos. ¿Retomamos? Volver ya es una victoria: cada regreso le enseña a tu cerebro que puedes contar contigo.'
-    : p ? pickCelebration(p, seed) : null;
-
-  // 2) Anticipación (con humildad) y 3) propuesta concreta.
-  const feel = i.onboardingCompleted || i.checkin
-    ? `Imagino que hoy llegas ${STATE_PHRASE[state]}, ${evidence}.`
-    : 'Soy SOI. Te acompaño a convertir lo que piensas y sientes en acciones que se notan.';
+    ? 'Ayer no te vimos, pero aquí seguimos. ¿Retomamos?'
+    // Si la propuesta ya dirá "La última vez te hizo bien", no repetimos la misma idea.
+    : celebration && !(i.proposal?.helpedBefore && celebration.includes('bien')) ? celebration : null;
 
   let proposal: OpenerProposal | null = null;
-  let offer = '';
+  let invite: string;
   if (i.proposal) {
     const pr = i.proposal;
-    const why = pr.challengeDay
-      ? `Hoy toca el día ${pr.challengeDay}: un día a la vez.`
-      : pr.helpedBefore && pr.lift && pr.lift > 0
-        ? `La última vez te subió el ánimo ${pr.lift.toLocaleString('es')} ${pr.lift === 1 ? 'punto' : 'puntos'}. ${STATE_WHY[state]}`
-        : STATE_WHY[state];
+    const why = pr.challengeDay ? 'Un día a la vez.' : pr.helpedBefore ? 'La última vez te hizo bien.' : STATE_WHY[state];
     proposal = { id: pr.id, title: pr.title, minutes: pr.minutes, cover: pr.cover, why, label: pr.challengeDay ? `Hacer el día ${pr.challengeDay}` : 'Empezar ahora' };
-    offer = pr.challengeDay
-      ? `Te propongo seguir con «${pr.title}». ${why} ¿Lo hacemos?`
-      : `Te propongo «${pr.title}» (${pr.minutes} min). ${why} ¿Lo hacemos ahora?`;
+    invite = pr.challengeDay
+      ? `Hoy toca el día ${pr.challengeDay} de «${pr.title}». ¿Lo hacemos?`
+      : `¿Hacemos «${pr.title}» ahora?${pr.helpedBefore ? ' La última vez te hizo bien.' : ''}`;
   } else if (i.ritualAvailable && i.lastRitualDate !== i.today && i.hour >= 5 && i.hour < 12) {
-    offer = 'Tu ritual de hoy está listo: cuatro pasos cortos para empezar con intención. ¿Lo hacemos?';
+    invite = 'Tu ritual de hoy está listo. ¿Empezamos?';
   } else {
-    offer = state === 'anxiety' ? '¿Respiramos juntos un minuto y luego me cuentas?' : '¿Qué pequeño paso quieres dar hoy? Si quieres, lo diseño contigo ahora.';
+    invite = state === 'anxiety' ? '¿Respiramos un momento y me cuentas?' : '¿Qué te gustaría mover hoy?';
   }
 
-  // 4) Meta y corrección fácil.
-  const goal = i.goal ? `Cada paso te acerca a «${i.goal}».` : '';
-  const correct = i.lastConversationTitle
-    ? `Si llegas distinto, dímelo y lo ajusto. O seguimos con «${i.lastConversationTitle}», lo que hablamos la última vez.`
-    : 'Si llegas distinto, dímelo y lo ajusto.';
+  const feel = i.onboardingCompleted || i.checkin
+    ? `Imagino que hoy llegas ${STATE_PHRASE[state]}.`
+    : 'Soy SOI y estoy aquí para acompañarte.';
 
-  const text = [[hello, win].filter(Boolean).join(' '), feel, offer, [goal, correct].filter(Boolean).join(' ')].filter(Boolean).join('\n\n');
+  const text = [hello, win, feel, invite].filter(Boolean).join(' ');
 
   const replies: OpenerReply[] = [];
   if (proposal) replies.push({ label: proposal.label, href: `/m/${proposal.id}/play` });
-  replies.push(...(Object.keys(REPLIES) as MomentumState[]).filter((s) => s !== state).slice(0, 2).map((s) => REPLIES[s]));
-  replies.push({ label: 'Proponme otra cosa', text: 'Proponme otro Moment para ahora, distinto.' });
+  replies.push(...(Object.keys(REPLIES) as MomentumState[]).filter((st) => st !== state).slice(0, 2).map((st) => REPLIES[st]));
+  replies.push({ label: 'Otra idea', text: 'Proponme otra cosa para ahora.' });
   if (i.lastConversationTitle) replies.push({ label: `Seguir con «${i.lastConversationTitle.slice(0, 28)}»`, text: `Sigamos con lo que hablamos: ${i.lastConversationTitle}.` });
 
   const practice = !proposal && i.ritualAvailable && i.lastRitualDate !== i.today && (missed || (i.hour >= 5 && i.hour < 12))

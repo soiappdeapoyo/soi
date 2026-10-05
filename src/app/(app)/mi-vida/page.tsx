@@ -323,7 +323,7 @@ function WeekCard({ progress: p, week }: { progress: Progress; week: { key: stri
       </ol>
       {(p.moodLift !== null && p.moodLift > 0) || (p.daysToMilestone !== null && p.streak > 0) ? (
         <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-soi-muted">
-          {p.moodLift !== null && p.moodLift > 0 && <span className="inline-flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5 text-soi-accent" aria-hidden="true" />Tu ánimo sube {p.moodLift.toLocaleString('es')} después de cada Moment</span>}
+          {p.moodLift !== null && p.moodLift > 0 && <span className="inline-flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5 text-soi-accent" aria-hidden="true" />Tus Moments te están haciendo bien</span>}
           {p.daysToMilestone !== null && p.streak > 0 && <span className="nums">A {p.daysToMilestone} {p.daysToMilestone === 1 ? 'día' : 'días'} del hito de {p.nextMilestone} 🛡️</span>}
         </p>
       ) : null}
