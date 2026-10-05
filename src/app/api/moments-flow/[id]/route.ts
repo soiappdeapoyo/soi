@@ -1,10 +1,13 @@
 import { z } from 'zod/v3';
-import { getSessionUser } from '@/lib/supabase/server';
+import { getSessionUser, createAdminClient } from '@/lib/supabase/server';
+import { isUserCover, reviewCover } from '@/lib/moments/cover';
 import { MomentKindSchema } from '@/config/actions';
 import { validBlocks, textOfBlocks, dbError } from '@/lib/moments/input';
 import { moderateFields } from '@/lib/social/guard';
 import { ownsDocuments, publishDocuments } from '@/lib/moments/library-blocks';
 import type { ActionBlock } from '@/config/actions';
+
+export const maxDuration = 60;
 
 const Patch = z.object({
   title: z.string().trim().min(3).max(120).optional(),
@@ -35,6 +38,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!(await ownsDocuments(user.id, blocks))) return Response.json({ ok: false, message: 'Solo puedes usar documentos de tu biblioteca.' }, { status: 403 });
   }
   if (p.status === 'published') {
+    // Lo publicado se ve en Impulso: la portada subida por la persona debe pasar la moderación.
+    const { data: cov } = await supabase.from('soi_blueprints').select('cover_path').eq('id', id).eq('creator_id', user.id).maybeSingle();
+    if (isUserCover(cov?.cover_path as string | null)) {
+      const review = await reviewCover(cov!.cover_path as string);
+      if (review.status === 'unavailable') return Response.json({ ok: false, message: 'No pudimos revisar la portada ahora. Intenta publicar en un momento.' }, { status: 503 });
+      if (review.status === 'blocked' || review.status === 'missing') {
+        await createAdminClient().from('soi_blueprints').update({ cover_path: null }).eq('id', id).eq('creator_id', user.id);
+        if (review.status === 'blocked') return Response.json({ ok: false, message: `${review.message} Quitamos la portada; puedes publicar sin ella o elegir otra.` }, { status: 422 });
+      }
+    }
     const { data: full } = await supabase.rpc('get_moment_blocks', { p_id: id });
     // Documentos privados de la biblioteca → copia pública del Moment.
     const pub = await publishDocuments(user.id, (blocks ?? full ?? []) as ActionBlock[]);

@@ -20,7 +20,13 @@ export async function compressImage(file: Blob, maxSide = MAX_IMAGE_SIDE, qualit
   canvas.height = h;
   canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
-  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo procesar la imagen'))), 'image/webp', quality));
+  const encode = (type: string, q: number) => new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, q));
+  // Safari no codifica WebP y devuelve PNG (varios MB): en ese caso, JPEG.
+  const webp = await encode('image/webp', quality);
+  if (webp && webp.type === 'image/webp') return webp;
+  const jpeg = await encode('image/jpeg', Math.min(0.85, quality + 0.03));
+  if (jpeg) return jpeg;
+  throw new Error('No se pudo procesar la imagen');
 }
 
 function extFor(type: string) {

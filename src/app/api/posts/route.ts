@@ -6,7 +6,10 @@ import { moderateFields } from '@/lib/social/guard';
 import { moderateImage, IMAGE_REASON_COPY } from '@/lib/ai/image-moderation';
 import { MODERATION_COPY } from '@/lib/ai/moderation';
 import { getMoment } from '@/lib/moments/server';
+import { isUserCover, reviewCover } from '@/lib/moments/cover';
 import { POST_FIELDS, hydratePosts, type PostRow } from '@/lib/social/posts';
+
+export const maxDuration = 60;
 
 const Body = z.object({
   body: z.string().trim().max(3000).optional(),
@@ -72,6 +75,17 @@ export async function POST(req: Request) {
     const m = await getMoment(supabase, p.moment);
     if (!m || m.status === 'archived') return Response.json({ ok: false, message: 'No encontramos ese Moment.' }, { status: 404 });
     momentCols = m.official ? { moment_id: null, moment_slug: m.slug } : { moment_id: m.id, moment_slug: null };
+    if (!m.official && m.status !== 'published' && m.creator_id === user.id) {
+      const { data: cov } = await supabase.from('soi_blueprints').select('cover_path').eq('id', m.id).maybeSingle();
+      if (isUserCover(cov?.cover_path as string | null)) {
+        const review = await reviewCover(cov!.cover_path as string);
+        if (review.status === 'unavailable') return Response.json({ ok: false, message: 'No pudimos revisar la portada del Moment. Intenta de nuevo en un momento.' }, { status: 503 });
+        if (review.status === 'blocked') {
+          await admin.from('soi_blueprints').update({ cover_path: null }).eq('id', m.id);
+          return Response.json({ ok: false, message: review.message }, { status: 422 });
+        }
+      }
+    }
   }
 
   let root_id: string | null = null;

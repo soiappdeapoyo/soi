@@ -173,7 +173,7 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
     if (coverPath !== undefined) {
       const c = await fetch(`/api/moments-flow/${savedId}/cover`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: coverPath }) });
       const cj = await c.json().catch(() => ({}));
-      if (!c.ok || !cj.ok) toast(cj.message ?? 'El Moment se guardó, pero no la portada.');
+      if (!c.ok || !cj.ok) toast.error(`El Moment se guardó, pero no la portada. ${cj.message ?? 'Intenta cambiarla de nuevo.'}`, { duration: 9000 });
     }
     toast(status === 'published' ? 'Moment publicado' : 'Moment guardado');
     router.push(`/m/${savedId}`);
