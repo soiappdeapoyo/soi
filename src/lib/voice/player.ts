@@ -1,0 +1,28 @@
+'use client';
+
+/**
+ * Reproductor único de la voz guía (módulo mínimo, se puede importar de forma estática).
+ * iOS solo deja reproducir audio si el primer play() ocurre dentro de un toque: unlockAudio() se llama
+ * de forma síncrona en ese toque y el mismo elemento se reutiliza después para toda la guía.
+ */
+let player: HTMLAudioElement | null = null;
+let unlocked = false;
+
+const SILENCE = 'data:audio/mpeg;base64,//NAxAAAAANIAAAAAExBTUUDAAkIAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/80LEAAAAA0gAAAAATEFNRQMACQgABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRQMACQgABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zQsQAAAADSAAAAABMQU1FAwAJCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/zQMQAAAADSAAAAABMQU1FAwAJCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//NCxAAAAANIAAAAAExBTUUDAAkIAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+export function getPlayer(): HTMLAudioElement | null {
+  if (typeof window === 'undefined') return null;
+  if (!player) { player = new Audio(); player.preload = 'auto'; }
+  return player;
+}
+
+export function isUnlocked() {
+  return unlocked;
+}
+
+export function unlockAudio() {
+  const p = getPlayer();
+  if (!p || unlocked) return;
+  p.src = SILENCE;
+  void p.play().then(() => { p.pause(); unlocked = true; }).catch(() => {});
+}

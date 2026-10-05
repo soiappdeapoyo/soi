@@ -12,6 +12,7 @@ import { MessageBubble } from './message-bubble';
 import { track } from '@/components/providers/analytics';
 import { detectCrisis } from '@/lib/ai/crisis';
 import type { Opener } from '@/lib/opener';
+import { unlockAudio } from '@/lib/voice/player';
 
 type Props = {
   conversationId?: string;
@@ -31,7 +32,7 @@ const OPENER_ID = 'soi-opener';
  * - El agente que responde se elige solo (router) y se muestra discretamente; el del sidebar se respeta.
  * - El mensaje del usuario aparece al instante; el streaming no anima tokens; "pensando" es un pulso de opacidad.
  */
-export function ChatView({ conversationId: initialId, initialMessages = [], agent, opener, paywalled: initialPaywalled, ttsAllowed, voice }: Props) {
+export function ChatView({ conversationId: initialId, initialMessages = [], agent, opener, paywalled: initialPaywalled, ttsAllowed }: Props) {
   const convRef = useRef<string | undefined>(initialId);
   const [paywalled, setPaywalled] = useState(initialPaywalled);
   const [activeAgent, setActiveAgent] = useState<AgentId | undefined>(agent);
@@ -126,8 +127,9 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
   }
 
   async function speakText(t: string) {
+    unlockAudio(); // síncrono, dentro del toque en "Escuchar" (iOS)
     const { speak } = await import('@/lib/voice/tts');
-    await speak(t, { voice: voice ?? undefined });
+    await speak(t, { style: 'chat' });
   }
 
   const a = activeAgent && activeAgent !== 'crisis' ? AGENTS[activeAgent] : null;

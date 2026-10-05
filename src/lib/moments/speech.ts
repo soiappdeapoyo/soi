@@ -1,6 +1,8 @@
 import type { ActionBlock } from '@/config/actions';
+import type { VoiceStyle } from '@/config/voices';
 
 type Cfg = Record<string, unknown>;
+const ENERGY = new Set(['exercise', 'pomodoro', 'walk', 'celebration']);
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0) : []);
@@ -10,7 +12,7 @@ const sentence = (s: string) => (s && !/[.!?…]$/.test(s) ? `${s}.` : s);
  * Todo lo que la voz lee de un bloque: el título y TODAS sus instrucciones (no solo el título).
  * `slow`: meditaciones, visualizaciones y respiración se leen más despacio y con pausas entre frases.
  */
-export function blockSpeech(b: Pick<ActionBlock, 'type' | 'title' | 'config'>): { text: string; slow: boolean } {
+export function blockSpeech(b: Pick<ActionBlock, 'type' | 'title' | 'config'>): { text: string; slow: boolean; style: VoiceStyle } {
   const c = (b.config ?? {}) as Cfg;
   const parts: string[] = [sentence(b.title)];
   let slow = false;
@@ -63,5 +65,6 @@ export function blockSpeech(b: Pick<ActionBlock, 'type' | 'title' | 'config'>): 
     }
     default: break;
   }
-  return { text: parts.map((p) => p.trim()).filter(Boolean).map(sentence).join(' '), slow };
+  const style: VoiceStyle = slow ? 'calm' : ENERGY.has(b.type) ? 'energy' : 'guide';
+  return { text: parts.map((p) => p.trim()).filter(Boolean).map(sentence).join(' '), slow, style };
 }

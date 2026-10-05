@@ -1,5 +1,6 @@
 'use client';
 
+import { unlockAudio } from '@/lib/voice/player';
 import { useState } from 'react';
 import Link from 'next/link';
 import { Check, Flame } from 'lucide-react';
@@ -35,8 +36,9 @@ export function DailyRitualView({ ritual, alreadyDone, ttsAllowed }: { ritual: R
   }
 
   async function listen(text: string) {
+    unlockAudio(); // síncrono, dentro del toque (iOS)
     const { speak } = await import('@/lib/voice/tts');
-    await speak(text);
+    await speak(text, { style: 'calm', pauseMs: 700 });
   }
 
   const phase = RITUAL_PHASES[ritual.phase] ?? RITUAL_PHASES.chispa;

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Label, Select } from '@/components/ui/input';
-import { VOICES } from '@/lib/voice/tts';
+import { GUIDE_VOICES, guideVoice } from '@/config/voices';
+import { unlockAudio } from '@/lib/voice/player';
 
 type Props = { ttsEnabled: boolean; voice: string | null; ttsAllowed: boolean; hasSubscription: boolean; pushEnabled: boolean };
 
@@ -16,7 +17,7 @@ function urlBase64ToUint8Array(base64: string) {
 
 export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, pushEnabled }: Props) {
   const [tts, setTts] = useState(ttsEnabled);
-  const [v, setV] = useState(voice ?? 'es-MX-DaliaNeural');
+  const [v, setV] = useState<string>(guideVoice(voice));
   const [push, setPush] = useState(pushEnabled);
   // Toasts (Sonner): copy corto, sin signos de exclamación.
   const setMsg = (m: string) => toast(m);
@@ -27,8 +28,9 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
   }
 
   async function test() {
+    unlockAudio();
     const { speak } = await import('@/lib/voice/tts');
-    await speak('Hoy va a ser el mejor día de todos.', { voice: v });
+    await speak('Hola. Soy tu guía en SOI. Respira conmigo: inhala… y exhala. Hoy va a ser un buen día.', { voice: v, style: 'guide' });
   }
 
   async function togglePush() {
@@ -59,12 +61,12 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
         {!ttsAllowed && <p className="mt-1 text-sm text-soi-muted">La guía por voz es parte de SOI+.</p>}
         <label className="mt-3 flex items-center gap-2">
           <input type="checkbox" checked={tts} onChange={(e) => setTts(e.target.checked)} disabled={!ttsAllowed} className="h-4 w-4 accent-soi-accent" />
-          Leer en voz alta respuestas y rutinas
+          Voz guía en los Moments y en el chat
         </label>
         <div className="mt-3">
           <Label htmlFor="st-voice">Voz</Label>
           <Select id="st-voice" value={v} onChange={(e) => setV(e.target.value)} disabled={!ttsAllowed}>
-            {VOICES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+            {GUIDE_VOICES.map((x) => <option key={x.id} value={x.id}>{x.label} · {x.detail}</option>)}
           </Select>
         </div>
         <div className="mt-4 flex gap-2">

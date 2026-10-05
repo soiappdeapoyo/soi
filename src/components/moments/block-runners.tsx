@@ -5,6 +5,7 @@ import { Check, Volume2 } from 'lucide-react';
 import { Input, Textarea } from '@/components/ui/input';
 import { SoiPlayer } from '@/components/media/soi-player';
 import { V2Runner } from './block-runners-v2';
+import type { VoiceStyle } from '@/config/voices';
 import { BookRunner, DocumentRunner, ExerciseRunner } from './block-runners-library';
 import type { ActionBlock } from '@/config/actions';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,8 @@ export type RunnerProps = {
   /** Avanza al siguiente bloque (lo usan los bloques que terminan solos, como el video). */
   next: () => void;
   say: (text: string) => void;
+  /** Indicación breve de la guía (no interrumpe una explicación en curso). */
+  cue: (text: string, style?: VoiceStyle) => void;
 };
 
 export const MOODS = ['😞', '😕', '😐', '🙂', '😄'] as const;
@@ -55,7 +58,7 @@ function cfg<T>(b: ActionBlock) {
 }
 
 /** Halo de respiración del ritual (la animación expresiva de SOI). Se detiene en pausa; estático con movimiento reducido. */
-function BreathHalo({ running, inhale = 4, exhale = 6, label }: { running: boolean; inhale?: number; exhale?: number; label?: string }) {
+function BreathHalo({ running, inhale = 4, exhale = 6, label, onPhase }: { running: boolean; inhale?: number; exhale?: number; label?: string; onPhase?: (p: 'in' | 'out') => void }) {
   const cycle = (inhale + exhale) * 1000;
   const [phase, setPhase] = useState<'in' | 'out'>('in');
   useEffect(() => {
@@ -64,6 +67,11 @@ function BreathHalo({ running, inhale = 4, exhale = 6, label }: { running: boole
     const t = setInterval(() => setPhase((Date.now() - start) % cycle < inhale * 1000 ? 'in' : 'out'), 200);
     return () => clearInterval(t);
   }, [running, cycle, inhale]);
+  // La guía dice "Inhala… / Exhala…" en cada cambio de fase.
+  useEffect(() => {
+    if (running) onPhase?.(phase);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, running]);
   return (
     <div className="relative mx-auto flex h-40 w-40 items-center justify-center">
       <span data-breath-halo aria-hidden="true" style={{ animationDuration: `${inhale + exhale}s`, animationPlayState: running ? 'running' : 'paused' }}
@@ -78,7 +86,7 @@ export function BlockRunner(p: RunnerProps) {
   switch (b.type) {
     case 'breathing': {
       const c = cfg<{ inhale: number; exhale: number }>(b);
-      return <BreathHalo running={p.running} inhale={c.inhale} exhale={c.exhale} />;
+      return <BreathHalo running={p.running} inhale={c.inhale} exhale={c.exhale} onPhase={(ph) => p.cue(ph === 'in' ? 'Inhala…' : 'Exhala…', 'breath')} />;
     }
     case 'meditation':
       return (
@@ -216,7 +224,7 @@ export function BlockRunner(p: RunnerProps) {
     case 'document': return <DocumentRunner block={b} output={output} setOutput={setOutput} say={p.say} running={p.running} />;
     case 'exercise': return <ExerciseRunner block={b} output={output} setOutput={setOutput} say={p.say} running={p.running} />;
     default:
-      return <V2Runner block={b} output={output} setOutput={setOutput} next={p.next} running={p.running} elapsed={p.elapsed} runId={p.runId} />;
+      return <V2Runner block={b} output={output} setOutput={setOutput} next={p.next} running={p.running} elapsed={p.elapsed} runId={p.runId} cue={p.cue} />;
   }
 }
 

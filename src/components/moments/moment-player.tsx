@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { blockSpeech } from '@/lib/moments/speech';
+import type { VoiceStyle } from '@/config/voices';
+import { unlockAudio } from '@/lib/voice/player';
 import { toast } from 'sonner';
 import { Check, Flame, Pause, Play, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
 import { Button, buttonClass } from '@/components/ui/button';
@@ -69,13 +71,19 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   const shownBlock = blocks[shown]!;
   const total = blockSeconds(block);
 
-  const say = useCallback(async (text: string, slow = false) => {
+  const say = useCallback(async (text: string, style: VoiceStyle = 'guide') => {
     if (!voiceOn || !ttsAllowed) return;
     try {
       const { speak } = await import('@/lib/voice/tts');
-      await speak(text, { voice: voice ?? undefined, rate: slow ? 0.88 : 1, pauseMs: slow ? 700 : 0 });
+      await speak(text, { style, pauseMs: style === 'calm' ? 900 : 0 });
     } catch { /* TTS opcional */ }
-  }, [voiceOn, ttsAllowed, voice]);
+  }, [voiceOn, ttsAllowed]);
+  // Indicaciones breves (Inhala, Exhala, "Diez segundos más"…): no interrumpen una explicación en curso.
+  const cue = useCallback((text: string, style: VoiceStyle = 'breath') => {
+    if (!voiceOn || !ttsAllowed) return;
+    void import('@/lib/voice/tts').then(({ cue: c }) => c(text, style)).catch(() => {});
+  }, [voiceOn, ttsAllowed]);
+  void voice;
 
   const saveOutputs = useCallback((id: string | null, data: Record<string, BlockOutput>) => {
     if (!id) return;
@@ -108,6 +116,20 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     return () => clearTimeout(t);
   }, [phase, running, remaining, block.type, next]);
 
+  // La guía acompaña el tiempo: a mitad de una meditación larga y al cerrar los bloques temporizados.
+  useEffect(() => {
+    if (phase !== 'run' || !running) return;
+    const elapsed = total - remaining;
+    if ((block.type === 'meditation' || block.type === 'visualization') && total >= 120 && elapsed === Math.floor(total / 2)) {
+      cue('Si tu mente se fue, no pasa nada. Vuelve con suavidad a tu respiración.', 'calm');
+    }
+    if (remaining === 10 && total >= 40) {
+      if (block.type === 'meditation' || block.type === 'visualization') cue('Poco a poco, vuelve a este momento.', 'calm');
+      else if (block.type === 'timer' || block.type === 'rest') cue('Diez segundos más.', 'guide');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remaining]);
+
   // Transición del paso: primero sale, luego entra.
   useEffect(() => {
     if (index === shown) return;
@@ -119,8 +141,14 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   // La voz lee el bloque completo: título e instrucciones (las meditaciones guiadas, enteras y pausadas).
   useEffect(() => {
     if (phase !== 'run') return;
-    const { text, slow } = blockSpeech(block);
-    void say(text, slow);
+    const { text, style } = blockSpeech(block);
+    void say(text, style);
+    // El audio del siguiente paso se prepara mientras se vive este (sin espera al avanzar).
+    const following = blocks[index + 1];
+    if (following && voiceOn && ttsAllowed) {
+      const n = blockSpeech(following);
+      void import('@/lib/voice/tts').then(({ prefetchSpeech }) => prefetchSpeech(n.text, n.style)).catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, phase]);
 
@@ -133,6 +161,8 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
 
   async function start() {
     if (locked) { setSheet(true); return; }
+    // Este toque habilita la voz en iOS para todo el Moment.
+    if (voiceOn && ttsAllowed) unlockAudio();
     setBusy(true);
     const res = await fetch('/api/moment-runs', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -253,7 +283,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
               <h2 className="mt-1 text-balance text-2xl font-semibold tracking-tight">{shownBlock.title}</h2>
               {shownBlock.source && <p className="mt-1 text-xs italic text-soi-muted">{shownBlock.source}</p>}
             </div>
-            <BlockRunner block={shownBlock} output={out} running={running} next={next} say={(t) => void say(t)}
+            <BlockRunner block={shownBlock} output={out} running={running} next={next} say={(t) => void say(t)} cue={cue}
               elapsed={Math.max(0, total - remaining)} runId={runId}
               setOutput={(o) => setOutputs((all) => ({ ...all, [shownBlock.id]: o }))} />
           </div>

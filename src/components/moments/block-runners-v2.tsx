@@ -19,6 +19,7 @@ export type V2Props = {
   /** Segundos transcurridos del bloque (pomodoro y estiramiento siguen el reloj del reproductor). */
   elapsed: number;
   runId: string | null;
+  cue?: (text: string, style?: 'guide' | 'calm' | 'breath' | 'energy' | 'chat') => void;
 };
 
 const lead = 'text-[17px] leading-relaxed text-soi-ink text-pretty';
@@ -402,9 +403,17 @@ export function pomodoroPhase(elapsed: number, focus: number, rest: number, cycl
   }
   return { phase: 'done' as const, cycle: cycles, left: 0 };
 }
-function PomodoroRunner({ block, elapsed }: V2Props) {
+function PomodoroRunner({ block, elapsed, cue }: V2Props) {
   const c = cfg<{ focus: number; rest: number; cycles: number }>(block);
   const s = pomodoroPhase(elapsed, c.focus, c.rest, c.cycles);
+  const prev = useRef(s.phase);
+  useEffect(() => {
+    if (prev.current === s.phase) return;
+    prev.current = s.phase;
+    if (s.phase === 'rest') cue?.('Descanso. Levántate, respira y mira lejos.', 'guide');
+    else if (s.phase === 'focus') cue?.(`Ciclo ${s.cycle}. De vuelta al foco, una sola tarea.`, 'energy');
+    else cue?.('Listo. Terminaste tu bloque de foco.', 'energy');
+  }, [s.phase, s.cycle, cue]);
   return (
     <div className="flex flex-col items-center gap-2 text-center" aria-live="polite">
       <span className={cn('rounded-full px-3 py-1 text-sm font-medium', s.phase === 'focus' ? 'bg-soi-ink text-white' : 'bg-soi-accent-soft text-soi-accent')}>
@@ -498,10 +507,16 @@ function TrackingRunner({ block, output, setOutput }: V2Props) {
 }
 
 /* ---------------- Estiramiento ---------------- */
-function StretchingRunner({ block, elapsed }: V2Props) {
+function StretchingRunner({ block, elapsed, cue }: V2Props) {
   const c = cfg<{ sequence: string[]; secondsEach: number }>(block);
   const i = Math.min(c.sequence.length - 1, Math.floor(elapsed / c.secondsEach));
   const left = c.secondsEach - (elapsed % c.secondsEach);
+  const prev = useRef(i);
+  useEffect(() => {
+    if (prev.current === i) return;
+    prev.current = i;
+    cue?.(`Ahora: ${c.sequence[i]}.`, 'calm');
+  }, [i, c.sequence, cue]);
   return (
     <div className="flex flex-col items-center gap-3 text-center" aria-live="polite">
       <p className="nums text-sm text-soi-muted">{i + 1} de {c.sequence.length}</p>
