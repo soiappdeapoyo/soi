@@ -8,6 +8,7 @@ import { ROUTINES, ROUTINE_IDS } from '@/config/routines';
 import { recordMomentum } from '@/lib/momentum-server';
 import { ActionCardSchema, EslabonSchema } from '@/lib/action-card';
 import { ACTION_TYPES, MomentKindSchema, parseBlocks, type ActionType } from '@/config/actions';
+import { ownsDocuments, resolveLibraryBlocks } from '@/lib/moments/library-blocks';
 
 type Ctx = {
   supabase: SupabaseClient;
@@ -123,14 +124,19 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
           type: z.enum(ACTION_TYPES.filter((t) => t !== 'moment') as [ActionType, ...ActionType[]]),
           title: z.string().min(2).max(80),
           minutes: z.number().int().min(1).max(30),
-          config: z.record(z.unknown()).describe('breathing:{inhale,exhale} meditation:{guide} timer:{instruction} writing:{prompt} visualization:{scene} checklist:{items[]} video:{query} walk:{instruction} gratitude:{count} reading:{book,pages} reflection:{question} affirmation:{text,repeat} goal:{prompt} emotion_log:{question} rest:{instruction,variant} celebration:{message} next_step:{instruction} canvas:{prompt} mind_map:{center,branches} quiz:{questions:[{q,options[],answer,explain}]} music:{query} audio:{mode:"record",prompt} photo:{prompt} agenda:{prompt,defaultTime:"HH:MM"} pomodoro:{focus,rest,cycles} contract:{commitment,consequence} weekly_review:{} tracking:{metric,unit,target} stretching:{sequence[],secondsEach}'),
+          config: z.record(z.unknown()).describe('breathing:{inhale,exhale} meditation:{guide} timer:{instruction} writing:{prompt} visualization:{scene} checklist:{items[]} video:{query} walk:{instruction} gratitude:{count} reading:{book,pages} reflection:{question} affirmation:{text,repeat} goal:{prompt} emotion_log:{question} rest:{instruction,variant} celebration:{message} next_step:{instruction} canvas:{prompt} mind_map:{center,branches} quiz:{questions:[{q,options[],answer,explain}]} music:{query} audio:{mode:"record",prompt} photo:{prompt} agenda:{prompt,defaultTime:"HH:MM"} pomodoro:{focus,rest,cycles} contract:{commitment,consequence} weekly_review:{} tracking:{metric,unit,target} stretching:{sequence[],secondsEach} book:{title,author,mode:"summary"|"read",pages} document:{itemId,title,prompt} (solo PDFs de su biblioteca) exercise:{query (inglés),name (español),sets,reps|seconds,rest}'),
           day: z.number().int().min(1).max(30).optional().describe('Solo en retos (kind challenge): día al que pertenece el bloque'),
           source: z.string().max(160).optional().describe('Autor y obra de la técnica, si aplica'),
         })).min(2).max(20),
         durationDays: z.number().int().optional().describe('Solo retos (kind challenge): cuántos días dura, de 2 a 30'),
       }),
       execute: async (m) => {
-        const { blocks, errors } = parseBlocks(m.blocks.map((b, i) => ({ ...b, id: `b${i + 1}` })));
+        const parsed = parseBlocks(m.blocks.map((b, i) => ({ ...b, id: `b${i + 1}` })));
+        const errors = parsed.errors;
+        // Documentos: solo PDFs de la biblioteca de la persona. Libros y ejercicios se resuelven por nombre.
+        const docsOk = await ownsDocuments(userId, parsed.blocks);
+        const blocks = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'));
+        if (!docsOk) errors.push('Un bloque document usaba un PDF que no está en la biblioteca de la persona; se quitó.');
         if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
         const { data, error } = await supabase.from('soi_blueprints').insert({
           creator_id: userId, title: m.title, objective: m.objective, kind: m.kind, source: m.source,

@@ -4,7 +4,7 @@ import type { Eslabon } from '@/config/agents';
 /**
  * Biblioteca de acciones: las piezas con las que se componen los SOI Moments.
  * Cada tipo tiene su runner ejecutable en `src/components/moments/blocks/`.
- * Núcleo v1: 16 acciones + 2 estructurales (próximo paso y Moment anidado).
+ * 31 acciones (núcleo, v2 y biblioteca: libro, documento, ejercicio) + 2 estructurales (próximo paso y Moment anidado).
  */
 
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -57,6 +57,34 @@ export const ACTION_CONFIG = {
   weekly_review: z.object({ focus: z.string().trim().max(200).optional() }),
   tracking: z.object({ metric: text(80), unit: z.string().trim().max(20).default(''), target: z.number().min(0).max(100000).optional() }),
   stretching: z.object({ sequence: z.array(text(120)).min(1).max(8), secondsEach: z.number().int().min(15).max(180).default(40) }),
+  // Biblioteca como acciones: libros (Open Library), documentos PDF y ejercicios (free-exercise-db).
+  book: z.object({
+    title: text(300),
+    author: z.string().trim().max(200).optional(),
+    key: z.string().regex(/^\/works\/OL\d+W$/).optional(),
+    cover: z.string().regex(/^https:\/\/covers\.openlibrary\.org\/b\/id\/\d+-[SML]\.jpg$/).optional(),
+    mode: z.enum(['summary', 'read']).default('summary'),
+    pages: z.number().int().min(1).max(200).optional(),
+  }),
+  document: z.object({
+    title: text(200),
+    /** PDF privado de la biblioteca de quien creó el Moment (solo lo abre su dueño). */
+    itemId: z.string().uuid().optional(),
+    /** PDF público del Moment en moment-assets ("<uid>/docs/<uuid>.pdf"). */
+    assetPath: z.string().regex(/^[0-9a-f-]{36}\/docs\/[0-9a-f-]{36}\.pdf$/).optional(),
+    prompt: z.string().trim().max(300).optional(),
+  }).refine((c) => c.itemId || c.assetPath, { message: 'Elige un documento PDF' }),
+  exercise: z.object({
+    name: text(120),
+    exerciseId: z.string().regex(/^[A-Za-z0-9_-]{2,120}$/).optional(),
+    /** Búsqueda (en inglés) para que el servidor elija el ejercicio cuando lo diseña la IA. */
+    query: z.string().trim().max(80).optional(),
+    frames: z.array(z.string().regex(/^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/[A-Za-z0-9_\-/]+\.jpg$/)).max(2).optional(),
+    sets: z.number().int().min(1).max(10).default(3),
+    reps: z.number().int().min(1).max(100).optional(),
+    seconds: z.number().int().min(5).max(300).optional(),
+    rest: z.number().int().min(0).max(180).default(30),
+  }).refine((c) => c.exerciseId || c.query, { message: 'Elige un ejercicio' }),
   next_step: z.object({ instruction: text(240) }),
   moment: z.object({ momentId: z.string().uuid().optional(), slug: z.string().max(60).optional() })
     .refine((c) => c.momentId || c.slug, { message: 'Un Moment anidado necesita momentId o slug' }),
@@ -97,6 +125,9 @@ export const ACTIONS: Record<ActionType, { label: string; icon: string; minutes:
   weekly_review: { label: 'Revisión semanal', icon: 'ClipboardCheck', minutes: 10, eslabon: 'resultado', output: 'structured', hint: 'Victorias, aprendizajes y prioridades' },
   tracking: { label: 'Seguimiento', icon: 'ChartLine', minutes: 1, eslabon: 'resultado', output: 'structured', hint: 'Registra una métrica de tu progreso' },
   stretching: { label: 'Estiramiento', icon: 'PersonStanding', minutes: 4, eslabon: 'emocion', output: 'none', hint: 'Una secuencia guiada' },
+  book: { label: 'Libro', icon: 'BookMarked', minutes: 5, eslabon: 'pensamiento', output: 'none', hint: 'Ideas clave de un libro o unas páginas para leer' },
+  document: { label: 'Documento', icon: 'FileText', minutes: 10, eslabon: 'pensamiento', output: 'none', hint: 'Un PDF: artículo, guía o ebook' },
+  exercise: { label: 'Ejercicio', icon: 'Dumbbell', minutes: 4, eslabon: 'accion', output: 'none', hint: 'Calistenia, gimnasio o estiramiento con animación' },
   next_step: { label: 'Próximo paso', icon: 'ArrowRight', minutes: 2, eslabon: 'accion', output: 'text', hint: 'La acción concreta que sigue' },
   moment: { label: 'Otro Moment', icon: 'Layers', minutes: 0, eslabon: 'accion', output: 'none', hint: 'Reutiliza un Moment como bloque' },
 };
@@ -156,6 +187,13 @@ export function blockSeconds(b: Pick<ActionBlock, 'minutes' | 'seconds'>) {
   return b.seconds ?? b.minutes * 60;
 }
 
+/** Duración de un bloque de ejercicio: series × (repeticiones ~3 s o segundos sostenidos) + descansos entre series. */
+export function exerciseSeconds(c: { sets?: number; reps?: number; seconds?: number; rest?: number }) {
+  const sets = c.sets ?? 3;
+  const work = c.seconds ?? (c.reps ?? 10) * 3;
+  return sets * work + Math.max(0, sets - 1) * (c.rest ?? 30);
+}
+
 export function newBlockId() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -186,9 +224,14 @@ export function defaultBlock(type: ActionType): ActionBlock {
     weekly_review: {},
     tracking: { metric: 'Vasos de agua', unit: 'vasos', target: 8 },
     stretching: { sequence: ['Cuello: inclina a cada lado', 'Hombros: círculos hacia atrás', 'Espalda: estírate hacia arriba'] },
+    book: { title: 'Piense y hágase rico', author: 'Napoleon Hill', key: '/works/OL527464W', cover: 'https://covers.openlibrary.org/b/id/14542536-M.jpg' },
+    exercise: { name: 'Lagartijas', exerciseId: 'Pushups', frames: ['https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/0.jpg', 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pushups/1.jpg'], reps: 10 },
     next_step: { instruction: 'La acción más pequeña que puedes hacer hoy.' },
     moment: { slug: 'brian_tracy_5min' },
   };
-  const config = ACTION_CONFIG[type].parse(defaults[type] ?? {}) as Record<string, unknown>;
+  // Documento no tiene valor por defecto válido (requiere elegir un PDF): se crea vacío y el constructor lo completa.
+  const config = type === 'document'
+    ? { title: 'Documento' }
+    : ACTION_CONFIG[type].parse(defaults[type] ?? {}) as Record<string, unknown>;
   return { id: newBlockId(), type, title: ACTIONS[type].label, minutes: ACTIONS[type].minutes, config };
 }

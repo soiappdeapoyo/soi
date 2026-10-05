@@ -81,7 +81,7 @@ export async function POST(req: Request) {
   }
 
   // 4) RAG + accesos de herramientas
-  const [memories, yt, ev, rt, ri, momentum, methods, , checkin] = await Promise.all([
+  const [memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }] = await Promise.all([
     isCrisis ? Promise.resolve([]) : recall(supabase, user.id, text, {
       categories: ['perfil_usuario', 'evidencia', 'conversacion', 'manifestacion', 'afirmacion', 'pensamiento', 'emocion', 'accion', 'resultado'],
       count: 4,
@@ -94,6 +94,8 @@ export async function POST(req: Request) {
     isCrisis ? Promise.resolve('') : creatorMethodPrompt(supabase, user.id),
     isCrisis ? Promise.resolve() : recordDailyReturn(supabase, user.id),
     isCrisis ? Promise.resolve(null) : todayCheckin(supabase, user.id),
+    isCrisis ? Promise.resolve({ data: [] }) : supabase.from('library_items').select('id, kind, title, author, status, external_id')
+      .eq('user_id', user.id).order('updated_at', { ascending: false }).limit(25),
   ]);
   const toolAccess = { youtube: yt.allowed, evidence: ev.allowed, routines: rt.allowed, ritual: ri.allowed };
   // Si SOI abrió la conversación, el saludo va como contexto (algunos proveedores exigen que el historial empiece por el usuario).
@@ -108,10 +110,14 @@ export async function POST(req: Request) {
   const state = detected === 'anxiety' ? 'anxiety' : (checkin ?? detected);
   const director = momentum && state && agent !== 'crisis' ? momentumDirectorPrompt(state, momentum) : '';
   const system = [
-    buildSystemPrompt(agent, { profile, memories, tools: toolAccess, weakestLink: route.weakestLink }),
+    buildSystemPrompt(agent, {
+      profile, memories, tools: toolAccess, weakestLink: route.weakestLink,
+      library: ((libraryRows ?? []) as { id: string; kind: 'book' | 'pdf' | 'exercise'; title: string; author: string | null; status: string; external_id: string | null }[])
+        .map((r) => ({ id: r.id, kind: r.kind, title: r.title, author: r.author, status: r.status, externalId: r.external_id })),
+    }),
     director,
     agent === 'crisis' ? '' : methods,
-    openerText && `TU PRIMER MENSAJE EN ESTA CONVERSACIÓN FUE: "${openerText.replace(/["\n]/g, ' ').slice(0, 400)}". Continúa desde ahí sin repetir el saludo.`,
+    openerText && `TU PRIMER MENSAJE EN ESTA CONVERSACIÓN FUE: "${openerText.replace(/["\n]/g, ' ').slice(0, 900)}". Continúa desde ahí sin repetir el saludo.`,
   ].filter(Boolean).join('\n\n');
   const recent = (first > 0 ? messages.slice(first) : messages).slice(-20);
   const modelMessages = recent[0]?.role === 'assistant' ? recent.slice(1) : recent;

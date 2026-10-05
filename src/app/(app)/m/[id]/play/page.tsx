@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import Link from 'next/link';
 import { getMoment, playableBlocks, resolveVideoBlocks, canRun, enroll } from '@/lib/moments/server';
+import { resolveLibraryBlocks } from '@/lib/moments/library-blocks';
 import { blocksForDay, challengeLength, challengeState } from '@/lib/moments/challenge';
 import { buttonClass } from '@/components/ui/button';
 import { todayISO } from '@/lib/utils';
@@ -41,7 +42,7 @@ export default async function PlayMomentPage({ params }: { params: Promise<{ id:
     challenge = { day: st.currentDay!, total };
     toPlay = blocksForDay(blocks, st.currentDay!);
   }
-  const ready = await resolveVideoBlocks(supabase, user.id, toPlay, access.youtube_embed);
+  const ready = await resolveVideoBlocks(supabase, user.id, await resolveLibraryBlocks(toPlay), access.youtube_embed);
 
   return (
     <MomentPlayer

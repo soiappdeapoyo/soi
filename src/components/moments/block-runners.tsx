@@ -5,6 +5,7 @@ import { Check, Volume2 } from 'lucide-react';
 import { Input, Textarea } from '@/components/ui/input';
 import { SoiPlayer } from '@/components/media/soi-player';
 import { V2Runner } from './block-runners-v2';
+import { BookRunner, DocumentRunner, ExerciseRunner } from './block-runners-library';
 import type { ActionBlock } from '@/config/actions';
 import { cn } from '@/lib/utils';
 
@@ -211,6 +212,9 @@ export function BlockRunner(p: RunnerProps) {
           <p className="relative text-balance text-2xl font-medium">{cfg<{ message: string }>(b).message}</p>
         </div>
       );
+    case 'book': return <BookRunner block={b} output={output} setOutput={setOutput} say={p.say} running={p.running} />;
+    case 'document': return <DocumentRunner block={b} output={output} setOutput={setOutput} say={p.say} running={p.running} />;
+    case 'exercise': return <ExerciseRunner block={b} output={output} setOutput={setOutput} say={p.say} running={p.running} />;
     default:
       return <V2Runner block={b} output={output} setOutput={setOutput} next={p.next} running={p.running} elapsed={p.elapsed} runId={p.runId} />;
   }

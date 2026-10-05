@@ -50,6 +50,17 @@ export function blockSpeech(b: Pick<ActionBlock, 'type' | 'title' | 'config'>): 
       if (n) parts.push(`${n} ${n === 1 ? 'pregunta' : 'preguntas'}.`);
       break;
     }
+    case 'book': {
+      const by = str(c.author) ? ` de ${str(c.author)}` : '';
+      parts.push(c.mode === 'read' ? `Lee ${num(c.pages, 10)} páginas de ${str(c.title)}${by}.` : `Ideas clave de ${str(c.title)}${by}.`);
+      break;
+    }
+    case 'document': parts.push(`Lee el documento ${str(c.title)}.`, str(c.prompt)); break;
+    case 'exercise': {
+      const sets = num(c.sets, 3);
+      parts.push(`${str(c.name)}: ${sets} series de ${c.seconds ? `${num(c.seconds, 30)} segundos` : `${num(c.reps, 10)} repeticiones`}${num(c.rest, 30) ? `, con ${num(c.rest, 30)} segundos de descanso` : ''}.`);
+      break;
+    }
     default: break;
   }
   return { text: parts.map((p) => p.trim()).filter(Boolean).map(sentence).join(' '), slow };

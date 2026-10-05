@@ -41,3 +41,15 @@ export async function POST(req: Request) {
   if (error) return Response.json({ ok: false, message: 'No se pudo guardar.' }, { status: 500 });
   return Response.json({ ok: true, id: data.id });
 }
+
+/** Mis elementos de la biblioteca (para elegirlos en el constructor). ?kind=pdf|book|exercise */
+export async function GET(req: Request) {
+  const { supabase, user } = await getSessionUser();
+  if (!user) return new Response('No autorizado', { status: 401 });
+  const kind = new URL(req.url).searchParams.get('kind');
+  let q = supabase.from('library_items').select('id, kind, title, author, cover_url, external_id, metadata').eq('user_id', user.id)
+    .order('updated_at', { ascending: false }).limit(100);
+  if (kind === 'pdf' || kind === 'book' || kind === 'exercise') q = q.eq('kind', kind);
+  const { data } = await q;
+  return Response.json({ items: data ?? [] });
+}

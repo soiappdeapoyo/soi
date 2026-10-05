@@ -9,6 +9,10 @@ import { loadMyMoments, filterMyMoments, MY_FILTERS, type MyMomentsFilter } from
 import { IdeasSection } from '@/components/social/feed-sections';
 import { ProfileTabs, type ProfileTab } from '@/components/profile/profile-tabs';
 import { MomentFlowCard } from '@/components/moments/moment-flow-card';
+import { MyMomentsGrid } from '@/components/moments/my-moments-grid';
+import { summarizeRuns, type Progress, type RunRow } from '@/lib/rewards';
+import type { MomentFlow } from '@/lib/moments/types';
+import { Flame, TrendingUp } from 'lucide-react';
 import { BookSearch } from '@/components/library/book-search';
 import { PdfUpload } from '@/components/library/pdf-upload';
 import { ExerciseAnimation } from '@/components/library/exercise-animation';
@@ -28,8 +32,8 @@ const TABS: ProfileTab[] = [
  * Mi Vida: todo lo que guardaste, para volver con facilidad.
  * Moments (continúa + colección con portada) · Biblioteca (libros, PDFs, ejercicios) · Ideas · Mi sistema.
  */
-export default async function MiVidaPage({ searchParams }: { searchParams: Promise<{ tab?: string; filtro?: string }> }) {
-  const { tab: t, filtro } = await searchParams;
+export default async function MiVidaPage({ searchParams }: { searchParams: Promise<{ tab?: string; filtro?: string; ordenar?: string }> }) {
+  const { tab: t, filtro, ordenar } = await searchParams;
   const tab = TABS.some((x) => x.id === t) ? t! : 'moments';
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
@@ -42,7 +46,7 @@ export default async function MiVidaPage({ searchParams }: { searchParams: Promi
       </header>
       <ProfileTabs tabs={TABS} active={tab} base="/mi-vida" />
       <div className="pt-5">
-        {tab === 'moments' && <MomentsTab supabase={supabase} userId={user.id} filter={(MY_FILTERS.some((f) => f.id === filtro) ? filtro : 'todos') as MyMomentsFilter} />}
+        {tab === 'moments' && <MomentsTab supabase={supabase} userId={user.id} filter={(MY_FILTERS.some((f) => f.id === filtro) ? filtro : 'todos') as MyMomentsFilter} tidy={ordenar === '1'} />}
         {tab === 'biblioteca' && <LibraryTab supabase={supabase} userId={user.id} />}
         {tab === 'ideas' && <IdeasSection supabase={supabase} userId={user.id} />}
         {tab === 'sistema' && <SystemTab supabase={supabase} userId={user.id} />}
@@ -53,17 +57,44 @@ export default async function MiVidaPage({ searchParams }: { searchParams: Promi
 
 type Sb = Awaited<ReturnType<typeof getSessionUser>>['supabase'];
 
-async function MomentsTab({ supabase, userId, filter }: { supabase: Sb; userId: string; filter: MyMomentsFilter }) {
-  const [data, { data: legacy }] = await Promise.all([
+async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; userId: string; filter: MyMomentsFilter; tidy: boolean }) {
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const [data, { data: legacy }, { data: runs }, profile] = await Promise.all([
     loadMyMoments(supabase, userId),
     supabase.from('blueprint_implementations').select('id, status, completed_steps, adapted_steps, blueprint:soi_blueprints(title)')
       .eq('user_id', userId).order('last_activity_at', { ascending: false }).limit(5),
+    supabase.from('moment_runs').select('moment_id, moment_slug, started_at, completed_at, mood_before, mood_after, helped')
+      .eq('user_id', userId).gte('started_at', since).order('started_at', { ascending: false }).limit(200),
+    getProfile(userId),
   ]);
   const list = filterMyMoments(data, filter);
+  const progress = summarizeRuns((runs ?? []) as RunRow[], profile?.streak_current ?? 0);
+
+  // Moments propios que llevan 3+ semanas sin vivirse (y existen hace más de una semana).
+  const recent = new Set((runs ?? []).filter((r) => Date.now() - Date.parse(r.started_at as string) < 21 * 86_400_000).map((r) => r.moment_id as string | null).filter(Boolean));
+  const ownIds = new Set([...data.mine, ...data.saved].map((m) => m.id));
+  const isStale = (m: MomentFlow) => ownIds.has(m.id) && !recent.has(m.id) && Date.now() - Date.parse(m.created_at) > 7 * 86_400_000;
+  const stale = [...data.mine, ...data.saved].filter(isStale);
+  const tooMany = (ownIds.size >= 6 && stale.length >= 4) || stale.length >= 8;
+  const quickPick = [...stale].sort((a, b) => a.required_minutes - b.required_minutes)[0];
+  const week = weekDots((runs ?? []) as RunRow[]);
   const older = (legacy ?? []) as unknown as { id: string; status: string; completed_steps: number[]; adapted_steps: unknown[]; blueprint: { title: string } | null }[];
 
   return (
     <div className="flex flex-col gap-7">
+      <WeekCard progress={progress} week={week} />
+
+      {tooMany && quickPick && (
+        <section aria-label="Aviso" className="rounded-[20px] bg-soi-gold/15 p-4 shadow-[inset_0_0_0_1px_rgb(212_175_55/0.35)]">
+          <p className="font-medium">Tienes {ownIds.size} Moments y {stale.length} llevan 3 semanas sin vivirse.</p>
+          <p className="mt-1 text-sm text-soi-muted">No necesitas más Moments: necesitas vivir uno. El que empiezas hoy vale más que diez guardados.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href={`/m/${quickPick.id}/play`} className={buttonClass('primary', 'sm')}>Elige uno por mí · {quickPick.required_minutes} min</Link>
+            <Link href="/mi-vida?ordenar=1" scroll={false} className={buttonClass('outline', 'sm')}>Ordenar mi colección</Link>
+          </div>
+        </section>
+      )}
+
       {data.continue.length > 0 && (
         <section aria-labelledby="cont">
           <h2 id="cont" className="mb-2 text-sm font-medium text-soi-muted">Continúa donde quedaste</h2>
@@ -92,9 +123,8 @@ async function MomentsTab({ supabase, userId, filter }: { supabase: Sb; userId: 
           ))}
         </nav>
         {list.length ? (
-          <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3">
-            {list.map((m) => <li key={m.id}><MomentFlowCard m={m} variant="tile" /></li>)}
-          </ul>
+          <MyMomentsGrid key={tidy ? 'tidy' : filter} startSelecting={tidy}
+            items={list.map((m) => ({ moment: m, deletable: ownIds.has(m.id), stale: isStale(m) }))} />
         ) : (
           <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">
             {filter === 'guardados' ? 'Cuando guardes tu versión de un Moment de Impulso, aparecerá aquí.'
@@ -252,5 +282,51 @@ function Node({ n }: { n: LifeNode }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** Los últimos 7 días: cuáles tuvieron al menos un Moment completado (de más antiguo a hoy). */
+function weekDots(runs: RunRow[]) {
+  const days = new Set(runs.filter((r) => r.completed_at).map((r) => (r.completed_at as string).slice(0, 10)));
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.now() - (6 - i) * 86_400_000);
+    return { key: d.toISOString().slice(0, 10), label: d.toLocaleDateString('es', { weekday: 'narrow' }), done: days.has(d.toISOString().slice(0, 10)) };
+  });
+}
+
+/**
+ * Tu semana: la recompensa visible. Días con Moment, racha y cuánto te sube el ánimo.
+ * Sin castigo: un día vacío no se marca en rojo, solo queda esperando.
+ */
+function WeekCard({ progress: p, week }: { progress: Progress; week: { key: string; label: string; done: boolean }[] }) {
+  const active = week.filter((d) => d.done).length;
+  const msg = active === 0
+    ? 'Tu semana empieza con un solo Moment. Hoy puede ser el primero.'
+    : p.weekRuns > p.prevWeekRuns
+      ? `¡Vas mejor que la semana pasada! ${p.weekRuns} ${p.weekRuns === 1 ? 'Moment vivido' : 'Moments vividos'}.`
+      : `${p.weekRuns} ${p.weekRuns === 1 ? 'Moment vivido' : 'Moments vividos'} esta semana. Cada uno cuenta.`;
+  return (
+    <section aria-label="Tu semana" className="rounded-[20px] bg-white p-4 shadow-ring">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[15px] font-medium">{msg}</p>
+        {p.streak > 0 && <span className="nums inline-flex shrink-0 items-center gap-1 text-sm font-medium text-orange-600"><Flame className="h-4 w-4" aria-hidden="true" />{p.streak}</span>}
+      </div>
+      <ol className="mt-3 grid grid-cols-7 gap-1.5" aria-label={`${active} de 7 días con un Moment`}>
+        {week.map((d, i) => (
+          <li key={d.key} className="flex flex-col items-center gap-1">
+            <span className={cn('flex h-8 w-8 items-center justify-center rounded-full text-xs', d.done ? 'bg-soi-accent-fill text-white' : i === 6 ? 'shadow-[inset_0_0_0_1.5px_var(--color-soi-accent-fill)] text-soi-accent' : 'bg-soi-sidebar text-soi-subtle')}>
+              {d.done ? '✓' : ''}
+            </span>
+            <span className="text-[11px] uppercase text-soi-subtle">{d.label}</span>
+          </li>
+        ))}
+      </ol>
+      {(p.moodLift !== null && p.moodLift > 0) || (p.daysToMilestone !== null && p.streak > 0) ? (
+        <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-soi-muted">
+          {p.moodLift !== null && p.moodLift > 0 && <span className="inline-flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5 text-soi-accent" aria-hidden="true" />Tu ánimo sube {p.moodLift.toLocaleString('es')} después de cada Moment</span>}
+          {p.daysToMilestone !== null && p.streak > 0 && <span className="nums">A {p.daysToMilestone} {p.daysToMilestone === 1 ? 'día' : 'días'} del hito de {p.nextMilestone} 🛡️</span>}
+        </p>
+      ) : null}
+    </section>
   );
 }

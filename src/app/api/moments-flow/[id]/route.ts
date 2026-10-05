@@ -3,6 +3,8 @@ import { getSessionUser } from '@/lib/supabase/server';
 import { MomentKindSchema } from '@/config/actions';
 import { validBlocks, textOfBlocks, dbError } from '@/lib/moments/input';
 import { moderateFields } from '@/lib/social/guard';
+import { ownsDocuments, publishDocuments } from '@/lib/moments/library-blocks';
+import type { ActionBlock } from '@/config/actions';
 
 const Patch = z.object({
   title: z.string().trim().min(3).max(120).optional(),
@@ -30,9 +32,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const v = validBlocks(p.blocks);
     if (!v.blocks) return Response.json({ ok: false, message: v.message }, { status: 400 });
     blocks = v.blocks;
+    if (!(await ownsDocuments(user.id, blocks))) return Response.json({ ok: false, message: 'Solo puedes usar documentos de tu biblioteca.' }, { status: 403 });
   }
   if (p.status === 'published') {
     const { data: full } = await supabase.rpc('get_moment_blocks', { p_id: id });
+    // Documentos privados de la biblioteca → copia pública del Moment.
+    const pub = await publishDocuments(user.id, (blocks ?? full ?? []) as ActionBlock[]);
+    if (pub.error) return Response.json({ ok: false, message: pub.error }, { status: 400 });
+    if (pub.changed) blocks = pub.blocks;
     const blocked = await moderateFields([p.title ?? current.title, p.objective ?? current.objective, current.source,
       ...textOfBlocks((blocks ?? full ?? []) as { title: string; config: Record<string, unknown> }[])]);
     if (blocked) return blocked;

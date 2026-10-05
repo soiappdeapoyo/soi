@@ -11,12 +11,13 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Icon } from '@/components/ui/icon';
-import { ACTIONS, ACTION_TYPES, MOMENT_KINDS, defaultBlock, type ActionBlock, type ActionType, type MomentKind } from '@/config/actions';
+import { ACTIONS, ACTION_TYPES, MOMENT_KINDS, defaultBlock, exerciseSeconds, type ActionBlock, type ActionType, type MomentKind } from '@/config/actions';
 import { CREATOR_REVENUE_SHARE, formatPrice } from '@/config/creators';
 import { cn } from '@/lib/utils';
 import { AudioField, QuizEditor } from './builder-fields';
+import { BookField, DocumentField, ExerciseField } from './builder-library-fields';
 
-type Field = { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'lines' | 'select' | 'time' | 'audio' | 'quiz'; options?: { value: string; label: string }[]; min?: number; max?: number };
+type Field = { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'lines' | 'select' | 'time' | 'audio' | 'quiz' | 'book' | 'document' | 'exercise'; options?: { value: string; label: string }[]; min?: number; max?: number };
 
 const FIELDS: Record<ActionType, Field[]> = {
   breathing: [{ key: 'inhale', label: 'Inhalar (s)', kind: 'number', min: 2, max: 8 }, { key: 'exhale', label: 'Exhalar (s)', kind: 'number', min: 2, max: 10 }],
@@ -36,6 +37,9 @@ const FIELDS: Record<ActionType, Field[]> = {
   rest: [{ key: 'instruction', label: 'Instrucción', kind: 'text' }, { key: 'variant', label: 'Tipo', kind: 'select', options: [{ value: 'rest', label: 'Descanso' }, { value: 'stretching', label: 'Estiramiento' }] }],
   celebration: [{ key: 'message', label: 'Mensaje', kind: 'text' }],
   next_step: [{ key: 'instruction', label: 'Instrucción', kind: 'text' }],
+  book: [{ key: 'book', label: 'Libro', kind: 'book' }],
+  document: [{ key: 'document', label: 'Documento', kind: 'document' }],
+  exercise: [{ key: 'exercise', label: 'Ejercicio', kind: 'exercise' }],
   canvas: [{ key: 'prompt', label: 'Qué dibujar', kind: 'text' }],
   mind_map: [{ key: 'center', label: 'Idea central', kind: 'text' }, { key: 'branches', label: 'Ramas', kind: 'number', min: 2, max: 8 }],
   quiz: [{ key: 'questions', label: 'Preguntas', kind: 'quiz' }],
@@ -103,9 +107,17 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
   const minutes = useMemo(() => blocks.reduce((a, b) => a + (b.seconds ? b.seconds / 60 : b.minutes), 0), [blocks]);
   const set = (i: number, patch: Partial<ActionBlock>) => setBlocks((bs) => bs.map((b, j) => (j === i ? { ...b, ...patch } : b)));
   // Pomodoro y estiramiento: la duración del bloque se deriva de su configuración.
-  const setCfg = (i: number, key: string, value: unknown) => setBlocks((bs) => bs.map((b, j) => {
+  const setCfg = (i: number, key: string, value: unknown) => patchCfg(i, { [key]: value });
+  const patchCfg = (i: number, patch: Record<string, unknown>) => setBlocks((bs) => bs.map((b, j) => {
     if (j !== i) return b;
-    const config = { ...b.config, [key]: value };
+    const config = Object.fromEntries(Object.entries({ ...b.config, ...patch }).filter(([, v]) => v !== undefined));
+    if (b.type === 'exercise') {
+      const secs = exerciseSeconds(config as { sets?: number; reps?: number; seconds?: number; rest?: number });
+      const title = patch.name && (b.title === ACTIONS.exercise.label || b.title === b.config.name) ? String(patch.name) : b.title;
+      return { ...b, title, config, minutes: Math.max(1, Math.round(secs / 60)), seconds: secs };
+    }
+    if (b.type === 'book' && patch.title && (b.title === ACTIONS.book.label || b.title === b.config.title)) return { ...b, title: String(patch.title).slice(0, 120), config };
+    if (b.type === 'document' && patch.title && (b.title === ACTIONS.document.label || b.title === b.config.title)) return { ...b, title: String(patch.title).slice(0, 120), config };
     if (b.type === 'pomodoro') {
       const c = config as { focus: number; rest: number; cycles: number };
       return { ...b, config, minutes: c.focus * c.cycles + c.rest * Math.max(0, c.cycles - 1), seconds: undefined };
@@ -272,8 +284,8 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                     const id = `${b.id}-${f.key}`;
                     const v = b.config[f.key];
                     return (
-                      <div key={f.key} className={cn(['textarea', 'lines', 'quiz', 'audio'].includes(f.kind) ? 'sm:col-span-2' : '')}>
-                        <Label htmlFor={id} className="text-xs text-soi-muted">{f.label}</Label>
+                      <div key={f.key} className={cn(['textarea', 'lines', 'quiz', 'audio', 'book', 'document', 'exercise'].includes(f.kind) ? 'sm:col-span-2' : '')}>
+                        {!['book', 'document', 'exercise'].includes(f.kind) && <Label htmlFor={id} className="text-xs text-soi-muted">{f.label}</Label>}
                         {f.kind === 'textarea' ? <Textarea id={id} rows={2} value={String(v ?? '')} onChange={(e) => setCfg(i, f.key, e.target.value)} />
                           : f.kind === 'lines' ? <Textarea id={id} rows={3} value={((v as string[]) ?? []).join('\n')} onChange={(e) => setCfg(i, f.key, e.target.value.split('\n').slice(0, 10))} />
                           : f.kind === 'number' ? <Input id={id} type="number" min={f.min} max={f.max} value={Number(v ?? f.min ?? 1)} className="nums"
@@ -282,6 +294,9 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                           : f.kind === 'time' ? <Input id={id} type="time" value={String(v ?? '07:00')} onChange={(e) => setCfg(i, f.key, e.target.value)} className="nums" />
                           : f.kind === 'audio' ? <AudioField id={id} value={v as string | undefined} onChange={(url) => setCfg(i, f.key, url)} />
                           : f.kind === 'quiz' ? <QuizEditor value={(v as QuizQ[]) ?? []} onChange={(qs) => setCfg(i, f.key, qs)} />
+                          : f.kind === 'book' ? <BookField id={id} value={b.config} onChange={(patch) => patchCfg(i, patch)} />
+                          : f.kind === 'document' ? <DocumentField id={id} value={b.config} onChange={(patch) => patchCfg(i, patch)} />
+                          : f.kind === 'exercise' ? <ExerciseField id={id} value={b.config} onChange={(patch) => patchCfg(i, patch)} />
                           : <Input id={id} value={String(v ?? '')} onChange={(e) => setCfg(i, f.key, e.target.value)} />}
                       </div>
                     );

@@ -149,12 +149,27 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
               ttsAllowed={ttsAllowed}
               onSpeak={speakText}
               practice={m.id === OPENER_ID ? opener?.practice : null}
+              proposal={m.id === OPENER_ID ? opener?.proposal : null}
               onReflected={(text, video) => {
                 stickRef.current = true;
                 sendMessage({ text: `Mi reflexión de «${video.title}»: ${text}` });
               }}
             />
           ))}
+          {/* Respuestas rápidas del saludo: un toque y SOI ajusta (sin escribir). Solo antes del primer mensaje. */}
+          {opener && messages.length === 1 && messages[0]?.id === OPENER_ID && opener.replies.length > 0 && (
+            <li className="-mt-1 flex flex-wrap gap-2" aria-label="Respuestas rápidas">
+              {opener.replies.map((r) => r.href ? (
+                <Link key={r.label} href={r.href} className="press inline-flex h-9 items-center rounded-full bg-soi-ink px-3.5 text-sm text-white">{r.label}</Link>
+              ) : (
+                <button key={r.label} type="button" disabled={!canSend && !detectCrisis(r.text ?? '')}
+                  onClick={() => { stickRef.current = true; track('opener_reply', { label: r.label }); sendMessage({ text: r.text ?? r.label }); }}
+                  className="press inline-flex h-9 items-center rounded-full bg-white px-3.5 text-sm text-soi-ink shadow-ring hover:shadow-soft disabled:opacity-40">
+                  {r.label}
+                </button>
+              ))}
+            </li>
+          )}
           {status === 'submitted' && (
             <li className="flex items-center gap-2 py-1 text-sm text-soi-muted" aria-label="SOI está escribiendo">
               <span aria-hidden="true" className="h-2 w-2 animate-thinking rounded-full bg-soi-accent" />

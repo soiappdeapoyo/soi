@@ -1,5 +1,6 @@
 import { getSessionUser } from '@/lib/supabase/server';
 import { MomentInput, validBlocks, textOfBlocks, dbError } from '@/lib/moments/input';
+import { ownsDocuments, publishDocuments } from '@/lib/moments/library-blocks';
 import { moderateFields } from '@/lib/social/guard';
 import { OFFICIAL_MOMENTS } from '@/config/official-moments';
 
@@ -10,8 +11,15 @@ export async function POST(req: Request) {
   const parsed = MomentInput.safeParse(await req.json());
   if (!parsed.success) return Response.json({ ok: false, message: parsed.error.issues[0]?.message ?? 'Revisa los campos.' }, { status: 400 });
   const m = parsed.data;
-  const { blocks, message } = validBlocks(m.blocks);
-  if (!blocks) return Response.json({ ok: false, message }, { status: 400 });
+  const v = validBlocks(m.blocks);
+  if (!v.blocks) return Response.json({ ok: false, message: v.message }, { status: 400 });
+  if (!(await ownsDocuments(user.id, v.blocks))) return Response.json({ ok: false, message: 'Solo puedes usar documentos de tu biblioteca.' }, { status: 403 });
+  let blocks = v.blocks;
+  if (m.status === 'published') {
+    const pub = await publishDocuments(user.id, blocks);
+    if (pub.error) return Response.json({ ok: false, message: pub.error }, { status: 400 });
+    blocks = pub.blocks;
+  }
 
   if (m.status === 'published') {
     const blocked = await moderateFields([m.title, m.objective, m.source, ...textOfBlocks(blocks)]);

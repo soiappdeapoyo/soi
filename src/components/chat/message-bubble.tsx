@@ -9,10 +9,12 @@ import { SoiPlayer, type SoiVideo } from '@/components/media/soi-player';
 import { PracticeCard, type Practice } from './practice-card';
 import { ActionCardView, type ActionCardResult } from './action-card-view';
 import { MomentProposal, type MomentProposalResult } from './moment-proposal';
+import { OpenerProposal } from './opener-proposal';
+import type { OpenerProposal as OpenerProposalData } from '@/lib/opener';
 import { cn } from '@/lib/utils';
 
 type Reflect = (text: string, video: SoiVideo) => void;
-type Props = { message: UIMessage; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null; onReflected?: Reflect };
+type Props = { message: UIMessage; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null; proposal?: OpenerProposalData | null; onReflected?: Reflect };
 
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -82,7 +84,7 @@ function ToolResult({ part, onReflected }: { part: ToolPart; onReflected?: Refle
  * Chat (DESIGN.md §4): el mensaje del usuario aparece al instante (sin animación de entrada);
  * el streaming del asistente no anima tokens: solo crece el texto.
  */
-export function MessageBubble({ message, ttsAllowed, onSpeak, practice, onReflected }: Props) {
+export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal, onReflected }: Props) {
   const mine = message.role === 'user';
   const text = messageText(message);
   const tools = message.parts.filter((p) => p.type.startsWith('tool-') && (p as ToolPart).state === 'output-available') as ToolPart[];
@@ -100,6 +102,7 @@ export function MessageBubble({ message, ttsAllowed, onSpeak, practice, onReflec
         {tools.map((t) => <ToolResult key={t.toolCallId} part={t} onReflected={onReflected} />)}
 
         {practice && <PracticeCard practice={practice} />}
+        {proposal && <OpenerProposal p={proposal} />}
 
         {!mine && ttsAllowed && text && (
           <button type="button" onClick={() => onSpeak(text)} className="press tap-target mt-2 inline-flex items-center gap-1 rounded-md text-xs text-soi-muted hover:text-soi-ink" aria-label="Escuchar respuesta">
