@@ -13,6 +13,8 @@ import { MyMomentsGrid } from '@/components/moments/my-moments-grid';
 import { IdentitySetup } from '@/components/identity/identity-setup';
 import { WeeklyStory } from '@/components/identity/weekly-story';
 import { loadIdentityView } from '@/lib/identity/view';
+import { intensityLabel, loadBattles } from '@/lib/battles';
+import { ENEMIES } from '@/config/enemies';
 import { DayPlanner } from '@/components/moments/day-planner';
 import { loadDayPlan, refOf, suggestForPart } from '@/lib/day-plan';
 import { OFFICIAL_MOMENTS } from '@/config/official-moments';
@@ -31,6 +33,7 @@ const TABS: ProfileTab[] = [
   { id: 'dia', label: 'Mi día' },
   { id: 'moments', label: 'Moments' },
   { id: 'nuevo-yo', label: 'Mi Nuevo Yo' },
+  { id: 'batallas', label: 'Batallas' },
   { id: 'biblioteca', label: 'Biblioteca' },
 ];
 
@@ -57,6 +60,7 @@ export default async function MiVidaPage({ searchParams }: { searchParams: Promi
         {tab === 'moments' && <MomentsTab supabase={supabase} userId={user.id} filter={(MY_FILTERS.some((f) => f.id === filtro) ? filtro : 'todos') as MyMomentsFilter} tidy={ordenar === '1'} />}
         {tab === 'biblioteca' && <LibraryTab supabase={supabase} userId={user.id} />}
         {tab === 'nuevo-yo' && <NewSelfTab supabase={supabase} userId={user.id} />}
+        {tab === 'batallas' && <BattlesTab supabase={supabase} userId={user.id} />}
       </div>
     </div>
   );
@@ -433,6 +437,117 @@ async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }
             </ol>
           ) : <p className="text-sm text-soi-muted">Tu historia empieza con tu primer Moment.</p>}
         </div>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * Batallas: SOI no lucha contra la persona; lucha JUNTO a ella contra sus enemigos interiores
+ * (patrones, no diagnósticos). Victorias, enemigo más frecuente, mapa de la Fortaleza Interior y jefes por meta.
+ */
+async function BattlesTab({ supabase, userId }: { supabase: Sb; userId: string }) {
+  const profile = await getProfile(userId);
+  const b = await loadBattles(supabase, userId, profile, profile?.timezone ?? 'America/Mexico_City');
+  const maxI = Math.max(2, ...b.active.map((e) => e.intensity));
+  const maxA = Math.max(1, ...b.allies.map((a) => a.level.level));
+  const seen = new Set(b.active.map((e) => e.enemy.id));
+
+  return (
+    <div className="flex flex-col gap-8">
+      <p className="rounded-[20px] bg-soi-ink p-4 text-[15px] leading-relaxed text-white">
+        No eres tus pensamientos, ni tus emociones, ni tus patrones automáticos. Los enemigos interiores aparecen en todos nosotros;
+        la diferencia está en reconocerlos y entrenar a tus aliados para responder de otra manera.
+      </p>
+
+      <section aria-labelledby="bt-won">
+        <h2 id="bt-won" className="mb-2 text-sm font-medium text-soi-muted">En los últimos 30 días</h2>
+        {b.defeated.length ? (
+          <div className="rounded-[20px] bg-white p-4 shadow-ring">
+            <p className="text-sm font-medium">Has derrotado:</p>
+            <ul className="mt-2 flex flex-col gap-1">
+              {b.defeated.map((d) => (
+                <li key={d.enemy.id} className="nums flex items-center gap-2 text-[15px]"><Check className="h-4 w-4 text-soi-accent" aria-hidden="true" />{d.enemy.name} ({d.victories30} {d.victories30 === 1 ? 'vez' : 'veces'})</li>
+              ))}
+            </ul>
+            {b.mostFrequent && <p className="mt-3 text-sm text-soi-muted">El enemigo que más aparece sigue siendo: <Link href={`/mi-vida/batallas/${b.mostFrequent.enemy.id}`} className="font-medium text-soi-ink underline underline-offset-4">{b.mostFrequent.enemy.name}</Link>.</p>}
+          </div>
+        ) : (
+          <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">
+            {b.totalEvents30 ? `SOI notó ${b.totalEvents30} ${b.totalEvents30 === 1 ? 'vez' : 'veces'} que un enemigo intentó ganar terreno. Cada Moment que entrena a sus aliados cuenta como victoria.` : 'Cuando un enemigo intente ganar terreno (en tus conversaciones con SOI), aparecerá aquí junto con la forma de vencerlo.'}
+          </p>
+        )}
+      </section>
+
+      <section aria-labelledby="bt-map">
+        <h2 id="bt-map" className="mb-2 text-sm font-medium text-soi-muted">Tu Fortaleza Interior</h2>
+        <div className="grid gap-3 rounded-[20px] bg-white p-4 shadow-ring sm:grid-cols-2">
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soi-accent">Aliados</p>
+            {b.allies.length ? (
+              <ul className="flex flex-col gap-1.5">{b.allies.slice(0, 8).map((a) => (
+                <li key={a.name} className="grid grid-cols-[6.5rem_1fr] items-center gap-2 text-sm"><span className="truncate">{a.name}</span>
+                  <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-accent-fill" style={{ transform: `scaleX(${Math.min(1, a.level.level / maxA)})` }} /></span></li>
+              ))}</ul>
+            ) : <p className="text-sm text-soi-muted">Se fortalecen con cada Moment.</p>}
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soi-danger">Enemigos</p>
+            {b.active.length ? (
+              <ul className="flex flex-col gap-1.5">{b.active.slice(0, 8).map((e) => (
+                <li key={e.enemy.id}>
+                  <Link href={`/mi-vida/batallas/${e.enemy.id}`} className="press grid grid-cols-[6.5rem_1fr] items-center gap-2 text-sm"><span className="truncate">{e.enemy.name.replace(/^(El|La) /, '')}</span>
+                    <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-danger/70" style={{ transform: `scaleX(${Math.min(1, e.intensity / maxI)})` }} /></span></Link>
+                </li>
+              ))}</ul>
+            ) : <p className="text-sm text-soi-muted">Ningún enemigo activo ahora.</p>}
+          </div>
+          <p className="text-xs text-soi-subtle sm:col-span-2">No representa quién eres: es el estado actual de tu entrenamiento.</p>
+        </div>
+      </section>
+
+      {b.bosses.length > 0 && (
+        <section aria-labelledby="bt-boss">
+          <h2 id="bt-boss" className="mb-2 text-sm font-medium text-soi-muted">Batallas importantes</h2>
+          <ul className="flex flex-col gap-2">
+            {b.bosses.map((boss) => {
+              const max = Math.max(...boss.top.map((t) => t.count));
+              return (
+                <li key={boss.goal} className="rounded-[20px] bg-white p-4 shadow-ring">
+                  <p className="text-xs text-soi-muted">Meta</p>
+                  <p className="font-medium">{boss.goal}</p>
+                  <ul className="mt-3 flex flex-col gap-1.5">{boss.top.map((t) => (
+                    <li key={t.enemy.id} className="grid grid-cols-[7rem_1fr] items-center gap-2 text-sm"><span className="truncate">{t.enemy.name.replace(/^(El|La) /, '')}</span>
+                      <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-danger/70" style={{ transform: `scaleX(${t.count / max})` }} /></span></li>
+                  ))}</ul>
+                  <p className="mt-3 text-sm text-soi-muted">En esta meta, {boss.top.slice(0, 2).map((t) => t.enemy.name).join(' y ')} {boss.top.length > 1 ? 'son los que más aparecen' : 'es el que más aparece'}. Podemos preparar un plan para enfrentarlos.</p>
+                  <div className="mt-2"><Link href={`/mi-vida/batallas/${boss.top[0]!.enemy.id}`} className="text-sm font-medium text-soi-accent underline underline-offset-4">Ver cómo vencer a {boss.top[0]!.enemy.name}</Link></div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      <section aria-labelledby="bt-all">
+        <h2 id="bt-all" className="mb-2 text-sm font-medium text-soi-muted">Los enemigos interiores</h2>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {[...b.active.map((e) => e.enemy), ...ENEMIES.filter((e) => !seen.has(e.id))].map((enemy) => {
+            const st = b.enemies.find((x) => x.enemy.id === enemy.id)!;
+            return (
+              <li key={enemy.id}>
+                <Link href={`/mi-vida/batallas/${enemy.id}`} className="press block h-full rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="font-medium">{enemy.name}</p>
+                    <p className={st.intensity > 0 ? 'text-xs font-medium text-soi-danger' : 'text-xs text-soi-subtle'}>{intensityLabel(st.intensity)}</p>
+                  </div>
+                  <p className="mt-0.5 text-sm italic text-soi-muted">«{enemy.whisper}»</p>
+                  {st.pattern && <p className="mt-1 text-xs text-soi-muted">{st.pattern}</p>}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </section>
     </div>
   );

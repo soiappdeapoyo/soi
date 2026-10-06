@@ -12,6 +12,8 @@ import { ownsDocuments, resolveLibraryBlocks } from '@/lib/moments/library-block
 import { enrichGuidedBlocks } from '@/lib/moments/enrich';
 import { generateAutosuggestion, generateGuided, personalContext, saveGuided } from './content-agents';
 import { HillPatchSchema, loadHillMemory, saveHillMemory } from './hill-memory';
+import { ENEMY_IDS } from '@/config/enemies';
+import { recordEnemy } from '@/lib/battles';
 import type { UserProfile } from '@/types/database';
 
 type Ctx = {
@@ -162,6 +164,16 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
           locked: access.routines === false,
         };
       },
+    }),
+
+    registerEnemy: tool({
+      description: 'Registra en silencio que apareció un enemigo interior (un patrón, no un diagnóstico) cuando lo reconoces en lo que cuenta la persona. Incluye sus palabras como evidencia y, si aplica, la meta en juego.',
+      inputSchema: z.object({
+        enemy: z.enum(ENEMY_IDS),
+        evidence: z.string().max(300).describe('La frase de la persona que lo muestra'),
+        goal: z.string().max(160).optional().describe('La meta afectada, si la hay'),
+      }),
+      execute: async ({ enemy, evidence, goal }) => ({ ok: await recordEnemy(userId, enemy, { source: 'chat', evidence, goal }) }),
     }),
 
     updateHillPlan: tool({

@@ -27,7 +27,7 @@ describe('niveles y capacidades', () => {
     expect(levelFor(1000).progress).toBeLessThan(1);
   });
   it('capacidades por reglas: tipo de Moment + acciones más presentes', () => {
-    expect(capacitiesByRules('recovery', ['breathing', 'meditation', 'writing'])).toEqual(['Calma', 'Claridad']);
+    expect(capacitiesByRules('recovery', ['breathing', 'meditation', 'writing'])).toEqual(['Calma', 'Paciencia']);
     expect(capacitiesByRules('growth', ['exercise', 'exercise', 'pomodoro'])).toContain('Salud');
   });
 });

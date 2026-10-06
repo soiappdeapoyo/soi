@@ -15,6 +15,8 @@ import { todayCheckin } from '@/lib/today';
 import { creatorMethodPrompt } from '@/lib/ai/creator-method';
 import { timeContextPrompt } from '@/lib/time-of-day';
 import { loadHillMemory } from '@/lib/ai/hill-memory';
+import { detectEnemies } from '@/config/enemies';
+import { recordEnemy } from '@/lib/battles';
 
 export const maxDuration = 60;
 
@@ -126,6 +128,9 @@ export async function POST(req: Request) {
   ].filter(Boolean).join('\n\n');
   const recent = (first > 0 ? messages.slice(first) : messages).slice(-20);
   const modelMessages = recent[0]?.role === 'assistant' ? recent.slice(1) : recent;
+
+  // Batallas: respaldo sin IA por frases típicas ("mañana lo hago", "¿y si sale mal?"…). La IA también puede registrar.
+  if (!isCrisis) for (const enemy of detectEnemies(text)) void recordEnemy(user.id, enemy, { source: 'signals', evidence: text.slice(0, 300) }).catch(() => {});
 
   // 5) Persistir mensaje del usuario
   await supabase.from('messages').insert({

@@ -4,6 +4,7 @@ import type { UserProfile } from '@/types/database';
 import { renderTemplate } from './template';
 import { AGENT_SPECS, CRISIS_PROMPT } from './agent-specs';
 import { hillPrompt, type HillMemory } from './napoleon-hill';
+import { ENEMIES } from '@/config/enemies';
 
 export type PromptContext = {
   profile?: Pick<UserProfile, 'display_name' | 'archetype' | 'dominant_emotion' | 'goals' | 'blockers' | 'weakest_link' | 'ritual_phase' | 'country'> & Partial<Pick<UserProfile, 'onboarding_completed' | 'available_minutes'>> | null;
@@ -65,7 +66,7 @@ export function buildSystemPrompt(agentId: AgentId, ctx: PromptContext = {}): st
     : '';
 
   const tools = `HERRAMIENTAS:
-- updateProfile, scheduleReminder, suggestPractice, createMoment, createGuidedContent, captureIdea y updateHillPlan: disponibles.
+- updateProfile, scheduleReminder, suggestPractice, createMoment, createGuidedContent, captureIdea, updateHillPlan y registerEnemy: disponibles.
 - Meditar, manifestar o afirmar SIEMPRE con contenido: en un Moment usa bloques meditation (guion), manifestation (deseo, asunción, escena) o affirmation (varias afirmaciones); nunca un temporizador vacío que solo diga "medita" o "manifiesta". Si la persona pide solo una meditación, afirmaciones o una manifestación, usa createGuidedContent.
 - Después de createMoment o createGuidedContent, pregunta en una frase breve si le hace sentido para hoy. Si dice que no, pregunta qué cambiar o diseña otro distinto (otro enfoque, no el mismo con otro nombre).
 - webSearch: solo para datos verificables (no para técnicas).
@@ -87,7 +88,11 @@ ${ctx.library.slice(0, 25).map((i) => i.kind === 'book'
 
   const hill = agentId === 'napoleon_hill' ? hillPrompt(ctx.hill ?? null) : '';
 
-  return [base, filter, profile, discovery, memory, hill, lib, library, tools].filter(Boolean).join('\n\n');
+  const enemies = `ENEMIGOS INTERIORES (patrones que todos tenemos, no diagnósticos): ${ENEMIES.map((e) => `${e.id}=${e.name} («${e.whisper}»)`).join('; ')}.
+- SOI lucha JUNTO a la persona contra ellos. Si reconoces uno en lo que cuenta, nómbralo como algo externo ("Parece que El Perfeccionista intentó tomar el control hoy"), nunca como un defecto de la persona ("eres perfeccionista"), y regístralo con registerEnemy sin anunciarlo.
+- Después, propón cómo vencerlo: un Moment que entrene a sus aliados (${ENEMIES.slice(0, 3).map((e) => `${e.name}: ${e.allies.join(', ')}`).join('; ')}…). No lo menciones si no aparece.`;
+
+  return [base, filter, profile, discovery, memory, hill, enemies, lib, library, tools].filter(Boolean).join('\n\n');
 }
 
 export { AGENT_SPECS };

@@ -6,7 +6,7 @@ import type { ActionType, MomentKind } from '@/config/actions';
  */
 export const CAPACITIES = [
   'Claridad', 'Disciplina', 'Constancia', 'Enfoque', 'Calma', 'Confianza', 'Liderazgo', 'Comunicación',
-  'Creatividad', 'Gratitud', 'Salud', 'Mentalidad de riqueza', 'Aprendizaje',
+  'Creatividad', 'Gratitud', 'Salud', 'Mentalidad de riqueza', 'Aprendizaje', 'Coraje', 'Paciencia', 'Persistencia',
 ] as const;
 export type Capacity = (typeof CAPACITIES)[number];
 
@@ -16,10 +16,10 @@ export function isCapacity(v: string): v is Capacity {
 
 /** Respaldo sin IA: qué capacidad entrena cada tipo de acción. */
 export const ACTION_CAPACITY: Partial<Record<ActionType, Capacity[]>> = {
-  breathing: ['Calma'], meditation: ['Calma'], visualization: ['Confianza'], rest: ['Calma'],
+  breathing: ['Calma', 'Paciencia'], meditation: ['Calma', 'Paciencia'], visualization: ['Confianza'], rest: ['Calma'],
   writing: ['Claridad'], reflection: ['Claridad'], goal: ['Claridad'], mind_map: ['Claridad', 'Creatividad'], canvas: ['Creatividad'],
-  timer: ['Enfoque'], pomodoro: ['Enfoque', 'Disciplina'], checklist: ['Disciplina'], next_step: ['Disciplina'], agenda: ['Disciplina'],
-  contract: ['Disciplina', 'Constancia'], tracking: ['Constancia'], weekly_review: ['Constancia', 'Claridad'],
+  timer: ['Enfoque'], pomodoro: ['Enfoque', 'Disciplina'], checklist: ['Disciplina'], next_step: ['Disciplina', 'Coraje'], agenda: ['Disciplina'],
+  contract: ['Disciplina', 'Persistencia'], tracking: ['Constancia', 'Persistencia'], weekly_review: ['Persistencia', 'Claridad'],
   affirmation: ['Confianza'], manifestation: ['Confianza', 'Mentalidad de riqueza'], gratitude: ['Gratitud'], celebration: ['Gratitud'],
   walk: ['Salud'], exercise: ['Salud', 'Disciplina'], stretching: ['Salud'],
   reading: ['Aprendizaje'], book: ['Aprendizaje'], document: ['Aprendizaje'], video: ['Aprendizaje'], quiz: ['Aprendizaje'],

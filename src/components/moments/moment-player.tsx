@@ -62,6 +62,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   const [streak, setStreak] = useState<StreakInfo>(null);
   const [challengeDone, setChallengeDone] = useState<{ day: number; completed: number; finished: boolean } | null>(null);
   const [gain, setGain] = useState<IdentityGain | null>(null);
+  const [victories, setVictories] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [improving, setImproving] = useState(false);
@@ -207,6 +208,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     setStreak(json.streak ?? null);
     setChallengeDone(json.challenge ?? null);
     setGain(json.identity ?? null);
+    setVictories(json.victories ?? []);
     setPhase('done');
     track('moment_completed', { moment: moment.id, mood_delta: moodBefore && moodAfter ? moodAfter - moodBefore : null });
   }
@@ -377,6 +379,11 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
         ) : gain && !gain.hasIdentities ? (
           <Link href="/mi-vida?tab=nuevo-yo" className="press text-sm text-soi-accent underline underline-offset-4">Define en quién te estás convirtiendo y cada Moment contará</Link>
         ) : null}
+        {victories.length > 0 && (
+          <Link href="/mi-vida?tab=batallas" className="press animate-pop rounded-[14px] bg-soi-ink px-4 py-2.5 text-sm font-medium text-white">
+            Le ganaste a {victories.join(' y a ')}
+          </Link>
+        )}
         {gain?.capacities.length ? (
           <p className="text-sm text-soi-muted">Entrenaste: {gain.capacities.map((c) => `${c.name}${c.levelUp ? ` (¡nivel ${c.level}!)` : ''}`).join(' · ')}</p>
         ) : null}

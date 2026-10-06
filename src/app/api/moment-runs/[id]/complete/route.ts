@@ -4,6 +4,7 @@ import { getProfile } from '@/lib/billing/check-access';
 import { recordMomentum } from '@/lib/momentum-server';
 import { registerRitualDay } from '@/lib/streak';
 import { identityGains } from '@/lib/identity/gains';
+import { battleWins } from '@/lib/battles';
 import { remember } from '@/lib/ai/rag';
 import { rpcError } from '@/lib/social/guard';
 import { todayISO } from '@/lib/utils';
@@ -134,8 +135,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const streak = await registerRitualDay(supabase, user.id, today);
   // Mi Nuevo Yo: qué identidades y capacidades fortaleció este Moment (y si subió de nivel).
   const { data: doneRun } = await supabase.from('moment_runs').select('completed_at').eq('id', id).maybeSingle();
+  const runRef = run.moment_id ? `m:${run.moment_id}` : `s:${run.moment_slug}`;
   const identity = doneRun?.completed_at
-    ? await identityGains(supabase, user.id, profile, run.moment_id ? `m:${run.moment_id}` : `s:${run.moment_slug}`, doneRun.completed_at as string).catch(() => null)
+    ? await identityGains(supabase, user.id, profile, runRef, doneRun.completed_at as string).catch(() => null)
     : null;
-  return Response.json({ ok: true, streak, challenge, identity });
+  // Batallas: enemigos que aparecieron estos días y que este Moment acaba de vencer.
+  const victories = doneRun?.completed_at
+    ? await battleWins(supabase, user.id, profile, `${runRef}@${doneRun.completed_at}`).catch(() => [])
+    : [];
+  return Response.json({ ok: true, streak, challenge, identity, victories });
 }
