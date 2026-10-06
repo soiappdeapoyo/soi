@@ -8,7 +8,7 @@ import type { VoiceStyle } from '@/config/voices';
 import { unlockAudio } from '@/lib/voice/player';
 import type { IdentityGain } from '@/lib/identity/gains';
 import { toast } from 'sonner';
-import { Check, Flame, Pause, Play, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
+import { Check, Flame, MessageCircle, Pause, PenLine, Play, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Label, Textarea } from '@/components/ui/input';
 import { Icon } from '@/components/ui/icon';
@@ -62,6 +62,8 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   const [voiceOn, setVoiceOn] = useState(ttsAllowed);
   const [moodAfter, setMoodAfter] = useState<number | null>(null);
   const [learning, setLearning] = useState('');
+  // Retro sin fricción: el texto es opcional y se abre solo si la persona quiere hablar.
+  const [talk, setTalk] = useState<null | 'choose' | 'write'>(null);
   const [helped, setHelped] = useState<boolean | null>(null);
   const [streak, setStreak] = useState<StreakInfo>(null);
   const [challengeDone, setChallengeDone] = useState<{ day: number; completed: number; finished: boolean } | null>(null);
@@ -218,7 +220,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
 
-  async function complete() {
+  async function complete(opts?: { toChat?: boolean }) {
     if (!runId) return;
     setBusy(true);
     saveOutputs(runId, outputsRef.current);
@@ -229,12 +231,14 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     const json = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) { toast(json.message ?? 'No se pudo guardar.'); return; }
+    track('moment_completed', { moment: moment.id, mood_delta: moodBefore && moodAfter ? moodAfter - moodBefore : null });
+    // Hablar con SOI: el chat empieza nuevo y sabe qué Moment acabas de vivir.
+    if (opts?.toChat) { router.push(`/chat?nueva=1&run=${runId}`); return; }
     setStreak(json.streak ?? null);
     setChallengeDone(json.challenge ?? null);
     setGain(json.identity ?? null);
     setVictories(json.victories ?? []);
     setPhase('done');
-    track('moment_completed', { moment: moment.id, mood_delta: moodBefore && moodAfter ? moodAfter - moodBefore : null });
   }
 
   async function improve() {
@@ -366,11 +370,20 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
                 className={cn('press h-10 rounded-lg text-sm', helped === o.v ? 'bg-white text-soi-ink shadow-ring' : 'text-soi-muted')}>{o.l}</button>
             ))}
           </div>
-          <div>
-            <Label htmlFor="learning">¿Qué funcionó? ¿Qué cambiarías?</Label>
-            <Textarea id="learning" rows={3} maxLength={1000} value={learning} onChange={(e) => setLearning(e.target.value)} />
-          </div>
-          <Button size="lg" onClick={complete} disabled={busy}>{busy ? 'Guardando…' : 'Terminar'}</Button>
+          {talk === 'write' ? (
+            <div className="animate-enter">
+              <Label htmlFor="learning">¿Qué funcionó? ¿Qué cambiarías?</Label>
+              <Textarea id="learning" rows={3} maxLength={1000} autoFocus value={learning} onChange={(e) => setLearning(e.target.value)} />
+            </div>
+          ) : talk === 'choose' ? (
+            <div className="grid animate-enter grid-cols-2 gap-2">
+              <Button variant="outline" className="whitespace-nowrap px-2 text-sm" onClick={() => setTalk('write')}><PenLine className="h-4 w-4" aria-hidden="true" /> Escribirlo aquí</Button>
+              <Button variant="outline" className="whitespace-nowrap px-2 text-sm" onClick={() => complete({ toChat: true })} disabled={busy}><MessageCircle className="h-4 w-4" aria-hidden="true" /> Hablar con SOI</Button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setTalk('choose')} className="press mx-auto text-sm text-soi-accent underline underline-offset-4">¿Quieres hablar sobre esto?</button>
+          )}
+          <Button size="lg" onClick={() => complete()} disabled={busy}>{busy ? 'Guardando…' : 'Terminar'}</Button>
         </div>
       </Shell>
     );

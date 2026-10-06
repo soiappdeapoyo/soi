@@ -109,9 +109,30 @@ export function detectMomentumState(i: StateInput): MomentumState {
 
 const GUIDANCE: Record<Intervention, string> = {
   EXECUTE: `EXECUTE — su energía está alta. Aprovecha el momento: diseña con createMoment un Moment de crecimiento (kind growth) que avance su meta, con un bloque goal o next_step. Sin teoría extra.`,
-  INSPIRE: `INSPIRE — su energía está baja. Hoy no necesita más teoría ni exigencia. Diseña con createMoment un Moment corto de inspiración: un bloque video (query con un autor del marco de SOI: Brian Tracy, Hal Elrod, Robin Sharma, Joe Dispenza, Neville Goddard o Napoleon Hill), una reflexión de UNA pregunta y una acción mínima de 2 minutos.`,
+  INSPIRE: `INSPIRE — su energía está baja. Hoy no necesita más teoría ni exigencia. Comparte UN video rápido con youtubeSearch (query con un autor del marco de SOI: Brian Tracy, Hal Elrod, Robin Sharma, Joe Dispenza, Neville Goddard o Napoleon Hill) y nada más en esa respuesta: al terminarlo SOI le hace una pregunta y su reflexión se convierte después en un Moment de 3 minutos.`,
   REGULATE: `REGULATE — hay estrés o bloqueo. Diseña con createMoment un Moment de recuperación (kind recovery): respiración → meditación breve → escritura de una línea → registro emocional. No propongas metas nuevas.`,
   CLARIFY: `CLARIFY — hay demasiados objetivos o falta dirección. Conversa para extraer UNA prioridad, confírmala y diseña con createMoment un Moment corto: escritura de prioridades → objetivo → próximo paso.`,
+};
+
+/**
+ * Un solo video por respuesta. Según el estado: con ansiedad, nada de pantallas (respirar primero); con poca
+ * energía, el video rápido solo (ver cuesta menos que hacer); con energía o confusión, un Moment de acción sin video.
+ * Si pide un video, se respeta; si quiere aprender o aplicar algo de un video, el video va dentro del Moment.
+ */
+export type VideoPolicy = 'none' | 'quick' | 'in_moment';
+
+export function videoPolicy(intervention: Intervention | null, message: string): VideoPolicy {
+  const m = norm(message);
+  const wantsVideo = /\b(video|videos|charla|conferencia|youtube)\b/.test(m);
+  if (wantsVideo && /\b(aprender|aprendo|entender|estudiar|aplicar|practicar)\b/.test(m)) return 'in_moment';
+  if (wantsVideo) return 'quick';
+  return intervention === 'INSPIRE' ? 'quick' : 'none';
+}
+
+export const VIDEO_RULE: Record<VideoPolicy, string> = {
+  none: 'VIDEO: en esta respuesta NO incluyas videos (ni youtubeSearch ni bloques video en un Moment). Lo que ayuda ahora es hacer, no mirar.',
+  quick: 'VIDEO: como máximo UN video rápido con youtubeSearch, sin crear un Moment en la misma respuesta (y nunca un bloque video dentro de un Moment). Acompáñalo con una frase, no con una lista.',
+  in_moment: 'VIDEO: el video va DENTRO del Moment (createMoment con un bloque video → reflexión → próximo paso). No uses youtubeSearch en esta respuesta.',
 };
 
 /** Bloque del system prompt: capa transversal sobre cualquier agente. */

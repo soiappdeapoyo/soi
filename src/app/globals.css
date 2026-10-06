@@ -87,7 +87,10 @@ body { background: var(--color-soi-canvas); color: var(--color-soi-ink); }
 h1, h2, h3 { text-wrap: balance; }
 p, li, figcaption { text-wrap: pretty; }
 
-:focus-visible { outline: 2px solid var(--color-soi-accent-fill); outline-offset: 2px; }
+/* En la capa base: los campos que ya marcan su foco (p. ej. el compositor del chat con outline-none) pueden quitarlo. */
+@layer base {
+  :focus-visible { outline: 2px solid var(--color-soi-accent-fill); outline-offset: 2px; }
+}
 
 button, [role="button"], a[href], summary, label[for], select { cursor: pointer; }
 button:disabled, [aria-disabled="true"] { cursor: not-allowed; }

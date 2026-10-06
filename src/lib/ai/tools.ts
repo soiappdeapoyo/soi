@@ -13,6 +13,7 @@ import { generateAutosuggestion, generateGuided, personalContext, saveGuided } f
 import { HillPatchSchema, loadHillMemory, saveHillMemory } from './hill-memory';
 import { ENEMY_IDS } from '@/config/enemies';
 import { recordEnemy } from '@/lib/battles';
+import type { VideoPolicy } from '@/lib/momentum';
 import type { UserProfile } from '@/types/database';
 
 type Ctx = {
@@ -20,9 +21,13 @@ type Ctx = {
   userId: string;
   authorName?: string | null;
   access: { youtube: boolean; evidence: boolean; routines?: boolean; ritual?: boolean };
+  /** Un solo video por respuesta, según el estado (`videoPolicy`). Por defecto, video rápido. */
+  video?: VideoPolicy;
 };
 
-export function buildTools({ supabase, userId, authorName, access }: Ctx) {
+export function buildTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx) {
+  // Un solo video por respuesta: lo que se muestre primero cierra la puerta al otro.
+  let videoShown = false;
   // Perfil para personalizar el contenido de los agentes (con el cliente de esta conversación; si falla, sin perfil).
   const profileOf = async (): Promise<UserProfile | null> => {
     try {
@@ -36,6 +41,10 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
       inputSchema: z.object({ query: z.string().min(3).max(120) }),
       execute: async ({ query }) => {
         if (!access.youtube) return { locked: true as const, videos: [] };
+        if (video !== 'quick' || videoShown) {
+          return { locked: false as const, videos: [], skipped: video === 'in_moment' ? 'El video va dentro del Moment.' : 'Ahora no conviene un video: responde sin él.' };
+        }
+        videoShown = true;
         const videos = await searchYouTube(query);
         if (videos.length) {
           await remember(supabase, {
@@ -145,6 +154,12 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
       execute: async (m) => {
         const parsed = parseBlocks(m.blocks.map((b, i) => ({ ...b, id: `b${i + 1}` })));
         const errors = parsed.errors;
+        // Un solo video por respuesta: si ya hubo video rápido (o no conviene), el Moment va sin bloque video.
+        if ((video !== 'in_moment' || videoShown) && parsed.blocks.some((b) => b.type === 'video')) {
+          parsed.blocks = parsed.blocks.filter((b) => b.type !== 'video');
+          errors.push('Se quitó el bloque video: en esta respuesta no corresponde un video dentro del Moment.');
+        }
+        if (parsed.blocks.some((b) => b.type === 'video')) videoShown = true;
         // Documentos: solo PDFs de la biblioteca de la persona. Libros y ejercicios se resuelven por nombre.
         const docsOk = await ownsDocuments(userId, parsed.blocks);
         // Libros y ejercicios por nombre (rápido). El contenido guiado (meditación, manifestación…) lo escriben los agentes

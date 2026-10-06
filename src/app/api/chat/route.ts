@@ -9,7 +9,7 @@ import { buildTools } from '@/lib/ai/tools';
 import { recall, remember } from '@/lib/ai/rag';
 import { isAgentId, type AgentId } from '@/config/agents';
 import { PAYWALL_MESSAGE } from '@/config/plans';
-import { detectMomentumState, momentumDirectorPrompt } from '@/lib/momentum';
+import { detectMomentumState, momentumDirectorPrompt, STATE_INTERVENTION, VIDEO_RULE, videoPolicy } from '@/lib/momentum';
 import { loadMomentum, recordDailyReturn } from '@/lib/momentum-server';
 import { todayCheckin } from '@/lib/today';
 import { creatorMethodPrompt } from '@/lib/ai/creator-method';
@@ -116,6 +116,8 @@ export async function POST(req: Request) {
   }) : null;
   const state = detected === 'anxiety' ? 'anxiety' : (checkin ?? detected);
   const director = momentum && state && agent !== 'crisis' ? momentumDirectorPrompt(state, momentum) : '';
+  // Video rápido o dentro del Moment (nunca los dos), según cómo llega.
+  const video = videoPolicy(state ? STATE_INTERVENTION[state] : null, text);
   const time = timeContextPrompt(profile?.timezone ?? 'America/Mexico_City');
   const hill = agent === 'napoleon_hill' ? (await loadHillMemory(supabase, user.id)).memory : null;
   const system = [
@@ -125,6 +127,7 @@ export async function POST(req: Request) {
         .map((r) => ({ id: r.id, kind: r.kind, title: r.title, author: r.author, status: r.status, externalId: r.external_id })),
     }),
     director,
+    agent === 'crisis' ? '' : VIDEO_RULE[video],
     agent === 'crisis' ? '' : methods,
     openerText && `TU PRIMER MENSAJE EN ESTA CONVERSACIÓN FUE: "${openerText.replace(/["\n]/g, ' ').slice(0, 900)}". Continúa desde ahí sin repetir el saludo.`,
     // Lo que cambia cada minuto va al final: así la parte fija del prompt se reutiliza desde la caché del proveedor.
@@ -147,7 +150,7 @@ export async function POST(req: Request) {
     stream = await streamWithFallback(
       system,
       await convertToModelMessages(modelMessages),
-      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess }),
+      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video }),
       async ({ text: out, provider, tokens, toolCalls, toolResults }) => {
         await supabase.from('messages').insert({
           conversation_id: conversationId, user_id: user.id, role: 'assistant', content: out || '…',

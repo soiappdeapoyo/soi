@@ -164,3 +164,30 @@ export function buildOpener(i: OpenerInput): Opener {
 function ritualPractice(reason: string): OpenerPractice {
   return { kind: 'ritual', href: '/ritual', label: 'Ritual de hoy', detail: 'Afirmación · visualización · acción · señal', reason, locked: false };
 }
+
+/**
+ * Al venir de un Moment ("Hablar con SOI"): SOI ya sabe qué viviste y cómo te fue, y te deja hablar.
+ * Sin preguntas de formulario: una sola, abierta, y respuestas de un toque.
+ */
+export function momentRunOpener(r: { title: string; helped: boolean | null; moodBefore: number | null; moodAfter: number | null; name?: string }): Opener {
+  const first = (r.name ?? '').trim().split(/\s+/)[0];
+  const hi = first ? `${first}, a` : 'A';
+  const better = r.helped === true || (r.moodBefore !== null && r.moodAfter !== null && r.moodAfter > r.moodBefore);
+  const text = r.helped === false
+    ? `${hi}cabas de vivir «${r.title}». Me dijiste que no del todo, y está bien: eso también me enseña. ¿Qué sentiste que no encajó?`
+    : better
+    ? `${hi}cabas de vivir «${r.title}» y se nota que te hizo bien. ¿Qué quieres contarme de cómo te fue?`
+    : `${hi}cabas de vivir «${r.title}». Aquí estoy. ¿Cómo te fue?`;
+  const replies: OpenerReply[] = r.helped === false
+    ? [
+        { label: 'Fue muy largo', text: 'Se me hizo muy largo.' },
+        { label: 'No era el momento', text: 'No era el momento para esto.' },
+        { label: 'Hazme otro', text: 'Hazme otro Moment que me ayude más.' },
+      ]
+    : [
+        { label: 'Me hizo bien', text: 'Me hizo bien. Te cuento qué funcionó.' },
+        { label: 'Algo me costó', text: 'Algo me costó en este Moment.' },
+        { label: 'Quiero repetirlo mañana', text: 'Quiero repetirlo mañana. ¿Me lo recuerdas?' },
+      ];
+  return { text, practice: null, proposal: null, replies };
+}
