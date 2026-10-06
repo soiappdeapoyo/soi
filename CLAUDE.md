@@ -324,6 +324,13 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 - **Stripe:** `/api/blueprints/[id]/checkout` (mode `payment`, `metadata.kind = 'blueprint'`). El webhook separa compras de Moments de suscripciones.
 - **Pendiente:** pagos a creadores (Stripe Connect), programas con sesiones grupales, office hours y mentoría 1:1, verificación de creadores (`is_verified` solo con service role).
 
+## ⚡ Rendimiento
+- **Nada de IA en el camino de una pantalla:** la clasificación de identidad tiene presupuesto (`classifyLinks(..., { budgetMs: 2500 })`, proveedor rápido); si no alcanza, la pantalla sale con reglas y la IA termina en segundo plano (`after`) y guarda para la próxima visita.
+- **Una vez por petición** (React `cache`): `getSessionUser` (una sola validación con Supabase Auth entre layout y página), `getProfile`, `loadIdentityView` (identidades y batallas al terminar un Moment la comparten).
+- **Al terminar un Moment** los guardados en memoria (con embedding) se escriben después de responder (`after`); la celebración no los espera.
+- **Chat:** el contexto (memoria, Momentum, continuidad, Moments parecidos) arranca en paralelo con el router; el mensaje del usuario y el eslabón se guardan sin bloquear el inicio de la respuesta; `embedText` reutiliza el mismo texto durante 60 s.
+- Medir en local: `next build && next start` con un proxy que añade latencia a Supabase y cuenta consultas por pantalla.
+
 ## 🕰️ Fechas y hora
 Los días se cuentan en la zona horaria del perfil (`profile.timezone`), nunca en UTC: `todayISO`, `dateInTz`, `startOfTodayISO`, `hourInTz` (`src/lib/utils.ts`). En México el domingo después de las 18:00 ya es lunes en UTC. **Zona automática** (`TimezoneSync` en el layout: la del dispositivo) o elegida en Ajustes entre las de su país (`src/config/timezones.ts`). **El chat conoce la hora local** (`timeContextPrompt`, `src/lib/time-of-day.ts`): mañana → rituales matutinos, intención, afirmaciones y manifestación (nada de descompresión salvo carga expresada); tarde → foco o reconexión; noche → bajar el ritmo, gratitud, SATS.
 

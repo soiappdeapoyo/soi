@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types/database';
 import { CAPACITIES, levelFor, type Capacity } from '@/config/capacities';
@@ -54,7 +55,8 @@ export function observe(runs: Run[], timeZone: string, now = Date.now()): string
 }
 
 /** Todo lo de "Mi Nuevo Yo": visión, identidades con nivel, capacidades, evidencias, observaciones e historia. */
-export async function loadIdentityView(supabase: SupabaseClient, userId: string, profile: UserProfile | null, timeZone: string) {
+/** Cacheada por petición: al terminar un Moment, identidades y batallas la comparten (antes se calculaba dos veces). */
+export const loadIdentityView = cache(async (supabase: SupabaseClient, userId: string, profile: UserProfile | null, timeZone: string) => {
   const [{ data: idRows }, { data: rawRuns }, { data: muro }, hill, links] = await Promise.all([
     supabase.from('identities').select('id, name, description, capacities, status, position, created_at').eq('user_id', userId)
       .neq('status', 'archived').order('position').order('created_at'),
@@ -81,7 +83,8 @@ export async function loadIdentityView(supabase: SupabaseClient, userId: string,
     }),
     ...muroRows.filter((e) => !links.has(`e:${e.id}`)).map((e) => ({ ref: `e:${e.id}`, title: e.title, text: e.content })),
   ].slice(0, 20);
-  if (pending.length && active.length) for (const l of await classifyLinks(userId, active, pending)) links.set(l.ref, l);
+  // Con presupuesto: si la IA tarda, la pantalla sale con reglas y la IA termina en segundo plano.
+  if (pending.length && active.length) for (const l of await classifyLinks(userId, active, pending, { budgetMs: 2500 })) links.set(l.ref, l);
 
   const titles = await resolveRefs(supabase, runRefs);
   const evidence: Evidence[] = [];
@@ -148,6 +151,6 @@ export async function loadIdentityView(supabase: SupabaseClient, userId: string,
     observations: observe(runs, timeZone),
     story,
   };
-}
+});
 
 export type IdentityView = Awaited<ReturnType<typeof loadIdentityView>>;

@@ -70,6 +70,30 @@ export async function POST(req: Request) {
     }
   }
 
+  // 4) Contexto (memoria, accesos, Momentum, continuidad, Moments parecidos): arranca YA, en paralelo con el router
+  //    y la conversación; no depende del agente.
+  const contextPromise = Promise.all([
+    isCreatorAccount(supabase, user.id),
+    isCrisis ? Promise.resolve([]) : recall(supabase, user.id, text, {
+      // Las conversaciones pasadas llegan aparte, con fecha (continuidad).
+      categories: ['perfil_usuario', 'evidencia', 'manifestacion', 'afirmacion', 'pensamiento', 'emocion', 'accion', 'resultado'],
+      count: 4,
+    }),
+    canAccess(user.id, 'youtube_embed'),
+    canAccess(user.id, 'evidence_save'),
+    canAccess(user.id, 'routine_execution'),
+    canAccess(user.id, 'daily_ritual'),
+    isCrisis ? Promise.resolve(null) : loadMomentum(supabase, user.id, profile?.streak_current ?? 0),
+    isCrisis ? Promise.resolve('') : creatorMethodPrompt(supabase, user.id),
+    isCrisis ? Promise.resolve() : recordDailyReturn(supabase, user.id, profile?.timezone),
+    isCrisis ? Promise.resolve(null) : todayCheckin(supabase, user.id, profile?.timezone),
+    isCrisis ? Promise.resolve({ data: [] }) : supabase.from('library_items').select('id, kind, title, author, status, external_id')
+      .eq('user_id', user.id).order('updated_at', { ascending: false }).limit(25),
+    // Continuidad y reutilizar antes de crear (reglas + embeddings; sin tokens extra del modelo).
+    isCrisis ? Promise.resolve([]) : loadContinuity(supabase, user.id, text, body.conversationId).catch(() => []),
+    isCrisis ? Promise.resolve([]) : findReusable(supabase, user.id, text).catch(() => []),
+  ]);
+
   // 2) Conversación (crea si no existe). El saludo con el que SOI abrió la conversación se guarda primero.
   let conversationId = body.conversationId;
   if (!conversationId) {
@@ -91,31 +115,11 @@ export async function POST(req: Request) {
   route ??= await routePromise;
   const agent: AgentId = isCrisis || route.agent === 'crisis' ? 'crisis' : isAgentId(body.agent) ? body.agent : route.agent;
   if (route.weakestLink && route.weakestLink !== profile?.weakest_link) {
-    await supabase.from('user_profiles').update({ weakest_link: route.weakestLink }).eq('user_id', user.id);
+    // No bloquea la respuesta.
+    void supabase.from('user_profiles').update({ weakest_link: route.weakestLink }).eq('user_id', user.id).then(() => undefined, () => undefined);
   }
+  const [isCreator, memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }, pastTalks, reusable] = await contextPromise;
 
-  // 4) RAG + accesos de herramientas
-  const [isCreator, memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }, pastTalks, reusable] = await Promise.all([
-    isCreatorAccount(supabase, user.id),
-    isCrisis ? Promise.resolve([]) : recall(supabase, user.id, text, {
-      // Las conversaciones pasadas llegan aparte, con fecha (continuidad).
-      categories: ['perfil_usuario', 'evidencia', 'manifestacion', 'afirmacion', 'pensamiento', 'emocion', 'accion', 'resultado'],
-      count: 4,
-    }),
-    canAccess(user.id, 'youtube_embed'),
-    canAccess(user.id, 'evidence_save'),
-    canAccess(user.id, 'routine_execution'),
-    canAccess(user.id, 'daily_ritual'),
-    isCrisis ? Promise.resolve(null) : loadMomentum(supabase, user.id, profile?.streak_current ?? 0),
-    isCrisis ? Promise.resolve('') : creatorMethodPrompt(supabase, user.id),
-    isCrisis ? Promise.resolve() : recordDailyReturn(supabase, user.id, profile?.timezone),
-    isCrisis ? Promise.resolve(null) : todayCheckin(supabase, user.id, profile?.timezone),
-    isCrisis ? Promise.resolve({ data: [] }) : supabase.from('library_items').select('id, kind, title, author, status, external_id')
-      .eq('user_id', user.id).order('updated_at', { ascending: false }).limit(25),
-    // Continuidad y reutilizar antes de crear (reglas + embeddings; sin tokens extra del modelo).
-    isCrisis ? Promise.resolve([]) : loadContinuity(supabase, user.id, text, body.conversationId).catch(() => []),
-    isCrisis ? Promise.resolve([]) : findReusable(supabase, user.id, text).catch(() => []),
-  ]);
   const toolAccess = { youtube: yt.allowed, evidence: ev.allowed, routines: rt.allowed, ritual: ri.allowed };
   // Si SOI abrió la conversación, el saludo va como contexto (algunos proveedores exigen que el historial empiece por el usuario).
   const first = messages.findIndex((m) => m.role === 'user');
@@ -159,10 +163,10 @@ export async function POST(req: Request) {
   // Batallas: respaldo sin IA por frases típicas ("mañana lo hago", "¿y si sale mal?"…). La IA también puede registrar.
   if (!isCrisis) for (const enemy of detectEnemies(text)) void recordEnemy(user.id, enemy, { source: 'signals', evidence: text.slice(0, 300) }).catch(() => {});
 
-  // 5) Persistir mensaje del usuario
-  await supabase.from('messages').insert({
+  // 5) Persistir mensaje del usuario, en paralelo con el inicio de la respuesta (se espera antes de guardar la de SOI).
+  const userSaved = supabase.from('messages').insert({
     conversation_id: conversationId, user_id: user.id, role: 'user', content: text, agent_category: agent,
-  });
+  }).then(() => undefined, (e) => console.error('[chat] mensaje del usuario', e));
 
   // 6) Stream con fallback triple. Si todos los proveedores fallan, se reembolsa la consulta.
   let stream: Awaited<ReturnType<typeof streamWithFallback>>;
@@ -172,6 +176,7 @@ export async function POST(req: Request) {
       await convertToModelMessages(modelMessages),
       agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video, creator: isCreator, proposals: ritmo === 'propose' || ritmo === 'soothe' }),
       async ({ text: out, provider, tokens, toolCalls, toolResults }) => {
+        await userSaved;
         await supabase.from('messages').insert({
           conversation_id: conversationId, user_id: user.id, role: 'assistant', content: out || '…',
           agent_category: agent, provider, tokens_used: tokens,
@@ -191,6 +196,7 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error('[chat]', error instanceof AllProvidersFailedError ? error.message : error);
+    await userSaved;
     if (consumed === 'consumed') await refundChatQuery();
     const noProviders = error instanceof AllProvidersFailedError && error.attempts.length === 0;
     return Response.json({

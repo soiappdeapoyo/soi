@@ -5,6 +5,7 @@ const upserts: unknown[] = [];
 vi.mock('@/lib/supabase/server', () => ({ createAdminClient: () => ({ from: () => ({ upsert: async (rows: unknown) => { upserts.push(rows); return { error: null }; }, delete: () => ({ eq: async () => ({}) }) }) }) }));
 let aiFails = false;
 vi.mock('@/lib/ai/fallback', () => ({
+  FAST_ORDER: ['groq', 'deepseek', 'gemini'],
   objectWithFallback: async (o: { schema: { shape: Record<string, unknown> } }) => {
     if (aiFails) throw new Error('sin proveedor');
     if ('items' in o.schema.shape) return { object: { items: [{ ref: 's:brian_tracy_5min', identities: [0, 7], capacities: ['Claridad', 'Inventada'] }] } };
@@ -74,5 +75,19 @@ describe('vínculos Moment → identidad', () => {
     aiFails = true;
     const rules = await proposeIdentities({} as never, 'u', { goals: ['Ganar más dinero', 'Correr 10 km'] } as never, []);
     expect(rules.map((r) => r.name)).toEqual(expect.arrayContaining(['Arquitecto de mi riqueza', 'Persona saludable']));
+  });
+});
+
+describe('la IA no frena la pantalla', () => {
+  it('con presupuesto agotado, responde con reglas sin esperar a la IA', async () => {
+    const { classifyLinks } = await import('@/lib/identity/classify');
+    const fallback = await import('@/lib/ai/fallback');
+    const slow = vi.spyOn(fallback, 'objectWithFallback').mockImplementation(() => new Promise(() => {}));
+    const t = Date.now();
+    const links = await classifyLinks('u', [{ id: 'i1', name: 'Persona constante', description: null, capacities: ['Constancia'], status: 'active', position: 0, created_at: '' }],
+      [{ ref: 's:brian_tracy_5min', title: 'Ritual de 5 minutos', types: ['writing', 'next_step'] }], { budgetMs: 50 });
+    expect(Date.now() - t).toBeLessThan(1000);
+    expect(links[0]!.ref).toBe('s:brian_tracy_5min');
+    slow.mockRestore();
   });
 });

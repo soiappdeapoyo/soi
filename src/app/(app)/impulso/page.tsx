@@ -28,11 +28,14 @@ export default async function ImpulsoPage({ searchParams }: { searchParams: Prom
   if (!user) redirect('/login');
   const { profile, access } = await getAccessMap(user.id);
 
-  const [feed, unread, today, { data: unreadDm }] = await Promise.all([
+  // Todo lo independiente, a la vez (antes: conteos y el Moment a compartir esperaban en fila).
+  const [feed, unread, today, { data: unreadDm }, counts, sharing] = await Promise.all([
     following ? loadFollowing(supabase, user.id) : loadForYou(supabase, user.id, 0),
     unreadNotifications(supabase, user.id),
     loadToday(supabase, user.id, profile, access.daily_ritual),
     supabase.rpc('dm_unread_threads'),
+    officialCounts(supabase),
+    compartir ? getMoment(supabase, compartir) : Promise.resolve(null),
   ]);
   const kinds = MODE_KINDS[today.decision.mode];
   const rec = await recommendMoment(supabase, user.id, kinds);
@@ -41,8 +44,7 @@ export default async function ImpulsoPage({ searchParams }: { searchParams: Prom
   add(rec);
   OFFICIAL_MOMENTS.filter((m) => kinds.includes(m.kind)).forEach(add);
   OFFICIAL_MOMENTS.forEach(add);
-  const railC = withOfficialCounts(rail.slice(0, 4), await officialCounts(supabase));
-  const sharing = compartir ? await getMoment(supabase, compartir) : null;
+  const railC = withOfficialCounts(rail.slice(0, 4), counts);
 
   const me = { name: profile?.display_name ?? 'Tú', avatarUrl: profile?.avatar_url ?? (user.user_metadata?.avatar_url as string | undefined) ?? null };
   const cursor = following

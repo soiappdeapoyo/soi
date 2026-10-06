@@ -5,7 +5,19 @@ import { recordMomentum } from '@/lib/momentum-server';
 import { registerRitualDay } from '@/lib/streak';
 import { identityGains } from '@/lib/identity/gains';
 import { battleWins } from '@/lib/battles';
-import { remember } from '@/lib/ai/rag';
+import { after } from 'next/server';
+import { remember as rememberNow } from '@/lib/ai/rag';
+import { createAdminClient } from '@/lib/supabase/server';
+
+/**
+ * Lo que se guarda en la memoria (y su embedding, cientos de ms cada uno) se escribe DESPUÉS de responder:
+ * la celebración no espera. Con el cliente de servicio (fuera de la petición no hay cookies) y el user_id de la sesión.
+ */
+const remember = (_sb: unknown, row: Parameters<typeof rememberNow>[1]) => {
+  const write = () => rememberNow(createAdminClient(), row).then(() => undefined);
+  try { after(write); } catch { void write(); }
+  return Promise.resolve(undefined);
+};
 import { rpcError } from '@/lib/social/guard';
 import { todayISO } from '@/lib/utils';
 import { challengeLength } from '@/lib/moments/challenge';
