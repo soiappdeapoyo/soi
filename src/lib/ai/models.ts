@@ -6,7 +6,8 @@
 export const MODELS = {
   gemini: process.env.AI_MODEL_GEMINI || 'gemini-3.8-flash',
   groq: process.env.AI_MODEL_GROQ || 'openai/gpt-oss-120b',
-  deepseek: process.env.AI_MODEL_DEEPSEEK || 'deepseek-v4-flash',
+  // deepseek-v4-flash está retirado (DeepSeek lo acepta como alias de V4.1 Flash): el ID vigente es deepseek-flash.
+  deepseek: process.env.AI_MODEL_DEEPSEEK || 'deepseek-flash',
   embedding: process.env.AI_MODEL_EMBEDDING || 'gemini-embedding-2',
 } as const;
 
