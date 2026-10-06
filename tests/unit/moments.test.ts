@@ -9,11 +9,12 @@ import { blocksForDay, challengeLength, challengeState } from '@/lib/moments/cha
 const b = (id: string, type: ActionBlock['type'], minutes: number, config: Record<string, unknown> = {}): ActionBlock => ({ id, type, title: id, minutes, config });
 
 describe('catálogo de acciones', () => {
-  it('cada tipo tiene un bloque por defecto válido (salvo documento y libro, que se eligen)', () => {
+  it('cada tipo tiene un bloque por defecto válido (salvo documento, libro e imagen, que se eligen o suben)', () => {
     expect(parseBlocks([defaultBlock('document')]).errors).toHaveLength(1);
+    expect(parseBlocks([defaultBlock('image')]).errors).toHaveLength(1);
     expect(parseBlocks([defaultBlock('book')]).errors).toHaveLength(1);
     expect(defaultBlock('book').config.title).toBe('');
-    for (const t of ACTION_TYPES.filter((x) => x !== 'document' && x !== 'book')) {
+    for (const t of ACTION_TYPES.filter((x) => x !== 'document' && x !== 'book' && x !== 'image')) {
       const { blocks, errors } = parseBlocks([defaultBlock(t)]);
       expect(errors, t).toEqual([]);
       expect(blocks[0]!.type).toBe(t);

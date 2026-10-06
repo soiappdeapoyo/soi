@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Plus, Upload, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { uploadMedia } from '@/lib/media/upload';
+import { compressImage, uploadMedia } from '@/lib/media/upload';
+import { coverUrl } from '@/lib/moments/types';
 import { cn } from '@/lib/utils';
 
 type QuizQ = { q: string; options: string[]; answer: number; explain?: string };
@@ -76,6 +77,64 @@ export function QuizEditor({ value, onChange }: { value: QuizQ[]; onChange: (qs:
         <button type="button" onClick={() => onChange([...value, { q: '', options: ['', ''], answer: 0 }])} className="press inline-flex h-9 w-fit items-center gap-1.5 rounded-lg px-2 text-sm text-soi-accent hover:bg-soi-accent-soft">
           <Plus className="h-4 w-4" aria-hidden="true" /> Agregar pregunta
         </button>
+      )}
+    </div>
+  );
+}
+
+/** Imagen propia del bloque "Imagen": se comprime en el navegador y se sube a moment-assets/<uid>/images/. */
+export function ImageField({ id, value, onChange }: { id: string; value?: string; onChange: (path: string | undefined) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setMsg('Elige una imagen.'); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const { path } = await uploadMedia('moment-assets', await compressImage(file, 1400, 0.8), 'images');
+      onChange(path);
+    } catch (e) { setMsg((e as Error).message); }
+    setBusy(false);
+  }
+  const src = value ? coverUrl(value) : null;
+  return (
+    <div className="flex flex-col gap-2">
+      {src && (
+        <div className="relative w-fit">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="" className="max-h-48 rounded-lg object-cover shadow-ring" />
+          <button type="button" onClick={() => onChange(undefined)} aria-label="Quitar imagen" className="press absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white"><X className="h-4 w-4" aria-hidden="true" /></button>
+        </div>
+      )}
+      <label htmlFor={id} className={cn('press inline-flex h-9 w-fit cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm shadow-ring', busy && 'opacity-60')}>
+        <Upload className="h-4 w-4" aria-hidden="true" /> {busy ? 'Subiendo…' : src ? 'Cambiar imagen' : 'Subir imagen'}
+      </label>
+      <input id={id} type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => pick(e.target.files?.[0])} />
+      {msg && <p role="alert" className="text-xs text-soi-danger">{msg}</p>}
+    </div>
+  );
+}
+
+/** Id de YouTube desde un link (watch, youtu.be, shorts, embed) o el id solo. */
+export function youtubeId(input: string): string | null {
+  const s = input.trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  const m = s.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1]! : null;
+}
+
+/** Link de YouTube elegido por quien crea el Moment (en lugar de una búsqueda). */
+export function YoutubeField({ id, videoId, onChange }: { id: string; videoId?: string; onChange: (videoId: string | undefined) => void }) {
+  const [text, setText] = useState(videoId ? `https://youtu.be/${videoId}` : '');
+  const parsed = text.trim() ? youtubeId(text) : null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Input id={id} value={text} inputMode="url" placeholder="https://youtu.be/…" aria-invalid={Boolean(text.trim()) && !parsed}
+        onChange={(e) => { setText(e.target.value); const v = youtubeId(e.target.value); onChange(v ?? undefined); }} />
+      {text.trim() && !parsed && <p role="alert" className="text-xs text-soi-danger">Pega un link de YouTube válido.</p>}
+      {parsed && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`https://i.ytimg.com/vi/${parsed}/mqdefault.jpg`} alt="" className="w-40 rounded-lg shadow-ring" />
       )}
     </div>
   );

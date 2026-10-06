@@ -1,3 +1,4 @@
+import { blockAIForCreators } from '@/lib/creators/profile';
 import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/billing/check-access';
@@ -11,6 +12,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const { supabase, user } = await getSessionUser();
   if (!user) return new Response('No autorizado', { status: 401 });
+  const noAI = await blockAIForCreators(supabase, user.id);
+  if (noAI) return noAI;
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return new Response('Datos inválidos', { status: 400 });
 

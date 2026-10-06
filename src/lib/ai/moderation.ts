@@ -19,15 +19,30 @@ export function hardFilter(content: string): 'link' | 'venta' | null {
   return null;
 }
 
+/** Contacto fuera de SOI (en perfiles de creador lo único que se bloquea del lado comercial). */
+const OFF_PLATFORM = /(whats?app|telegram|inbox|dm me|escr[ií]beme (al|por)|link en (mi )?bio|\+?\d[\d\s-]{8,}\d)/i;
+
+/**
+ * Contexto: `community` (publicaciones, Ideas, Moments compartidos) o `creator` (perfil de creador y Moments que
+ * publica). Presentarse, contar su método y su experiencia NO es autopromoción: es justo lo que un perfil de creador
+ * debe hacer. Lo que se vende, se vende dentro de SOI; se bloquea sacar a la gente de SOI (enlaces, contacto) y lo médico.
+ */
+export type ModerationContext = 'community' | 'creator';
+
 /** Regla dura: nada de ventas, links externos, ni consejos médicos. */
-export async function moderatePost(content: string): Promise<ModerationResult> {
+export async function moderatePost(content: string, context: ModerationContext = 'community'): Promise<ModerationResult> {
   if (detectCrisis(content)) return { allowed: false, reason: 'crisis' };
   if (LINK.test(content)) return { allowed: false, reason: 'link' };
-  if (SALES.test(content)) return { allowed: false, reason: 'venta' };
+  if (context === 'creator' ? OFF_PLATFORM.test(content) : SALES.test(content)) return { allowed: false, reason: 'venta' };
   try {
     const { object } = await objectWithFallback({
       schema: ModerationSchema,
-      instructions: `Moderas una comunidad de bienestar en español. Rechaza: ventas o autopromoción, links, consejos médicos
+      instructions: context === 'creator'
+        ? `Moderas el perfil o el contenido de una persona creadora en una app de bienestar en español. PERMITE que se presente,
+cuente su experiencia, su método, sus credenciales y a quién acompaña (eso no es autopromoción). Rechaza solo: invitar a
+contactar o comprar FUERA de la app (WhatsApp, teléfono, redes, "escríbeme"), links, promesas de curación o consejos médicos
+(dosis, medicamentos, diagnósticos, dejar tratamientos), odio, acoso, contenido sexual, spam.`
+        : `Moderas una comunidad de bienestar en español. Rechaza: ventas o autopromoción, links, consejos médicos
 (dosis, medicamentos, diagnósticos, dejar tratamientos), odio, acoso, contenido sexual, spam. Permite testimonios, peticiones de apoyo y preguntas sobre prácticas.`,
       prompt: content.slice(0, 2000),
     });
@@ -42,6 +57,7 @@ export async function moderatePost(content: string): Promise<ModerationResult> {
 export const MODERATION_COPY: Record<string, string> = {
   link: 'En la comunidad no se permiten enlaces externos.',
   venta: 'En la comunidad no se permiten ventas ni autopromoción.',
+  venta_creator: 'Tu trabajo se ofrece dentro de SOI: quita las invitaciones a contactarte o comprar fuera de la app (WhatsApp, teléfono, «escríbeme»).',
   consejo_medico: 'No compartimos consejos médicos. Consulta a un profesional de salud.',
   crisis: 'Notamos que puedes estar pasando por un momento difícil. Escríbele a SOI en el chat: ahí tienes líneas de ayuda.',
 };

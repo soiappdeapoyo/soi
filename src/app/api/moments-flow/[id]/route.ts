@@ -1,6 +1,7 @@
+import { creatorBlocks, isCreatorAccount } from '@/lib/creators/profile';
 import { z } from 'zod/v3';
 import { getSessionUser, createAdminClient } from '@/lib/supabase/server';
-import { isUserCover, reviewCover } from '@/lib/moments/cover';
+import { checkBlockImages, isUserCover, reviewCover } from '@/lib/moments/cover';
 import { MomentKindSchema } from '@/config/actions';
 import { validBlocks, textOfBlocks, dbError } from '@/lib/moments/input';
 import { moderateFields } from '@/lib/social/guard';
@@ -27,15 +28,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!parsed.success) return Response.json({ ok: false, message: 'Datos inválidos.' }, { status: 400 });
   const p = parsed.data;
 
-  const { data: current } = await supabase.from('soi_blueprints').select('title, objective, source').eq('id', id).eq('creator_id', user.id).maybeSingle();
+  const { data: current } = await supabase.from('soi_blueprints').select('title, objective, source, status').eq('id', id).eq('creator_id', user.id).maybeSingle();
   if (!current) return Response.json({ ok: false, message: 'No encontrado.' }, { status: 404 });
 
   let blocks;
   if (p.blocks) {
     const v = validBlocks(p.blocks);
     if (!v.blocks) return Response.json({ ok: false, message: v.message }, { status: 400 });
-    blocks = v.blocks;
+    blocks = (await isCreatorAccount(supabase, user.id)) ? creatorBlocks(v.blocks) : v.blocks;
     if (!(await ownsDocuments(user.id, blocks))) return Response.json({ ok: false, message: 'Solo puedes usar documentos de tu biblioteca.' }, { status: 403 });
+    // Imágenes propias; si el Moment es (o queda) público, revisadas en estricto.
+    const visible = p.status === 'published' || (p.status === undefined && current.status === 'published');
+    const imgs = await checkBlockImages(user.id, blocks, visible && p.status !== 'published');
+    if (imgs) return imgs;
   }
   if (p.status === 'published') {
     // Lo publicado se ve en Impulso: la portada subida por la persona debe pasar la moderación.
@@ -53,8 +58,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const pub = await publishDocuments(user.id, (blocks ?? full ?? []) as ActionBlock[]);
     if (pub.error) return Response.json({ ok: false, message: pub.error }, { status: 400 });
     if (pub.changed) blocks = pub.blocks;
+    const imgs = await checkBlockImages(user.id, (blocks ?? full ?? []) as ActionBlock[], true);
+    if (imgs) return imgs;
     const blocked = await moderateFields([p.title ?? current.title, p.objective ?? current.objective, current.source,
-      ...textOfBlocks((blocks ?? full ?? []) as { title: string; config: Record<string, unknown> }[])]);
+      ...textOfBlocks((blocks ?? full ?? []) as { title: string; config: Record<string, unknown> }[])], 'creator');
     if (blocked) return blocked;
   }
 

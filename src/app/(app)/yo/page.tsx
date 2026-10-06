@@ -12,6 +12,9 @@ import { loadProfileCard } from '@/lib/social/profile';
 import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import { MomentumCard, EvolutionChain } from '@/components/momentum/momentum-card';
 import { ProfileHeader } from '@/components/profile/profile-header';
+import { Highlights } from '@/components/creators/highlights';
+import { CreatorMoments } from '@/components/creators/creator-moments';
+import { loadCreatorLayer } from '@/lib/creators/profile';
 import { ProfileTabs, PrivateNote, type ProfileTab } from '@/components/profile/profile-tabs';
 import { EditProfileButton } from '@/components/profile/edit-profile';
 import { FeedList } from '@/components/feed/feed-list';
@@ -38,7 +41,7 @@ const ACCOUNT_LINKS = [
   { href: '/evidencias', label: 'Muro de Evidencias' },
   { href: '/ritual', label: 'Ritual diario' },
   { href: '/mensajes', label: 'Mensajes' },
-  { href: '/creadores', label: 'Estudio de creador' },
+  { href: '/creadores', label: 'Cuenta de creador' },
   { href: '/planes', label: 'Planes SOI+' },
   { href: '/ajustes', label: 'Ajustes' },
 ];
@@ -47,9 +50,8 @@ const ACCOUNT_LINKS = [
  * Yo, estilo Substack: la vista principal es tu perfil tal como lo ven los demás (foto, bio, enlaces, seguidores)
  * y debajo pestañas. Las públicas muestran lo que publicas; las privadas (candado) tu evolución, logros e identidad.
  */
-export default async function YoPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  const { tab: tabParam } = await searchParams;
-  const tab = TABS.some((t) => t.id === tabParam) ? tabParam! : 'publicaciones';
+export default async function YoPage({ searchParams }: { searchParams: Promise<{ tab?: string; destacado?: string }> }) {
+  const { tab: tabParam, destacado } = await searchParams;
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
   const [{ profile, access }, card, { data: creator }] = await Promise.all([
@@ -58,6 +60,10 @@ export default async function YoPage({ searchParams }: { searchParams: Promise<{
     supabase.from('creator_profiles').select('handle').eq('user_id', user.id).maybeSingle(),
   ]);
   if (!card) redirect('/onboarding');
+  // Cuenta de creador: un solo perfil (como Instagram). Su trabajo va primero, en cuadrícula, con destacados.
+  const layer = creator ? await loadCreatorLayer(supabase, user.id) : null;
+  const tabs: ProfileTab[] = layer ? [{ id: 'moments', label: 'Moments' }, { id: 'retos', label: 'Retos' }, ...TABS.filter((t) => t.id !== 'moments')] : TABS;
+  const tab = tabs.some((t) => t.id === tabParam) ? tabParam! : tabs[0]!.id;
   const me = { name: profile?.display_name ?? 'Tú', avatarUrl: profile?.avatar_url ?? null };
 
   return (
@@ -69,19 +75,30 @@ export default async function YoPage({ searchParams }: { searchParams: Promise<{
       </div>
       <ProfileHeader
         card={card}
+        creator={layer ? { category: layer.category, moments: layer.moments.length, people: layer.people } : null}
         actions={(
           <>
             <EditProfileButton name={card.display_name} bio={profile?.bio ?? card.bio} avatarUrl={card.avatar_url} links={card.links} isCreator={Boolean(creator)} />
+            {layer && <Link href="/creadores" className="press inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium shadow-ring hover:shadow-soft">Panel profesional</Link>}
             <Link href={`/u/${user.id}?vista=publica`} className="press inline-flex h-9 items-center rounded-lg px-3 text-sm text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink">Ver como los demás</Link>
           </>
         )}
       />
 
-      <ProfileTabs tabs={TABS} active={tab} base="/yo" />
+      {layer && <Highlights items={layer.highlights} base="/yo" active={tab === 'moments' ? destacado : null} />}
+      <ProfileTabs tabs={tabs} active={tab} base="/yo" />
 
       <div className="pt-4">
         {tab === 'publicaciones' && <PostsTab supabase={supabase} userId={user.id} me={me} canPost={access.community} />}
-        {tab === 'moments' && <MomentsTab supabase={supabase} userId={user.id} />}
+        {layer && (tab === 'moments' || tab === 'retos') && (
+          <CreatorMoments creator={layer} tab={tab} highlight={destacado} empty={(
+            <div className="py-10 text-center text-sm text-soi-muted">
+              <p>{tab === 'retos' ? 'Aún no publicas retos.' : 'Aún no publicas Moments.'}</p>
+              <Link href="/m/nuevo" className="mt-2 inline-block text-soi-accent underline underline-offset-4">Crear un Moment</Link>
+            </div>
+          )} />
+        )}
+        {!layer && tab === 'moments' && <MomentsTab supabase={supabase} userId={user.id} />}
         {tab === 'evolucion' && <EvolutionTab supabase={supabase} userId={user.id} profile={profile} />}
         {tab === 'logros' && <AchievementsTab supabase={supabase} userId={user.id} profile={profile} isCreator={Boolean(creator)} />}
         {tab === 'identidad' && <IdentityTab profile={profile} />}
@@ -218,7 +235,7 @@ function AccountTab({ handle }: { handle: string | null }) {
       <nav aria-label="Cuenta" className="flex flex-col gap-1.5 rounded-[20px] bg-soi-sidebar p-1.5">
         {ACCOUNT_LINKS.map((l) => (
           <Link key={l.href} href={l.href} className="press flex items-center justify-between rounded-[14px] bg-white px-3 py-3 text-[15px] shadow-ring hover:shadow-soft">
-            {l.href === '/creadores' && handle ? `${l.label} · @${handle}` : l.label}
+            {l.href === '/creadores' && handle ? `Panel profesional · @${handle}` : l.label}
             <ArrowRight className="h-4 w-4 text-soi-subtle" aria-hidden="true" />
           </Link>
         ))}

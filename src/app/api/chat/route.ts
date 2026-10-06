@@ -6,6 +6,10 @@ import { classifyIntent, type RouterResult } from '@/lib/ai/router';
 import { streamWithFallback, AllProvidersFailedError } from '@/lib/ai/fallback';
 import { buildSystemPrompt } from '@/lib/ai/prompts';
 import { buildTools } from '@/lib/ai/tools';
+import { isCreatorAccount } from '@/lib/creators/profile';
+
+/** Cuenta de creador: su contenido es 100% suyo. SOI acompaña, no genera. */
+const CREATOR_CHAT_RULE = 'CUENTA DE CREADOR: esta persona crea su propio contenido. No diseñes Moments ni escribas meditaciones, afirmaciones o manifestaciones para ella (no tienes esas herramientas). Acompáñala conversando, con preguntas; si quiere crear algo, invítala a hacerlo con su propio material en el constructor de Moments.';
 import { recall, remember } from '@/lib/ai/rag';
 import { isAgentId, type AgentId } from '@/config/agents';
 import { PAYWALL_MESSAGE } from '@/config/plans';
@@ -88,7 +92,8 @@ export async function POST(req: Request) {
   }
 
   // 4) RAG + accesos de herramientas
-  const [memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }] = await Promise.all([
+  const [isCreator, memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }] = await Promise.all([
+    isCreatorAccount(supabase, user.id),
     isCrisis ? Promise.resolve([]) : recall(supabase, user.id, text, {
       categories: ['perfil_usuario', 'evidencia', 'conversacion', 'manifestacion', 'afirmacion', 'pensamiento', 'emocion', 'accion', 'resultado'],
       count: 4,
@@ -128,6 +133,7 @@ export async function POST(req: Request) {
     }),
     director,
     agent === 'crisis' ? '' : VIDEO_RULE[video],
+    isCreator && agent !== 'crisis' ? CREATOR_CHAT_RULE : '',
     agent === 'crisis' ? '' : methods,
     openerText && `TU PRIMER MENSAJE EN ESTA CONVERSACIÓN FUE: "${openerText.replace(/["\n]/g, ' ').slice(0, 900)}". Continúa desde ahí sin repetir el saludo.`,
     // Lo que cambia cada minuto va al final: así la parte fija del prompt se reutiliza desde la caché del proveedor.
@@ -150,7 +156,7 @@ export async function POST(req: Request) {
     stream = await streamWithFallback(
       system,
       await convertToModelMessages(modelMessages),
-      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video }),
+      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video, creator: isCreator }),
       async ({ text: out, provider, tokens, toolCalls, toolResults }) => {
         await supabase.from('messages').insert({
           conversation_id: conversationId, user_id: user.id, role: 'assistant', content: out || '…',

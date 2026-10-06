@@ -94,7 +94,7 @@ function Meta({ m, by, creator, className }: { m: MomentFlow; by?: string | null
 }
 
 /** Portada o, si no hay, un fondo con el ícono del primer bloque (para que el mosaico siga siendo reconocible). */
-function Cover({ m, className }: { m: MomentFlow; className?: string }) {
+export function Cover({ m, className }: { m: MomentFlow; className?: string }) {
   if (m.cover) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={m.cover} alt="" loading="lazy" className={cn('block w-full bg-soi-tray object-cover', className)} />;

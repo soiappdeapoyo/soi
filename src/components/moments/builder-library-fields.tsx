@@ -8,7 +8,7 @@ import { ExerciseAnimation } from '@/components/library/exercise-animation';
 import { cn } from '@/lib/utils';
 
 type Cfg = Record<string, unknown>;
-type Props = { id: string; value: Cfg; onChange: (patch: Cfg) => void };
+type Props = { id: string; value: Cfg; onChange: (patch: Cfg) => void; /** Cuenta de creador: sin resumen con IA (solo leer páginas). */ noAI?: boolean };
 
 function useDebounced<T>(fn: (q: string) => Promise<T>, q: string, min = 2) {
   const [data, setData] = useState<T | null>(null);
@@ -27,7 +27,7 @@ function useDebounced<T>(fn: (q: string) => Promise<T>, q: string, min = 2) {
  * Libro: empieza con el buscador (Open Library). Elegido el libro: portada, cambiar, modo
  * (ideas clave o leer páginas) y "Generar resumen" para ver aquí mismo lo que verá quien lo viva.
  */
-export function BookField({ id, value, onChange }: Props) {
+export function BookField({ id, value, onChange, noAI = false }: Props) {
   const chosen = Boolean(value.key || value.title);
   const [searching, setSearching] = useState(!chosen);
   const [q, setQ] = useState('');
@@ -37,7 +37,7 @@ export function BookField({ id, value, onChange }: Props) {
   }, q);
   const [summary, setSummary] = useState<{ premise: string; ideas: { title: string; text: string }[] } | null>(null);
   const [sumState, setSumState] = useState<'idle' | 'loading' | 'error'>('idle');
-  const mode = (value.mode as string) ?? 'summary';
+  const mode = noAI ? 'read' : (value.mode as string) ?? 'summary';
 
   async function loadSummary() {
     setSumState('loading');
@@ -51,7 +51,7 @@ export function BookField({ id, value, onChange }: Props) {
   }
 
   function pick(b: { key: string; title: string; author: string | null; coverUrl: string | null }) {
-    onChange({ title: b.title.slice(0, 300), author: b.author ?? undefined, key: b.key, cover: b.coverUrl ?? undefined });
+    onChange({ title: b.title.slice(0, 300), author: b.author ?? undefined, key: b.key, cover: b.coverUrl ?? undefined, ...(noAI ? { mode: 'read' } : {}) });
     setQ(''); setSearching(false); setSummary(null); setSumState('idle');
   }
 
@@ -100,12 +100,12 @@ export function BookField({ id, value, onChange }: Props) {
 
       {chosen && !searching && (
         <>
-          <div role="radiogroup" aria-label="Qué hacer con el libro" className="grid grid-cols-2 gap-1 rounded-lg bg-soi-sidebar p-1">
+          {!noAI && <div role="radiogroup" aria-label="Qué hacer con el libro" className="grid grid-cols-2 gap-1 rounded-lg bg-soi-sidebar p-1">
             {([['summary', 'Ideas clave'], ['read', 'Leer páginas']] as const).map(([v, l]) => (
               <button key={v} type="button" role="radio" aria-checked={mode === v} onClick={() => onChange({ mode: v })}
                 className={cn('press h-8 rounded-md text-sm', mode === v ? 'bg-white font-medium shadow-ring' : 'text-soi-muted')}>{l}</button>
             ))}
-          </div>
+          </div>}
           {mode === 'read' ? (
             <div className="w-28">
               <Label htmlFor={`${id}-pages`} className="text-xs text-soi-muted">Páginas</Label>

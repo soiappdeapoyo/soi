@@ -1,3 +1,4 @@
+import { blockAIForCreators } from '@/lib/creators/profile';
 import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess, getProfile } from '@/lib/billing/check-access';
@@ -20,6 +21,8 @@ const Body = z.object({
 export async function POST(req: Request) {
   const { supabase, user } = await getSessionUser();
   if (!user) return new Response('No autorizado', { status: 401 });
+  const noAI = await blockAIForCreators(supabase, user.id);
+  if (noAI) return noAI;
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ ok: false, message: 'Cuéntale a SOI qué intención tienes.' }, { status: 400 });
   const { kind, intention, minutes } = parsed.data;

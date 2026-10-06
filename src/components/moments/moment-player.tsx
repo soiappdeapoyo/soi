@@ -30,6 +30,8 @@ type Props = {
   playlist?: { position: number; total: number; next: { href: string; title: string; minutes: number } | null } | null;
   /** Empezar sin pantalla previa (al pasar solo al siguiente Moment de la lista). */
   autoStart?: boolean;
+  /** false en cuentas de creador: sin "Mejorar mi Moment" (la IA no genera su contenido). */
+  aiContent?: boolean;
 };
 
 type Phase = 'before' | 'run' | 'after' | 'done';
@@ -48,7 +50,7 @@ function fmt(s: number) {
  * - Barra de tiempo LINEAL (es tiempo real). Halo de respiración solo en respiración y meditación.
  * - Una sola celebración al final (800 ms). Las salidas se guardan al pasar de bloque.
  */
-export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice, playlist, autoStart }: Props) {
+export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice, playlist, autoStart, aiContent = true }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('before');
   const [runId, setRunId] = useState<string | null>(null);
@@ -437,7 +439,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
         {/* En la lista de Hoy lo que sigue es el siguiente Moment: sin más opciones que distraigan. */}
         {playlist ? null : !proposal ? (
           <div className="mt-2 grid w-full gap-2 sm:grid-cols-2">
-            <Button onClick={improve} disabled={improving}><Sparkles className="h-4 w-4" aria-hidden="true" /> {improving ? 'Preparando tu versión…' : 'Mejorar mi Moment'}</Button>
+            {aiContent && <Button onClick={improve} disabled={improving}><Sparkles className="h-4 w-4" aria-hidden="true" /> {improving ? 'Preparando tu versión…' : 'Mejorar mi Moment'}</Button>}
             <Link href="/evidencias/nueva" className={buttonClass('outline')}><Star className="h-4 w-4" aria-hidden="true" /> Llevar al Muro</Link>
             <Link href={`/impulso?compartir=${moment.id}`} className={buttonClass('outline', 'md', 'sm:col-span-2')}>Compartir cómo te fue en Impulso</Link>
             <Link href="/hoy" className={buttonClass('ghost', 'md', 'sm:col-span-2')}>Volver a Hoy</Link>

@@ -141,6 +141,12 @@ export async function findCover(m: CoverInput): Promise<string | null> {
 /** Asigna portada a un Moment que aún no tiene. Pensado para `after()`: no retrasa la respuesta. */
 export async function autoCover(momentId: string, m: CoverInput) {
   try {
+    // Cuenta de creador: sus imágenes son suyas; SOI no le pone portada.
+    const admin = createAdminClient();
+    const { data: row } = await admin.from('soi_blueprints').select('creator_id').eq('id', momentId).maybeSingle();
+    if (!row) return null;
+    const { data: creator } = await admin.from('creator_profiles').select('user_id').eq('user_id', row.creator_id).maybeSingle();
+    if (creator) return null;
     const path = await findCover(m);
     if (!path) return null;
     await createAdminClient().from('soi_blueprints').update({ cover_path: path }).eq('id', momentId).is('cover_path', null);

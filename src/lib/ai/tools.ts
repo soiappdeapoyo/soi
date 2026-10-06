@@ -24,9 +24,21 @@ type Ctx = {
   access: { youtube: boolean; evidence: boolean; routines?: boolean; ritual?: boolean };
   /** Un solo video por respuesta, según el estado (`videoPolicy`). Por defecto, video rápido. */
   video?: VideoPolicy;
+  /** Cuenta de creador: sin herramientas que generan contenido (Moments, meditaciones, afirmaciones). */
+  creator?: boolean;
 };
 
-export function buildTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx) {
+/** Herramientas que generan contenido: una cuenta de creador no las tiene (todo su contenido es suyo). */
+export const CONTENT_TOOLS = ['createMoment', 'createGuidedContent'] as const;
+
+export function buildTools(ctx: Ctx): ReturnType<typeof allTools> {
+  const tools = allTools(ctx);
+  if (!ctx.creator) return tools;
+  // Cuenta de creador: la IA acompaña, no genera. (El tipo se conserva para quien llama; estas claves no viajan al modelo.)
+  return Object.fromEntries(Object.entries(tools).filter(([k]) => !(CONTENT_TOOLS as readonly string[]).includes(k))) as ReturnType<typeof allTools>;
+}
+
+function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx) {
   // Un solo video por respuesta: lo que se muestre primero cierra la puerta al otro.
   let videoShown = false;
   // Perfil para personalizar el contenido de los agentes (con el cliente de esta conversación; si falla, sin perfil).
@@ -143,7 +155,7 @@ export function buildTools({ supabase, userId, authorName, access, video = 'quic
         reason: z.string().max(160).describe('Por qué este Moment ahora, en una frase cálida'),
         source: z.string().min(2).max(200).describe('Autores en los que se basa, p. ej. "Diseñado por SOI · basado en Brian Tracy y Joe Dispenza"'),
         blocks: z.array(z.object({
-          type: z.enum(ACTION_TYPES.filter((t) => t !== 'moment') as [ActionType, ...ActionType[]]),
+          type: z.enum(ACTION_TYPES.filter((t) => t !== 'moment' && t !== 'image') as [ActionType, ...ActionType[]]), // la imagen la sube una persona
           title: z.string().min(2).max(80),
           minutes: z.number().int().min(1).max(30),
           config: z.record(z.unknown()).describe('breathing:{inhale,exhale} meditation:{guide} timer:{instruction} writing:{prompt} visualization:{scene} checklist:{items[]} video:{query} walk:{instruction} gratitude:{count} reading:{book,pages} reflection:{question} affirmation:{text,repeat} goal:{prompt} emotion_log:{question} rest:{instruction,variant} celebration:{message} next_step:{instruction} canvas:{prompt} mind_map:{center,branches} quiz:{questions:[{q,options[],answer,explain}]} music:{query} audio:{mode:"record",prompt} photo:{prompt} agenda:{prompt,defaultTime:"HH:MM"} pomodoro:{focus,rest,cycles} contract:{commitment,consequence} weekly_review:{} tracking:{metric,unit,target} stretching:{sequence[],secondsEach} book:{title,author,mode:"summary"|"read",pages} document:{itemId,title,prompt} (solo PDFs de su biblioteca) exercise:{query (inglés),name (español),sets,reps|seconds,rest}'),

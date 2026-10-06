@@ -5,6 +5,7 @@ import { moderateFields } from '@/lib/social/guard';
 const Body = z.object({
   handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,30}$/, 'Usa 3 a 30 letras, números o guion bajo.'),
   displayName: z.string().trim().min(2).max(60),
+  category: z.string().trim().min(2).max(40).optional(),
   bio: z.string().trim().max(400).optional(),
   methodology: z.string().trim().max(3000).optional(),
   principles: z.array(z.string().trim().min(2).max(160)).max(10).default([]),
@@ -19,12 +20,12 @@ export async function POST(req: Request) {
   if (!parsed.success) return Response.json({ ok: false, message: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
   const c = parsed.data;
 
-  const blocked = await moderateFields([c.displayName, c.bio, c.methodology, ...c.principles]);
+  const blocked = await moderateFields([c.displayName, c.category, c.bio, c.methodology, ...c.principles, ...c.boundaries], 'creator');
   if (blocked) return blocked;
 
   const { data: existing } = await supabase.from('creator_profiles').select('user_id').eq('user_id', user.id).maybeSingle();
   const fields = {
-    display_name: c.displayName, bio: c.bio ?? null, methodology: c.methodology ?? null,
+    display_name: c.displayName, category: c.category ?? null, bio: c.bio ?? null, methodology: c.methodology ?? null,
     principles: c.principles, boundaries: c.boundaries,
   };
   const { error } = existing

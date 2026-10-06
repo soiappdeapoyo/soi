@@ -11,6 +11,7 @@ import { buttonClass } from '@/components/ui/button';
 import { todayISO } from '@/lib/utils';
 import { MomentPlayer } from '@/components/moments/moment-player';
 import { loadDayPlan, playQueue, refOf } from '@/lib/day-plan';
+import { isCreatorAccount } from '@/lib/creators/profile';
 
 export const metadata: Metadata = { title: 'Moment en curso' };
 
@@ -22,9 +23,10 @@ export default async function PlayMomentPage({ params, searchParams }: { params:
   const m = await getMoment(supabase, id);
   if (!m) notFound();
 
-  const { access, profile } = await getAccessMap(user.id);
+  const [{ access, profile }, creatorAccount] = await Promise.all([getAccessMap(user.id), isCreatorAccount(supabase, user.id)]);
   // Moments propios sin contenido guiado ("medita" con solo tiempo): los agentes lo completan una vez y se guarda.
-  if (!m.official && m.creator_id === user.id && access.routine_execution) {
+  // En una cuenta de creador no: su contenido es 100% suyo.
+  if (!m.official && m.creator_id === user.id && access.routine_execution && !creatorAccount) {
     const raw = await fullBlocks(supabase, m);
     if (raw) {
       const { blocks: enriched, changed } = await enrichGuidedBlocks(supabase, user.id, profile, raw, `${m.title}. ${m.objective}`);
@@ -66,6 +68,7 @@ export default async function PlayMomentPage({ params, searchParams }: { params:
       locked={!allowed}
       challenge={challenge}
       playlist={queue}
+      aiContent={!creatorAccount}
       autoStart={Boolean(queue) && auto === '1' && allowed}
       ttsAllowed={access.tts && (profile?.tts_enabled ?? true)}
       voice={profile?.voice_preference}

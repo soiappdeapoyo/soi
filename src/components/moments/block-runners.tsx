@@ -9,6 +9,7 @@ import type { VoiceStyle } from '@/config/voices';
 import { BookRunner, DocumentRunner, ExerciseRunner } from './block-runners-library';
 import type { ActionBlock } from '@/config/actions';
 import { cn } from '@/lib/utils';
+import { coverUrl } from '@/lib/moments/types';
 
 export type BlockOutput = {
   type?: string;
@@ -256,6 +257,17 @@ export function BlockRunner(p: RunnerProps) {
           <p className="relative text-balance text-2xl font-medium">{cfg<{ message: string }>(b).message}</p>
         </div>
       );
+    case 'image': {
+      const c = cfg<{ path: string; caption?: string }>(b);
+      const src = coverUrl(c.path);
+      return (
+        <figure className="flex flex-col items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {src && <img src={src} alt={c.caption ?? b.title} className="max-h-[52dvh] w-full rounded-[20px] object-contain shadow-ring" />}
+          {c.caption && <figcaption className="whitespace-pre-line text-balance text-center text-[17px] leading-relaxed">{c.caption}</figcaption>}
+        </figure>
+      );
+    }
     case 'book': return <BookRunner block={b} output={output} setOutput={setOutput} say={p.say} running={p.running} />;
     case 'document': return <DocumentRunner block={b} output={output} setOutput={setOutput} say={p.say} running={p.running} />;
     case 'exercise': return <ExerciseRunner block={b} output={output} setOutput={setOutput} say={p.say} running={p.running} />;

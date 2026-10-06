@@ -3,7 +3,7 @@ import {
   Users, User, Sunrise, Settings, Flame, MessageCircle, Lock, Layers, PenLine, Sun, Zap, Orbit,
   Wind, Timer, Eye, ListChecks, CirclePlay, Footprints, BookOpen, Smile, Coffee, PartyPopper, ArrowRight,
   Palette, Network, CircleHelp, Music, Mic, Camera, CalendarClock, Hourglass, Signature, ClipboardCheck, ChartLine, PersonStanding,
-  BookMarked, FileText, Dumbbell, Crown, type LucideIcon,
+  BookMarked, FileText, Dumbbell, Crown, Image, type LucideIcon,
 } from 'lucide-react';
 
 const MAP: Record<string, LucideIcon> = {
@@ -11,7 +11,7 @@ const MAP: Record<string, LucideIcon> = {
   Users, User, Sunrise, Settings, Flame, MessageCircle, Lock, Layers, PenLine, Sun, Zap, Orbit,
   Wind, Timer, Eye, ListChecks, CirclePlay, Footprints, BookOpen, Smile, Coffee, PartyPopper, ArrowRight,
   Palette, Network, CircleHelp, Music, Mic, Camera, CalendarClock, Hourglass, Signature, ClipboardCheck, ChartLine, PersonStanding,
-  BookMarked, FileText, Dumbbell, Crown,
+  BookMarked, FileText, Dumbbell, Crown, Image,
 };
 
 /** Íconos lucide a 1.5 de trazo, tamaños coherentes 16/20/24 (por defecto 20). */

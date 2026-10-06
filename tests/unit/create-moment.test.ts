@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+vi.mock('@/lib/moments/auto-cover', () => ({ scheduleAutoCover: () => {} }));
 import { buildTools } from '@/lib/ai/tools';
 
 function fakeSupabase() {

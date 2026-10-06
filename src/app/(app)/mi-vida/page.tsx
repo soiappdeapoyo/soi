@@ -17,6 +17,7 @@ import { intensityLabel, loadBattles } from '@/lib/battles';
 import { ENEMIES } from '@/config/enemies';
 import { DayPlanner } from '@/components/moments/day-planner';
 import { PrepareCounter } from '@/components/battles/battle-actions';
+import { isCreatorAccount } from '@/lib/creators/profile';
 import { loadDayPlan, refOf, suggestForPart } from '@/lib/day-plan';
 import { OFFICIAL_MOMENTS } from '@/config/official-moments';
 import { summarizeRuns, type Progress, type RunRow } from '@/lib/rewards';
@@ -170,8 +171,11 @@ type LibraryRow = { id: string; kind: 'book' | 'pdf' | 'exercise' | GuidedKind; 
 const READ_STATUS: Record<string, string> = { want: 'Quiero leer', reading: 'Leyendo', done: 'Leído', saved: '' };
 
 async function LibraryTab({ supabase, userId }: { supabase: Sb; userId: string }) {
-  const { data } = await supabase.from('library_items').select('id, kind, title, author, cover_url, status, external_id, file_size, metadata')
-    .eq('user_id', userId).order('updated_at', { ascending: false }).limit(200);
+  const [{ data }, creatorAccount] = await Promise.all([
+    supabase.from('library_items').select('id, kind, title, author, cover_url, status, external_id, file_size, metadata')
+      .eq('user_id', userId).order('updated_at', { ascending: false }).limit(200),
+    isCreatorAccount(supabase, userId),
+  ]);
   const rows = (data ?? []) as LibraryRow[];
   const order = { reading: 0, want: 1, done: 2, saved: 3 } as Record<string, number>;
   const books = rows.filter((r) => r.kind === 'book').sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
@@ -184,7 +188,8 @@ async function LibraryTab({ supabase, userId }: { supabase: Sb; userId: string }
       <section aria-labelledby="lib-guided">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 id="lib-guided" className="flex items-center gap-1.5 text-sm font-medium text-soi-muted"><Sparkles className="h-4 w-4" aria-hidden="true" /> Meditaciones, afirmaciones y manifestaciones</h2>
-          <GuidedCreate />
+          {/* Cuenta de creador: sin contenido escrito por la IA. */}
+          {!creatorAccount && <GuidedCreate />}
         </div>
         {guided.length ? (
           <ul className="flex flex-col gap-1.5">

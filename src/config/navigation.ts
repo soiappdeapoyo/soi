@@ -31,7 +31,7 @@ export const MY_LIFE = [
 /** Crear: diseñar Moments y (con perfil de creador) publicarlos. */
 export const CREATE_LINKS = [
   { href: '/m/nuevo', label: 'Crear un Moment', icon: 'Layers' },
-  { href: '/creadores', label: 'Estudio de creador', icon: 'PenLine' },
+  { href: '/creadores', label: 'Cuenta de creador', icon: 'PenLine' },
 ] as const;
 
 export const PROTECTED_PREFIXES = [

@@ -62,6 +62,7 @@ export function blockSpeech(b: Pick<ActionBlock, 'type' | 'title' | 'config'>): 
       parts.push(c.mode === 'read' ? `Lee ${num(c.pages, 10)} páginas de ${str(c.title)}${by}.` : `Ideas clave de ${str(c.title)}${by}.`);
       break;
     }
+    case 'image': parts.push(str(c.caption)); break;
     case 'document': parts.push(`Lee el documento ${str(c.title)}.`, str(c.prompt)); break;
     case 'exercise': {
       const sets = num(c.sets, 3);

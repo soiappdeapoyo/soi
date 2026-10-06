@@ -76,6 +76,10 @@ export type CreatorProfile = {
   is_verified: boolean;
   is_demo: boolean;
   created_at: string;
+  /** Etiqueta profesional bajo el nombre ("Coach de hábitos"). */
+  category?: string | null;
+  /** Destacados: grupos de Moments por tema (como las historias destacadas). */
+  highlights?: unknown;
 };
 
 export type SoiBlueprint = {

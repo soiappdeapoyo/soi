@@ -1,10 +1,14 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { BadgeCheck } from 'lucide-react';
-import { getSessionUser } from '@/lib/supabase/server';
 import { PublicShell } from '@/components/public/public-shell';
-import { MomentFlowCard } from '@/components/moments/moment-flow-card';
-import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
+import { MomentGrid } from '@/components/creators/moment-grid';
+import { Highlights } from '@/components/creators/highlights';
+import { Avatar } from '@/components/feed/avatar';
+import { loadCreatorLayer } from '@/lib/creators/profile';
+import { loadProfileCard } from '@/lib/social/profile';
+import { ProfileLinks } from '@/components/profile/profile-links';
+import { createAdminClient, getSessionUser } from '@/lib/supabase/server';
 import { transformationScore, type CreatorStats } from '@/config/creators';
 import type { CreatorProfile } from '@/types/database';
 
@@ -24,61 +28,53 @@ export async function generateMetadata({ params }: { params: Promise<{ handle: s
   };
 }
 
-/** Perfil público: la reputación es el Transformation Score, no los seguidores. */
-export default async function CreatorPublicPage({ params }: { params: Promise<{ handle: string }> }) {
-  const { handle } = await params;
+/**
+ * Perfil público del creador para visitantes sin sesión (enlaces desde redes). Con sesión, es el mismo perfil
+ * de siempre (/u/[id]): un solo perfil, como en Instagram.
+ */
+export default async function CreatorPublicPage({ params, searchParams }: { params: Promise<{ handle: string }>; searchParams: Promise<{ destacado?: string }> }) {
+  const [{ handle }, { destacado }] = await Promise.all([params, searchParams]);
   const { supabase, user, creator } = await load(handle);
   if (!creator) notFound();
+  if (user) redirect(`/u/${creator.user_id}${destacado ? `?tab=moments&destacado=${destacado}` : ''}`);
 
-  const [{ data: blueprints }, { data: statsRows }] = await Promise.all([
-    supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('creator_id', creator.user_id).eq('status', 'published').order('executions_count', { ascending: false }),
+  // Un solo perfil: bio, foto y enlaces son los del perfil (lo público de get_profile_card; el visitante no tiene sesión).
+  const [layer, { data: statsRows }, card] = await Promise.all([
+    loadCreatorLayer(supabase, creator.user_id),
     supabase.rpc('creator_stats', { p_creator: creator.user_id }),
+    loadProfileCard(createAdminClient(), creator.user_id),
   ]);
   const raw = (Array.isArray(statsRows) ? statsRows[0] : statsRows) as Record<keyof CreatorStats, number | string> | null;
   const stats: CreatorStats = {
     implementations: Number(raw?.implementations ?? 0), completions: Number(raw?.completions ?? 0),
     active_last_14d: Number(raw?.active_last_14d ?? 0), results_reported: Number(raw?.results_reported ?? 0),
   };
+  const moments = layer?.moments ?? [];
+  const h = destacado ? layer?.highlights.find((x) => x.id === destacado) : null;
 
   return (
-    <PublicShell signedIn={Boolean(user)}>
-      <p className="text-xs text-soi-muted">Transformation Creator</p>
-      <h1 className="mt-1 flex items-center gap-2 text-3xl font-semibold tracking-tight">
-        {creator.display_name}
-        {creator.is_verified && <BadgeCheck className="h-6 w-6 text-soi-accent" aria-label="Creador verificado" />}
-      </h1>
-      <p className="text-sm text-soi-muted">@{creator.handle}</p>
-      {creator.bio && <p className="mt-4 text-[17px] leading-relaxed">{creator.bio}</p>}
+    <PublicShell signedIn={false}>
+      <header>
+        <Avatar url={card?.avatar_url ?? creator.avatar_url} name={card?.display_name ?? creator.display_name} size={84} className="text-2xl" />
+        <h1 className="mt-3 flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
+          {creator.display_name}
+          {creator.is_verified && <BadgeCheck className="h-5 w-5 text-soi-accent" aria-label="Creador verificado" />}
+        </h1>
+        <p className="text-sm text-soi-muted">@{creator.handle}{creator.category ? ` · ${creator.category}` : ''}</p>
+        {(card?.bio ?? creator.bio) && <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed">{card?.bio ?? creator.bio}</p>}
+        {card && <ProfileLinks links={card.links} />}
+        <p className="nums mt-2 text-sm text-soi-muted">
+          <span className="font-medium text-soi-ink">{moments.length}</span> Moments
+          <span aria-hidden="true"> · </span><span className="font-medium text-soi-ink">{stats.implementations}</span> {stats.implementations === 1 ? 'persona' : 'personas'}
+          <span aria-hidden="true"> · </span>Transformation Score <span className="font-medium text-soi-ink">{transformationScore(stats)}</span>
+        </p>
+      </header>
 
-      <dl className="nums mt-5 grid grid-cols-3 gap-1.5 rounded-[14px] bg-soi-sidebar p-1.5">
-        {[
-          { k: 'Transformation Score', v: transformationScore(stats) },
-          { k: 'Personas', v: stats.implementations },
-          { k: 'Lo completaron', v: stats.completions },
-        ].map((t) => (
-          <div key={t.k} className="rounded-lg bg-white px-3 py-2.5 shadow-ring">
-            <dt className="text-xs text-soi-muted">{t.k}</dt>
-            <dd className="text-xl font-medium">{t.v}</dd>
-          </div>
-        ))}
-      </dl>
+      {layer && <Highlights items={layer.highlights} base={`/c/${creator.handle}`} active={destacado} withTab={false} />}
 
-      {creator.principles.length > 0 && (
-        <section className="mt-6">
-          <h2 className="mb-2 text-sm font-medium text-soi-muted">Principios</h2>
-          <ul className="flex flex-col gap-1.5">
-            {creator.principles.map((p) => <li key={p} className="rounded-[14px] bg-white p-3 text-[15px] shadow-ring">{p}</li>)}
-          </ul>
-        </section>
-      )}
-
-      <section className="mt-6">
-        <h2 className="mb-2 text-sm font-medium text-soi-muted">Moments</h2>
-        {blueprints?.length ? (
-          <ul className="flex flex-col gap-2">
-            {blueprints.map((b) => { const m = toMomentFlow(b); return <li key={m.id}><MomentFlowCard m={m} creator={{ user_id: creator.user_id, handle: creator.handle, display_name: creator.display_name, is_verified: creator.is_verified }} href={`/b/${m.id}`} /></li>; })}
-          </ul>
-        ) : <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">Pronto publicará sus primeros Moments.</p>}
+      <section className="mt-5" aria-label="Moments">
+        {h && <p className="mb-2 px-1 text-sm text-soi-muted">Destacado: <span className="font-medium text-soi-ink">{h.title}</span></p>}
+        <MomentGrid moments={h ? h.moments : moments} hrefBase="/b" empty={<p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">Pronto publicará sus primeros Moments.</p>} />
       </section>
     </PublicShell>
   );

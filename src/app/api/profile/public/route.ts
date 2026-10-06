@@ -41,7 +41,7 @@ export async function PATCH(req: Request) {
     if (labelHard === 'venta') return Response.json({ ok: false, message: MODERATION_COPY.venta }, { status: 422 });
     links.push({ label: l.label, url });
   }
-  if (links.length && !creator) return Response.json({ ok: false, message: 'Los enlaces son para creadores. Activa tu Estudio de creador.' }, { status: 403 });
+  if (links.length && !creator) return Response.json({ ok: false, message: 'Los enlaces son para creadores. Activa tu cuenta de creador.' }, { status: 403 });
 
   const changedText = [display_name !== (creator?.display_name ?? null) ? display_name : null, bio || null];
   const blocked = await moderateFields([...changedText, ...links.map((l) => l.label)]);

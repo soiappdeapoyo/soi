@@ -104,7 +104,7 @@ export function EditProfileButton(props: Props) {
               </>
             ) : (
               <p className="mt-1 text-sm text-soi-muted">
-                Los enlaces son para creadores. <Link href="/creadores" className="text-soi-accent underline underline-offset-4">Activa tu Estudio de creador</Link>.
+                Los enlaces son para creadores. <Link href="/creadores" className="text-soi-accent underline underline-offset-4">Activa tu cuenta de creador</Link>.
               </p>
             )}
           </fieldset>

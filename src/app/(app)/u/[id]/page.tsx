@@ -13,26 +13,33 @@ import { FeedList } from '@/components/feed/feed-list';
 import { MomentFlowCard } from '@/components/moments/moment-flow-card';
 import { ProfileHeader } from '@/components/profile/profile-header';
 import { ProfileTabs, type ProfileTab } from '@/components/profile/profile-tabs';
+import { Highlights } from '@/components/creators/highlights';
+import { CreatorMoments } from '@/components/creators/creator-moments';
+import { loadCreatorLayer } from '@/lib/creators/profile';
 
 export const metadata: Metadata = { title: 'Perfil' };
 
 const TABS: ProfileTab[] = [{ id: 'publicaciones', label: 'Publicaciones' }, { id: 'moments', label: 'Moments' }];
+/** Cuenta de creador: primero su trabajo (cuadrícula), luego retos y publicaciones. */
+const CREATOR_TABS: ProfileTab[] = [{ id: 'moments', label: 'Moments' }, { id: 'retos', label: 'Retos' }, { id: 'publicaciones', label: 'Publicaciones' }];
 
 /** Perfil público en Impulso (estilo Substack). Tu propio perfil vive en /yo; "Ver como los demás" llega aquí. */
-export default async function UserPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; vista?: string }> }) {
-  const [{ id }, { tab: tabParam, vista }] = await Promise.all([params, searchParams]);
+export default async function UserPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; vista?: string; destacado?: string }> }) {
+  const [{ id }, { tab: tabParam, vista, destacado }] = await Promise.all([params, searchParams]);
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
   const mine = id === user.id;
   if (mine && vista !== 'publica') redirect(tabParam ? `/yo?tab=${tabParam}` : '/yo');
-  const tab = tabParam === 'moments' ? 'moments' : 'publicaciones';
 
-  const [card, { data: iFollow }, { profile, access }] = await Promise.all([
+  const [card, { data: iFollow }, { profile, access }, creator] = await Promise.all([
     loadProfileCard(supabase, id),
     supabase.from('follows').select('followee_id').eq('follower_id', user.id).eq('followee_id', id).maybeSingle(),
     getAccessMap(user.id),
+    loadCreatorLayer(supabase, id),
   ]);
   if (!card) notFound();
+  const tabs = creator ? CREATOR_TABS : TABS;
+  const tab = tabs.some((t) => t.id === tabParam) ? tabParam! : tabs[0]!.id;
   const [a, b] = [user.id, id].sort() as [string, string];
   const [{ data: canMessage }, { data: thread }] = mine ? [{ data: false }, { data: null }] : await Promise.all([
     supabase.rpc('can_message', { p_sender: user.id, p_recipient: id }),
@@ -52,6 +59,7 @@ export default async function UserPage({ params, searchParams }: { params: Promi
       )}
       <ProfileHeader
         card={card}
+        creator={creator ? { category: creator.category, moments: creator.moments.length, people: creator.people } : null}
         actions={mine ? null : (
           <>
             <FollowButton userId={id} initial={Boolean(iFollow)} count={card.followers} />
@@ -59,9 +67,12 @@ export default async function UserPage({ params, searchParams }: { params: Promi
           </>
         )}
       />
-      <ProfileTabs tabs={TABS} active={tab} base={base} />
+      {creator && <Highlights items={creator.highlights} base={base} active={tab === 'moments' ? destacado : null} />}
+      <ProfileTabs tabs={tabs} active={tab} base={base} />
       <div className="pt-4">
-        {tab === 'publicaciones' ? <Posts supabase={supabase} userId={user.id} authorId={id} me={me} /> : <Moments supabase={supabase} authorId={id} />}
+        {tab === 'publicaciones' ? <Posts supabase={supabase} userId={user.id} authorId={id} me={me} />
+          : creator ? <CreatorMoments creator={creator} tab={tab} highlight={destacado} />
+          : <Moments supabase={supabase} authorId={id} />}
       </div>
     </div>
   );

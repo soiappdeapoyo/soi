@@ -109,6 +109,11 @@ export const ACTION_CONFIG = {
     seconds: z.number().int().min(5).max(300).optional(),
     rest: z.number().int().min(0).max(180).default(30),
   }).refine((c) => c.exerciseId || c.query, { message: 'Elige un ejercicio' }),
+  /** Imagen propia (creadores y cualquiera): se contempla con su texto. Vive en moment-assets/<uid>/images/. */
+  image: z.object({
+    path: z.string().regex(/^[0-9a-f-]{36}\/images\/[0-9a-f-]{36}\.(webp|jpg|png)$/),
+    caption: z.string().trim().max(600).optional(),
+  }),
   next_step: z.object({ instruction: text(240) }),
   moment: z.object({ momentId: z.string().uuid().optional(), slug: z.string().max(60).optional() })
     .refine((c) => c.momentId || c.slug, { message: 'Un Moment anidado necesita momentId o slug' }),
@@ -151,6 +156,7 @@ export const ACTIONS: Record<ActionType, { label: string; icon: string; minutes:
   stretching: { label: 'Estiramiento', icon: 'PersonStanding', minutes: 4, eslabon: 'emocion', output: 'none', hint: 'Una secuencia guiada' },
   manifestation: { label: 'Manifestación', icon: 'Sparkles', minutes: 5, eslabon: 'pensamiento', output: 'none', hint: 'Qué manifestar, tu asunción y la escena del deseo cumplido' },
   book: { label: 'Libro', icon: 'BookMarked', minutes: 5, eslabon: 'pensamiento', output: 'none', hint: 'Ideas clave de un libro o unas páginas para leer' },
+  image: { label: 'Imagen', icon: 'Image', minutes: 1, eslabon: 'emocion', output: 'none', hint: 'Una imagen tuya para contemplar, con su texto' },
   document: { label: 'Documento', icon: 'FileText', minutes: 10, eslabon: 'pensamiento', output: 'none', hint: 'Un PDF: artículo, guía o ebook' },
   exercise: { label: 'Ejercicio', icon: 'Dumbbell', minutes: 4, eslabon: 'accion', output: 'none', hint: 'Calistenia, gimnasio o estiramiento con animación' },
   next_step: { label: 'Próximo paso', icon: 'ArrowRight', minutes: 2, eslabon: 'accion', output: 'text', hint: 'La acción concreta que sigue' },
@@ -254,9 +260,11 @@ export function defaultBlock(type: ActionType): ActionBlock {
     next_step: { instruction: 'La acción más pequeña que puedes hacer hoy.' },
     moment: { slug: 'brian_tracy_5min' },
   };
-  // Documento y libro no tienen valor por defecto: se crean vacíos y la persona elige el PDF o busca el libro.
+  // Documento, libro e imagen no tienen valor por defecto: se crean vacíos y la persona elige el PDF, busca el libro o sube la imagen.
   const config = type === 'document'
     ? { title: 'Documento' }
+    : type === 'image'
+      ? {}
     : type === 'book'
       ? { title: '', mode: 'summary' }
     : ACTION_CONFIG[type].parse(defaults[type] ?? {}) as Record<string, unknown>;

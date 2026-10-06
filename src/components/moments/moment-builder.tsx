@@ -14,11 +14,11 @@ import { Icon } from '@/components/ui/icon';
 import { ACTIONS, ACTION_TYPES, MOMENT_KINDS, defaultBlock, exerciseSeconds, type ActionBlock, type ActionType, type MomentKind } from '@/config/actions';
 import { CREATOR_REVENUE_SHARE, formatPrice } from '@/config/creators';
 import { cn } from '@/lib/utils';
-import { AudioField, QuizEditor } from './builder-fields';
+import { AudioField, ImageField, QuizEditor, YoutubeField } from './builder-fields';
 import { BookField, DocumentField, ExerciseField } from './builder-library-fields';
 import { GuidedField } from './guided-field';
 
-type Field = { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'lines' | 'select' | 'time' | 'audio' | 'quiz' | 'book' | 'document' | 'exercise'; options?: { value: string; label: string }[]; min?: number; max?: number };
+type Field = { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'lines' | 'select' | 'time' | 'audio' | 'quiz' | 'book' | 'document' | 'exercise' | 'image' | 'youtube'; options?: { value: string; label: string }[]; min?: number; max?: number };
 
 const FIELDS: Record<ActionType, Field[]> = {
   breathing: [{ key: 'inhale', label: 'Inhalar (s)', kind: 'number', min: 2, max: 8 }, { key: 'exhale', label: 'Exhalar (s)', kind: 'number', min: 2, max: 10 }],
@@ -27,7 +27,8 @@ const FIELDS: Record<ActionType, Field[]> = {
   writing: [{ key: 'prompt', label: 'Pregunta para escribir', kind: 'text' }],
   visualization: [{ key: 'scene', label: 'Escena', kind: 'textarea' }],
   checklist: [{ key: 'items', label: 'Pasos (uno por línea)', kind: 'lines' }],
-  video: [{ key: 'query', label: 'Qué video buscar (autor y tema)', kind: 'text' }],
+  video: [{ key: 'videoId', label: 'Link de YouTube', kind: 'youtube' }, { key: 'query', label: 'O qué video buscar (autor y tema)', kind: 'text' }],
+  image: [{ key: 'path', label: 'Imagen', kind: 'image' }, { key: 'caption', label: 'Texto que acompaña la imagen (opcional)', kind: 'textarea' }],
   walk: [{ key: 'instruction', label: 'Instrucción', kind: 'text' }],
   gratitude: [{ key: 'count', label: 'Cuántas cosas', kind: 'number', min: 1, max: 5 }],
   reading: [{ key: 'book', label: 'Libro', kind: 'text' }, { key: 'pages', label: 'Páginas', kind: 'number', min: 1, max: 100 }],
@@ -273,7 +274,7 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                     </Select>
                   </div>
                 )}
-                {(b.type === 'meditation' || b.type === 'affirmation' || b.type === 'manifestation') && (
+                {!isCreator && (b.type === 'meditation' || b.type === 'affirmation' || b.type === 'manifestation') && (
                   <div className="mt-2">
                     <GuidedField kind={b.type === 'affirmation' ? 'affirmations' : b.type} minutes={b.minutes}
                       intention={[title, objective, b.title].filter(Boolean).join('. ')}
@@ -289,11 +290,11 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                       }} className="sm:col-span-2">
                       {nestable.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </Select>
-                  ) : FIELDS[b.type].map((f) => {
+                  ) : FIELDS[b.type].filter((f) => !(isCreator && b.type === 'video' && f.key === 'query')).map((f) => {
                     const id = `${b.id}-${f.key}`;
                     const v = b.config[f.key];
                     return (
-                      <div key={f.key} className={cn(['textarea', 'lines', 'quiz', 'audio', 'book', 'document', 'exercise'].includes(f.kind) ? 'sm:col-span-2' : '')}>
+                      <div key={f.key} className={cn(['textarea', 'lines', 'quiz', 'audio', 'book', 'document', 'exercise', 'image', 'youtube'].includes(f.kind) ? 'sm:col-span-2' : '')}>
                         {!['book', 'document', 'exercise'].includes(f.kind) && <Label htmlFor={id} className="text-xs text-soi-muted">{f.label}</Label>}
                         {f.kind === 'textarea' ? <Textarea id={id} rows={2} value={String(v ?? '')} onChange={(e) => setCfg(i, f.key, e.target.value)} />
                           : f.kind === 'lines' ? <Textarea id={id} rows={3} value={((v as string[]) ?? []).join('\n')} onChange={(e) => setCfg(i, f.key, e.target.value.split('\n').slice(0, 10))} />
@@ -302,8 +303,10 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                           : f.kind === 'select' ? <Select id={id} value={String(v)} onChange={(e) => setCfg(i, f.key, e.target.value)}>{f.options!.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
                           : f.kind === 'time' ? <Input id={id} type="time" value={String(v ?? '07:00')} onChange={(e) => setCfg(i, f.key, e.target.value)} className="nums" />
                           : f.kind === 'audio' ? <AudioField id={id} value={v as string | undefined} onChange={(url) => setCfg(i, f.key, url)} />
+                          : f.kind === 'image' ? <ImageField id={id} value={v as string | undefined} onChange={(path) => setCfg(i, f.key, path)} />
+                          : f.kind === 'youtube' ? <YoutubeField id={id} videoId={v as string | undefined} onChange={(vid) => patchCfg(i, vid ? { videoId: vid, query: undefined, title: undefined, thumbnail: undefined } : { videoId: undefined })} />
                           : f.kind === 'quiz' ? <QuizEditor value={(v as QuizQ[]) ?? []} onChange={(qs) => setCfg(i, f.key, qs)} />
-                          : f.kind === 'book' ? <BookField id={id} value={b.config} onChange={(patch) => patchCfg(i, patch)} />
+                          : f.kind === 'book' ? <BookField id={id} value={b.config} onChange={(patch) => patchCfg(i, patch)} noAI={isCreator} />
                           : f.kind === 'document' ? <DocumentField id={id} value={b.config} onChange={(patch) => patchCfg(i, patch)} />
                           : f.kind === 'exercise' ? <ExerciseField id={id} value={b.config} onChange={(patch) => patchCfg(i, patch)} />
                           : <Input id={id} value={String(v ?? '')} onChange={(e) => setCfg(i, f.key, e.target.value)} />}
