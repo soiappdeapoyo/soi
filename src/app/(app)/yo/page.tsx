@@ -36,6 +36,7 @@ const TABS: ProfileTab[] = [
 const ACCOUNT_LINKS = [
   { href: '/perfil', label: 'Mi perfil e identidad' },
   { href: '/evidencias', label: 'Muro de Evidencias' },
+  { href: '/ritual', label: 'Ritual diario' },
   { href: '/mensajes', label: 'Mensajes' },
   { href: '/creadores', label: 'Estudio de creador' },
   { href: '/planes', label: 'Planes SOI+' },
