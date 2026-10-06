@@ -3,6 +3,7 @@ import { getSessionUser } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/billing/check-access';
 import { recordMomentum } from '@/lib/momentum-server';
 import { registerRitualDay } from '@/lib/streak';
+import { identityGains } from '@/lib/identity/gains';
 import { remember } from '@/lib/ai/rag';
 import { rpcError } from '@/lib/social/guard';
 import { todayISO } from '@/lib/utils';
@@ -21,6 +22,8 @@ type Outputs = Record<string, Out | undefined>;
  * Cerrar la ejecución: resultados (ánimo después) y aprendizaje ("¿qué funcionó?").
  * Efectos: momentum, racha sin castigo, metas nuevas al perfil, próximo paso como Action Card y aprendizaje a la memoria.
  */
+export const maxDuration = 60;
+
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { supabase, user } = await getSessionUser();
@@ -129,5 +132,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   await recordMomentum(supabase, user.id, 'moment_completed', { eslabon: 'accion', metadata: ref });
   const streak = await registerRitualDay(supabase, user.id, today);
-  return Response.json({ ok: true, streak, challenge });
+  // Mi Nuevo Yo: qué identidades y capacidades fortaleció este Moment (y si subió de nivel).
+  const { data: doneRun } = await supabase.from('moment_runs').select('completed_at').eq('id', id).maybeSingle();
+  const identity = doneRun?.completed_at
+    ? await identityGains(supabase, user.id, profile, run.moment_id ? `m:${run.moment_id}` : `s:${run.moment_slug}`, doneRun.completed_at as string).catch(() => null)
+    : null;
+  return Response.json({ ok: true, streak, challenge, identity });
 }

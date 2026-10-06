@@ -26,7 +26,7 @@ export function IdeaOwnerControls({ id, visibility, canShare, blueprintId }: {
     if (!window.confirm('¿Eliminar esta idea? No se puede deshacer.')) return;
     setBusy(true);
     await fetch(`/api/moments/${id}`, { method: 'DELETE' });
-    router.push('/mi-vida?tab=ideas');
+    router.push('/mi-vida');
   }
 
   return (

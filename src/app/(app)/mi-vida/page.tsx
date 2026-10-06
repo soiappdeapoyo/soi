@@ -1,17 +1,18 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { ArrowRight, BookOpen, Brain, Dumbbell, FileText, Heart, Link2, Plus, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, Brain, Check, Dumbbell, FileText, Heart, Plus, Sparkles } from 'lucide-react';
 import { GuidedCreate } from '@/components/library/guided-create';
 import { GUIDED_LABEL, type GuidedKind } from '@/lib/guided';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/billing/check-access';
-import { loadLifeGraph, type LifeNode } from '@/lib/life-graph';
 import { loadMyMoments, filterMyMoments, MY_FILTERS, type MyMomentsFilter } from '@/lib/moments/mine';
-import { IdeasSection } from '@/components/social/feed-sections';
 import { ProfileTabs, type ProfileTab } from '@/components/profile/profile-tabs';
 import { MomentFlowCard } from '@/components/moments/moment-flow-card';
 import { MyMomentsGrid } from '@/components/moments/my-moments-grid';
+import { IdentitySetup } from '@/components/identity/identity-setup';
+import { WeeklyStory } from '@/components/identity/weekly-story';
+import { loadIdentityView } from '@/lib/identity/view';
 import { DayPlanner } from '@/components/moments/day-planner';
 import { loadDayPlan, refOf, suggestForPart } from '@/lib/day-plan';
 import { OFFICIAL_MOMENTS } from '@/config/official-moments';
@@ -29,14 +30,13 @@ export const metadata: Metadata = { title: 'Mi Vida' };
 const TABS: ProfileTab[] = [
   { id: 'dia', label: 'Mi día' },
   { id: 'moments', label: 'Moments' },
+  { id: 'nuevo-yo', label: 'Mi Nuevo Yo' },
   { id: 'biblioteca', label: 'Biblioteca' },
-  { id: 'ideas', label: 'Ideas' },
-  { id: 'sistema', label: 'Mi sistema' },
 ];
 
 /**
  * Mi Vida: todo lo que guardaste, para volver con facilidad.
- * Moments (continúa + colección con portada) · Biblioteca (libros, PDFs, ejercicios) · Ideas · Mi sistema.
+ * Mi día · Moments (continúa + colección con portada) · Mi Nuevo Yo (identidad con evidencia) · Biblioteca.
  */
 export default async function MiVidaPage({ searchParams }: { searchParams: Promise<{ tab?: string; filtro?: string; ordenar?: string }> }) {
   const { tab: t, filtro, ordenar } = await searchParams;
@@ -56,8 +56,7 @@ export default async function MiVidaPage({ searchParams }: { searchParams: Promi
         {tab === 'dia' && <DayTab supabase={supabase} userId={user.id} />}
         {tab === 'moments' && <MomentsTab supabase={supabase} userId={user.id} filter={(MY_FILTERS.some((f) => f.id === filtro) ? filtro : 'todos') as MyMomentsFilter} tidy={ordenar === '1'} />}
         {tab === 'biblioteca' && <LibraryTab supabase={supabase} userId={user.id} />}
-        {tab === 'ideas' && <IdeasSection supabase={supabase} userId={user.id} />}
-        {tab === 'sistema' && <SystemTab supabase={supabase} userId={user.id} />}
+        {tab === 'nuevo-yo' && <NewSelfTab supabase={supabase} userId={user.id} />}
       </div>
     </div>
   );
@@ -270,55 +269,6 @@ async function LibraryTab({ supabase, userId }: { supabase: Sb; userId: string }
   );
 }
 
-async function SystemTab({ supabase, userId }: { supabase: Sb; userId: string }) {
-  const profile = await getProfile(userId);
-  const groups = await loadLifeGraph(supabase, userId, profile);
-  return (
-    <div className="flex flex-col gap-6">
-      {groups.map((g) => (
-        <section key={g.id} aria-labelledby={`${g.id}-t`}>
-          <h2 id={`${g.id}-t`} className="mb-2 text-sm font-medium text-soi-muted">{g.label}</h2>
-          {g.nodes.length ? (
-            <ul className="flex flex-col gap-1.5 rounded-[20px] bg-soi-sidebar p-1.5">
-              {g.nodes.map((n) => <li key={n.id}><Node n={n} /></li>)}
-            </ul>
-          ) : (
-            <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">{g.empty}</p>
-          )}
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function Node({ n }: { n: LifeNode }) {
-  const body = (
-    <>
-      <span className="min-w-0 flex-1">
-        <span className="line-clamp-2 block text-[15px]">{n.title}</span>
-        {n.detail && <span className="block text-xs text-soi-muted">{n.detail}</span>}
-      </span>
-      {n.href && <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-soi-subtle" aria-hidden="true" />}
-    </>
-  );
-  return (
-    <div className="rounded-[14px] bg-white shadow-ring">
-      {n.href
-        ? <Link href={n.href} className="press flex items-start gap-3 p-3">{body}</Link>
-        : <div className="flex items-start gap-3 p-3">{body}</div>}
-      {n.links.length > 0 && (
-        <p className="flex flex-wrap gap-1.5 px-3 pb-3">
-          {n.links.map((l) => (
-            <Link key={l.href} href={l.href} className="press inline-flex items-center gap-1 rounded-md bg-soi-accent-soft px-2 py-0.5 text-xs text-soi-accent">
-              <Link2 className="h-3 w-3" aria-hidden="true" /> Conectado con {l.label}
-            </Link>
-          ))}
-        </p>
-      )}
-    </div>
-  );
-}
-
 /** Los últimos 7 días: cuáles tuvieron al menos un Moment completado (de más antiguo a hoy). */
 function weekDots(runs: RunRow[], timeZone: string) {
   // Fechas en la zona horaria de la persona: el domingo en la noche sigue siendo domingo (no lunes en UTC).
@@ -381,4 +331,109 @@ async function DayTab({ supabase, userId }: { supabase: Sb; userId: string }) {
     return true;
   });
   return <DayPlanner initial={plan.items} options={options} suggestions={suggestions} />;
+}
+
+/**
+ * Mi Nuevo Yo: no se acumulan Moments, se acumula EVIDENCIA DE IDENTIDAD.
+ * Visión → Identidades (nivel) → Capacidades → La evidencia ("SOI ha observado que…") → Tu historia.
+ */
+async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }) {
+  const profile = await getProfile(userId);
+  const tz = profile?.timezone ?? 'America/Mexico_City';
+  const v = await loadIdentityView(supabase, userId, profile, tz);
+  const fmt = (iso: string) => new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric', timeZone: tz }).format(new Date(iso));
+  const name = profile?.display_name?.split(/\s+/)[0];
+
+  return (
+    <div className="flex flex-col gap-8">
+      <section aria-labelledby="ny-vision">
+        <h2 id="ny-vision" className="mb-2 text-sm font-medium text-soi-muted">Tu visión</h2>
+        {v.vision.aim || v.vision.goals.length ? (
+          <div className="rounded-[20px] bg-soi-ink p-4 text-white">
+            {v.vision.aim && <p className="text-lg font-medium leading-snug">{v.vision.aim}</p>}
+            {(v.vision.target || v.vision.deadline) && <p className="mt-1 text-sm text-white/80">{[v.vision.target, v.vision.deadline && `para ${v.vision.deadline}`].filter(Boolean).join(' · ')}</p>}
+            {v.vision.goals.length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-1.5">{v.vision.goals.map((g, i) => <li key={i} className="rounded-full bg-white/15 px-2.5 py-1 text-xs">{g}</li>)}</ul>
+            )}
+          </div>
+        ) : (
+          <Link href="/chat?agent=napoleon_hill" className="press block rounded-[20px] bg-soi-sidebar p-4 text-sm text-soi-muted hover:shadow-soft">
+            Aún no defines tu propósito. <span className="text-soi-accent underline underline-offset-4">Constrúyelo con Napoleon Hill</span>: qué quieres, para cuándo y qué darás a cambio.
+          </Link>
+        )}
+      </section>
+
+      <section aria-labelledby="ny-ids">
+        <h2 id="ny-ids" className="mb-2 text-sm font-medium text-soi-muted">{name ? `${name}, estás convirtiéndote en…` : 'Estás convirtiéndote en…'}</h2>
+        {v.active.length ? (
+          <ul className="flex flex-col gap-2">
+            {v.active.map((i) => (
+              <li key={i.id}>
+                <Link href={`/mi-vida/yo/${i.id}`} className="press block rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-[17px] font-semibold">{i.name}</p>
+                    <p className="nums shrink-0 text-sm font-medium text-soi-accent">Nivel {i.level.level}</p>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-soi-tray" role="progressbar" aria-label={`Hacia el nivel ${i.level.level + 1}`} aria-valuemin={0} aria-valuemax={i.level.next} aria-valuenow={i.level.current}>
+                    <div className="h-full origin-left rounded-full bg-soi-accent-fill" style={{ transform: `scaleX(${i.level.progress})` }} />
+                  </div>
+                  <p className="nums mt-1.5 text-xs text-soi-muted">
+                    {i.evidenceCount ? `Basado en ${i.evidenceCount} ${i.evidenceCount === 1 ? 'evidencia' : 'evidencias'}` : 'Tu primera evidencia llega con el próximo Moment'}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <div className={v.active.length ? 'mt-3' : ''}><IdentitySetup auto={v.active.length === 0} compact={v.active.length > 0} /></div>
+      </section>
+
+      {v.capacities.length > 0 && (
+        <section aria-labelledby="ny-caps">
+          <h2 id="ny-caps" className="mb-2 text-sm font-medium text-soi-muted">Has desarrollado</h2>
+          <ul className="flex flex-col gap-2.5 rounded-[20px] bg-white p-4 shadow-ring">
+            {v.capacities.map((c) => (
+              <li key={c.name} className="grid grid-cols-[7.5rem_1fr_auto] items-center gap-3">
+                <span className="truncate text-sm">{c.name}</span>
+                <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-accent-fill" style={{ transform: `scaleX(${c.level.progress})` }} /></span>
+                <span className="nums text-xs text-soi-muted">Nivel {c.level.level}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section aria-labelledby="ny-ev">
+        <h2 id="ny-ev" className="mb-2 text-sm font-medium text-soi-muted">La evidencia</h2>
+        {v.observations.length ? (
+          <div className="rounded-[20px] bg-soi-accent-soft p-4">
+            <p className="text-sm font-medium text-soi-accent">SOI ha observado que:</p>
+            <ul className="mt-2 flex flex-col gap-1.5">{v.observations.map((o) => <li key={o} className="flex gap-2 text-[15px]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-soi-accent" aria-hidden="true" />{o}</li>)}</ul>
+          </div>
+        ) : (
+          <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">
+            {v.evidence.length ? `Llevas ${v.evidence.length} ${v.evidence.length === 1 ? 'evidencia' : 'evidencias'}. Con un par de meses de práctica, SOI te mostrará cómo estás cambiando (no motivación: evidencia).` : 'Cada Moment que vivas, cada reflexión y cada regreso se vuelven evidencia de quién te estás convirtiendo.'}
+          </p>
+        )}
+      </section>
+
+      <section aria-labelledby="ny-story">
+        <h2 id="ny-story" className="mb-2 text-sm font-medium text-soi-muted">Tu historia</h2>
+        <div className="flex flex-col gap-4">
+          <WeeklyStory />
+          {v.story.length ? (
+            <ol className="relative flex flex-col gap-4 border-l border-black/10 pl-4">
+              {v.story.map((e, i) => (
+                <li key={i} className="relative">
+                  <span aria-hidden="true" className="absolute -left-[1.3rem] top-1.5 h-2.5 w-2.5 rounded-full bg-soi-accent-fill" />
+                  <p className="text-xs text-soi-muted">{fmt(e.at)}</p>
+                  <p className="text-[15px] leading-relaxed">{e.text}</p>
+                </li>
+              ))}
+            </ol>
+          ) : <p className="text-sm text-soi-muted">Tu historia empieza con tu primer Moment.</p>}
+        </div>
+      </section>
+    </div>
+  );
 }

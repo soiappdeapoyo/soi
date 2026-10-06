@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { blockSpeech } from '@/lib/moments/speech';
 import type { VoiceStyle } from '@/config/voices';
 import { unlockAudio } from '@/lib/voice/player';
+import type { IdentityGain } from '@/lib/identity/gains';
 import { toast } from 'sonner';
 import { Check, Flame, Pause, Play, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
 import { Button, buttonClass } from '@/components/ui/button';
@@ -60,6 +61,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   const [helped, setHelped] = useState<boolean | null>(null);
   const [streak, setStreak] = useState<StreakInfo>(null);
   const [challengeDone, setChallengeDone] = useState<{ day: number; completed: number; finished: boolean } | null>(null);
+  const [gain, setGain] = useState<IdentityGain | null>(null);
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [improving, setImproving] = useState(false);
@@ -204,6 +206,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     if (!res.ok) { toast(json.message ?? 'No se pudo guardar.'); return; }
     setStreak(json.streak ?? null);
     setChallengeDone(json.challenge ?? null);
+    setGain(json.identity ?? null);
     setPhase('done');
     track('moment_completed', { moment: moment.id, mood_delta: moodBefore && moodAfter ? moodAfter - moodBefore : null });
   }
@@ -354,9 +357,29 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
           <span aria-hidden="true" className="absolute inset-0 animate-celebrate rounded-full ring-2 ring-soi-accent" />
           <span className="flex h-20 w-20 items-center justify-center rounded-full bg-soi-accent-soft text-soi-accent"><Check className="h-9 w-9" aria-hidden="true" /></span>
         </div>
-        <h2 className="text-2xl font-semibold">{challengeDone ? (challengeDone.finished ? 'Reto completado' : `Día ${challengeDone.day} completado`) : 'Moment completado'}</h2>
+        {/* No "actividad completada": acabas de cambiar una parte de quién eres. */}
+        <h2 className="text-balance text-2xl font-semibold">{gain?.identities.length ? 'Acabas de fortalecer quién eres' : challengeDone ? (challengeDone.finished ? 'Reto completado' : `Día ${challengeDone.day} completado`) : 'Una evidencia más de quién eres'}</h2>
         {challengeDone && !challengeDone.finished && challenge && <p className="nums text-sm text-soi-muted">{challengeDone.completed} de {challenge.total} días · mañana sigue el día {challengeDone.day + 1}</p>}
-        <p className="text-soi-muted">Cada acción es una evidencia de tu nueva identidad.</p>
+        {gain?.identities.length ? (
+          <ul className="flex w-full flex-col gap-1.5">
+            {gain.identities.map((i) => (
+              <li key={i.id}>
+                <Link href={`/mi-vida/yo/${i.id}`} className={cn('press flex items-center justify-between gap-3 rounded-[14px] p-3 text-left shadow-ring', i.levelUp ? 'animate-pop bg-soi-accent-soft' : 'bg-white')}>
+                  <span className="min-w-0">
+                    <span className="block text-xs text-soi-muted">Te estás convirtiendo en</span>
+                    <span className="block truncate text-[17px] font-semibold">{i.name}</span>
+                  </span>
+                  <span className="nums shrink-0 text-right text-sm font-medium text-soi-accent">{i.levelUp ? `¡Nivel ${i.level}!` : `Nivel ${i.level}`}<span className="block text-xs font-normal text-soi-muted">{i.evidenceCount} evidencias</span></span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : gain && !gain.hasIdentities ? (
+          <Link href="/mi-vida?tab=nuevo-yo" className="press text-sm text-soi-accent underline underline-offset-4">Define en quién te estás convirtiendo y cada Moment contará</Link>
+        ) : null}
+        {gain?.capacities.length ? (
+          <p className="text-sm text-soi-muted">Entrenaste: {gain.capacities.map((c) => `${c.name}${c.levelUp ? ` (¡nivel ${c.level}!)` : ''}`).join(' · ')}</p>
+        ) : null}
         {streak && (
           <p className="nums inline-flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-sm font-medium text-orange-800">
             <span className={cn('inline-flex', streak.milestone && 'animate-milestone')}><Flame className="h-5 w-5" aria-hidden="true" /></span>
