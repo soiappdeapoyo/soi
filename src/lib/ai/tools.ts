@@ -14,6 +14,7 @@ import { HillPatchSchema, loadHillMemory, saveHillMemory } from './hill-memory';
 import { ENEMY_IDS } from '@/config/enemies';
 import { recordEnemy } from '@/lib/battles';
 import { scheduleAutoCover } from '@/lib/moments/auto-cover';
+import { PROPOSAL_TOOLS } from './proposal-gate';
 import { forkOfficial, getMoment } from '@/lib/moments/server';
 import { isNearDuplicate } from '@/lib/moments/reuse';
 import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
@@ -29,6 +30,8 @@ type Ctx = {
   video?: VideoPolicy;
   /** Cuenta de creador: sin herramientas que generan contenido (Moments, meditaciones, afirmaciones). */
   creator?: boolean;
+  /** false = escuchar o pedir permiso: sin herramientas que proponen (ver proposalMode). */
+  proposals?: boolean;
 };
 
 /** Herramientas que generan contenido: una cuenta de creador no las tiene (todo su contenido es suyo). */
@@ -36,9 +39,11 @@ export const CONTENT_TOOLS = ['createMoment', 'createGuidedContent'] as const;
 
 export function buildTools(ctx: Ctx): ReturnType<typeof allTools> {
   const tools = allTools(ctx);
-  if (!ctx.creator) return tools;
-  // Cuenta de creador: la IA acompaña, no genera. (El tipo se conserva para quien llama; estas claves no viajan al modelo.)
-  return Object.fromEntries(Object.entries(tools).filter(([k]) => !(CONTENT_TOOLS as readonly string[]).includes(k))) as ReturnType<typeof allTools>;
+  // Cuenta de creador: la IA acompaña, no genera. Escuchar primero: sin propuestas hasta que haya permiso.
+  // (El tipo se conserva para quien llama; estas claves no viajan al modelo.)
+  const off = new Set<string>([...(ctx.creator ? CONTENT_TOOLS : []), ...(ctx.proposals === false ? PROPOSAL_TOOLS : [])]);
+  if (!off.size) return tools;
+  return Object.fromEntries(Object.entries(tools).filter(([k]) => !off.has(k))) as ReturnType<typeof allTools>;
 }
 
 function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx) {

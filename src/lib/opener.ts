@@ -159,21 +159,19 @@ export function buildOpener(i: OpenerInput): Opener {
   const intro = i.onboardingCompleted || i.checkin ? null : 'Soy SOI y estoy aquí para acompañarte.';
   const text = [hello, intro, evidence, said ?? maybe, suggest, ask].filter(Boolean).join(' ');
 
+  // Escuchar primero: sin señal fuerte no hay tarjeta; la propuesta está a un toque ("Proponme algo") si la quiere.
   const replies: OpenerReply[] = [];
-  if (proposal) replies.push({ label: proposal.label, href: `/m/${proposal.id}/play` });
+  if (proposal) replies.push({ label: proposal.label, href: `/m/${proposal.id}/play?from=chat` });
   if (!i.checkin) replies.push(...CHECKIN_REPLIES);
-  else replies.push({ label: 'Otra idea', text: 'Proponme otra cosa para ahora.' });
+  replies.push(proposal ? { label: 'Otra idea', text: 'Proponme otra cosa para ahora.' } : { label: 'Proponme algo', text: 'Proponme algo para ahora.' });
+  const ritualReady = !proposal && i.ritualAvailable && i.lastRitualDate !== i.today && (missed || part === 'manana');
+  if (ritualReady) replies.push({ label: 'Mi ritual de hoy', href: '/ritual' });
   if (i.lastConversationTitle) replies.push({ label: `Seguir con «${i.lastConversationTitle.slice(0, 28)}»`, text: `Sigamos con lo que hablamos: ${i.lastConversationTitle}.` });
 
-  const practice = !proposal && i.ritualAvailable && i.lastRitualDate !== i.today && (missed || part === 'manana')
-    ? ritualPractice(missed ? 'Volver con un paso pequeño.' : 'Empezar el día con intención.')
-    : null;
+  // El ritual ya no es una tarjeta en el saludo: es un chip (la persona decide).
+  const practice = null;
 
   return { text, practice, proposal, replies: replies.slice(0, 5) };
-}
-
-function ritualPractice(reason: string): OpenerPractice {
-  return { kind: 'ritual', href: '/ritual', label: 'Ritual de hoy', detail: 'Afirmación · visualización · acción · señal', reason, locked: false };
 }
 
 /**

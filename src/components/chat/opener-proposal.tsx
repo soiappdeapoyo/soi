@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Play } from 'lucide-react';
 import { buttonClass } from '@/components/ui/button';
 import type { OpenerProposal as Proposal } from '@/lib/opener';
+import { track } from '@/components/providers/analytics';
+import { TrackOnce } from './track-once';
 
 const AFTER_NO = [
   { label: 'Algo más corto', text: 'Ahora no tengo tanto tiempo. Proponme algo más corto.' },
@@ -22,6 +24,7 @@ export function OpenerProposal({ p, onSend, onDecline }: { p: Proposal; onSend?:
   function decline() {
     setDeclined(true);
     onDecline?.();
+    track('opener_declined', { moment: p.id });
     void fetch('/api/opener/decline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) }).catch(() => {});
   }
 
@@ -52,7 +55,8 @@ export function OpenerProposal({ p, onSend, onDecline }: { p: Proposal; onSend?:
         <h3 className="mt-0.5 text-[17px] font-medium">{p.title}</h3>
         <p className="mt-1 text-sm text-soi-muted">{p.why}</p>
         <div className="mt-3 flex items-center gap-2">
-          <Link href={`/m/${p.id}/play`} className={buttonClass('primary', 'sm')}><Play className="h-4 w-4" aria-hidden="true" /> {p.label}</Link>
+          <TrackOnce event="moment_proposed" props={{ source: 'opener', moment: p.id }} />
+          <Link href={`/m/${p.id}/play?from=chat`} className={buttonClass('primary', 'sm')}><Play className="h-4 w-4" aria-hidden="true" /> {p.label}</Link>
           <button type="button" onClick={decline} className="press rounded-lg px-2 py-1.5 text-sm text-soi-muted hover:text-soi-ink">Ahora no</button>
           <Link href={`/m/${p.id}`} className="press ml-auto rounded-lg px-2 py-1.5 text-sm text-soi-muted hover:text-soi-ink">Ver</Link>
         </div>

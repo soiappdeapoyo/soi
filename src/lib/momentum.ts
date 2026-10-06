@@ -108,10 +108,10 @@ export function detectMomentumState(i: StateInput): MomentumState {
 }
 
 const GUIDANCE: Record<Intervention, string> = {
-  EXECUTE: `EXECUTE — su energía está alta. Aprovecha el momento: diseña con createMoment un Moment de crecimiento (kind growth) que avance su meta, con un bloque goal o next_step. Sin teoría extra.`,
-  INSPIRE: `INSPIRE — su energía está baja. Hoy no necesita más teoría ni exigencia. Comparte UN video rápido con youtubeSearch (query con un autor del marco de SOI: Brian Tracy, Hal Elrod, Robin Sharma, Joe Dispenza, Neville Goddard o Napoleon Hill) y nada más en esa respuesta: al terminarlo SOI le hace una pregunta y su reflexión se convierte después en un Moment de 3 minutos.`,
-  REGULATE: `REGULATE — hay estrés o bloqueo. Diseña con createMoment un Moment de recuperación (kind recovery): respiración → meditación breve → escritura de una línea → registro emocional. No propongas metas nuevas.`,
-  CLARIFY: `CLARIFY — hay demasiados objetivos o falta dirección. Conversa para extraer UNA prioridad, confírmala y diseña con createMoment un Moment corto: escritura de prioridades → objetivo → próximo paso.`,
+  EXECUTE: `EXECUTE — su energía está alta. Cuando haya permiso (ver RITMO): un Moment de crecimiento (kind growth) que avance su meta, con un bloque goal o next_step. Sin teoría extra.`,
+  INSPIRE: `INSPIRE — su energía está baja. Hoy no necesita más teoría ni exigencia. Cuando haya permiso (ver RITMO), comparte UN video rápido con youtubeSearch (query con un autor del marco de SOI: Brian Tracy, Hal Elrod, Robin Sharma, Joe Dispenza, Neville Goddard o Napoleon Hill) y nada más en esa respuesta: al terminarlo SOI le hace una pregunta y su reflexión se convierte después en un Moment de 3 minutos.`,
+  REGULATE: `REGULATE — hay estrés o bloqueo. Primero valida; luego ofrece, como invitación, un Moment de recuperación corto (kind recovery): respiración → meditación breve → una línea escrita. No propongas metas nuevas.`,
+  CLARIFY: `CLARIFY — hay demasiados objetivos o falta dirección. Conversa para extraer UNA prioridad y confírmala; cuando haya permiso (ver RITMO), un Moment corto: escritura de prioridades → objetivo → próximo paso.`,
 };
 
 /**

@@ -198,7 +198,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
           {/* Respuestas rápidas del saludo: un toque y SOI ajusta (sin escribir). Solo antes del primer mensaje. */}
           {opener && messages.length === 1 && messages[0]?.id === OPENER_ID && opener.replies.length > 0 && (
             <li className="-mt-1 flex flex-wrap gap-2" aria-label="Respuestas rápidas">
-              {opener.replies.filter((r) => !(declined && opener.proposal && r.href === `/m/${opener.proposal.id}/play`)).map((r) => r.href ? (
+              {opener.replies.filter((r) => !(declined && opener.proposal && r.href === `/m/${opener.proposal.id}/play?from=chat`)).map((r) => r.href ? (
                 <Link key={r.label} href={r.href} className="press inline-flex h-9 items-center rounded-full bg-soi-ink px-3.5 text-sm text-white">{r.label}</Link>
               ) : (
                 <button key={r.label} type="button" disabled={!canSend && !detectCrisis(r.text ?? '')}

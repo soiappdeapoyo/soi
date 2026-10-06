@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Lock, Play } from 'lucide-react';
 import { Icon } from '@/components/ui/icon';
 import { buttonClass } from '@/components/ui/button';
+import { TrackOnce } from './track-once';
 import { ACTIONS, MOMENT_KINDS, type ActionType, type MomentKind } from '@/config/actions';
 
 export type MomentProposalResult = {
@@ -44,7 +45,8 @@ export function MomentProposal({ m, onSend }: { m: MomentProposalResult; onSend?
           ))}
         </ol>
         <div className="mt-4 flex items-center gap-2">
-          <Link href={`/m/${m.id}/play`} className={buttonClass(m.locked ? 'gold' : 'primary', 'sm')}>
+          <TrackOnce event="moment_proposed" props={{ source: 'chat', moment: m.id, reused: Boolean(m.reused), adjusted: Boolean(m.adjusted) }} />
+          <Link href={`/m/${m.id}/play?from=chat`} className={buttonClass(m.locked ? 'gold' : 'primary', 'sm')}>
             {m.locked ? <Lock className="h-4 w-4" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />} Comenzar
           </Link>
           <Link href={`/m/${m.id}`} className="press rounded-lg px-2 py-1.5 text-sm text-soi-muted hover:text-soi-ink">Ver o editar</Link>

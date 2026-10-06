@@ -51,6 +51,9 @@ function fmt(s: number) {
  * - Barra de tiempo LINEAL (es tiempo real). Halo de respiración solo en respiración y meditación.
  * - Una sola celebración al final (800 ms). Las salidas se guardan al pasar de bloque.
  */
+/** De dónde se abrió el Moment (chat, Hoy…), para medir en PostHog qué propuestas se viven. */
+const fromParam = () => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('from') ?? (window.location.search.includes('lista=hoy') ? 'hoy' : null));
+
 export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice, playlist, autoStart, aiContent = true }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('before');
@@ -211,7 +214,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     setRunId(json.id);
     setPhase('run');
     setRunning(true);
-    track('moment_started', { moment: moment.id });
+    track('moment_started', { moment: moment.id, from: fromParam() });
   }
 
   // Lista de Hoy: al pasar solo al siguiente, empieza sin pantalla previa (la voz ya quedó habilitada con el primer toque).
@@ -234,7 +237,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     const json = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) { toast(json.message ?? 'No se pudo guardar.'); return; }
-    track('moment_completed', { moment: moment.id, mood_delta: moodBefore && moodAfter ? moodAfter - moodBefore : null });
+    track('moment_completed', { moment: moment.id, from: fromParam(), mood_delta: moodBefore && moodAfter ? moodAfter - moodBefore : null });
     // Hablar con SOI: el chat empieza nuevo y sabe qué Moment acabas de vivir.
     if (opts?.toChat) { router.push(`/chat?nueva=1&run=${runId}`); return; }
     setStreak(json.streak ?? null);

@@ -1,14 +1,12 @@
 import { declinedFilter, lastDecline, loadDeclines, type Decline } from '@/lib/declines';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types/database';
-import type { MomentKind } from '@/config/actions';
 import { todayCheckin } from '@/lib/today';
 import { summarizeRuns, type RunRow } from '@/lib/rewards';
 import type { OpenerInput, OpenerMemory } from '@/lib/opener';
-import { getMoment, recommendMoment } from '@/lib/moments/server';
+import { getMoment } from '@/lib/moments/server';
 import { challengeLength, challengeState } from '@/lib/moments/challenge';
-import { officialMoment } from '@/config/official-moments';
-import { loadDayPlan, partOfDay, PART_SUGGEST, resolveRefs } from '@/lib/day-plan';
+import { loadDayPlan, partOfDay, resolveRefs } from '@/lib/day-plan';
 import { dateInTz, hourInTz } from '@/lib/utils';
 import type { MomentFlow } from '@/lib/moments/types';
 
@@ -27,7 +25,7 @@ export function dayLabelFor(iso: string, timeZone: string, now = new Date()) {
 
 /**
  * Lo que el saludo necesita: evidencia concreta (qué hizo y cuándo, en su zona horaria), la parte del día
- * y una propuesta con su porqué: reto de hoy > lo planeado en Mi día > lo que ya le ayudó a esta hora > lo propio de la hora.
+ * y una propuesta SOLO con señal fuerte: el día de un reto pendiente o lo planeado en Mi día que toca ahora (escuchar primero).
  */
 export async function openerContext(
   supabase: SupabaseClient, userId: string, profile: UserProfile | null,
@@ -75,27 +73,13 @@ export async function openerContext(
     if (st.availableToday && st.currentDay && said.allows(refFor(m), m.kind, true)) return { ...ctx, proposal: card(m, { challengeDay: st.currentDay }) };
   }
 
-  // 2) Lo que la persona planeó en "Mi día" (su decisión pesa más que cualquier recomendación).
+  // 2) Lo que planeó en "Mi día" y que toca ahora (su decisión; con hora, desde 15 min antes).
   const plan = await loadDayPlan(supabase, userId, tz);
   const planned = plan.items.find((i) => i.id === plan.next && !i.done);
-  if (planned?.moment && said.allows(refFor(planned.moment), planned.moment.kind, true)) return { ...ctx, proposal: card(planned.moment, { planned: true }) };
+  const nowMin = base.hour * 60 + new Date().getMinutes();
+  const due = planned && (!planned.time || Number(planned.time.slice(0, 2)) * 60 + Number(planned.time.slice(3, 5)) <= nowMin + 15);
+  if (planned?.moment && due && said.allows(refFor(planned.moment), planned.moment.kind, true)) return { ...ctx, proposal: card(planned.moment, { planned: true }) };
 
-  // 3) Por la hora del día (la ansiedad que dijo hoy manda): primero algo que ya le ayudó, con ese recuerdo.
-  const allKinds: MomentKind[] = checkin === 'anxiety' ? ['recovery'] : PART_SUGGEST[part].kinds;
-  const kinds = allKinds.filter((k) => said.allowsKind(k));
-  if (!kinds.length) return { ...ctx, proposal: null };
-  for (const r of done) {
-    if (!(r.helped || (r.learning && r.learning.trim().length >= 6))) continue;
-    const m = byRef.get(refOf(r));
-    if (!m || !kinds.includes(m.kind) || m.status === 'archived' || !said.allows(refFor(m), m.kind)) continue;
-    if (part === 'manana' && checkin !== 'anxiety' && m.kind === 'recovery') continue;
-    return { ...ctx, proposal: card(m, { memory: memoryOf(r, m) }) };
-  }
-  // 4) Lo propio de esta hora: rituales de los autores en la mañana, SATS en la noche…
-  const official = checkin === 'anxiety' ? null : PART_SUGGEST[part].slugs.map(officialMoment).find((m) => m && said.allows(refFor(m), m.kind));
-  const recommended = official ?? (await recommendMoment(supabase, userId, kinds));
-  const fallback = officialMoment('brian_tracy_5min');
-  const rec = recommended && said.allows(refFor(recommended), recommended.kind) ? recommended
-    : fallback && said.allows(refFor(fallback), fallback.kind) ? fallback : null;
-  return { ...ctx, proposal: rec ? card(rec) : null };
+  // 3) Nada más: escuchar primero. Sin una señal fuerte, el saludo no impone un Moment (hay un chip "Proponme algo").
+  return { ...ctx, proposal: null };
 }

@@ -7,6 +7,7 @@ import { streamWithFallback, AllProvidersFailedError } from '@/lib/ai/fallback';
 import { buildSystemPrompt } from '@/lib/ai/prompts';
 import { buildTools } from '@/lib/ai/tools';
 import { isCreatorAccount } from '@/lib/creators/profile';
+import { PROPOSAL_RULE, proposalMode } from '@/lib/ai/proposal-gate';
 import { continuityPrompt, loadContinuity } from '@/lib/ai/continuity';
 import { findReusable, reusePrompt } from '@/lib/moments/reuse';
 
@@ -127,6 +128,10 @@ export async function POST(req: Request) {
   }) : null;
   const state = detected === 'anxiety' ? 'anxiety' : (checkin ?? detected);
   const director = momentum && state && agent !== 'crisis' ? momentumDirectorPrompt(state, momentum) : '';
+  // Escuchar primero, proponer después (reglas): sin herramientas de propuesta hasta que lo pida o acepte.
+  const userTurns = messages.filter((m) => m.role === 'user').length;
+  const prev = messages.at(-2);
+  const ritmo = proposalMode({ text, userTurns, previousAssistant: prev?.role === 'assistant' ? textOf(prev) : null, anxiety: state === 'anxiety' });
   // Video rápido o dentro del Moment (nunca los dos), según cómo llega.
   const video = videoPolicy(state ? STATE_INTERVENTION[state] : null, text);
   const time = timeContextPrompt(profile?.timezone ?? 'America/Mexico_City');
@@ -138,7 +143,8 @@ export async function POST(req: Request) {
         .map((r) => ({ id: r.id, kind: r.kind, title: r.title, author: r.author, status: r.status, externalId: r.external_id })),
     }),
     director,
-    agent === 'crisis' ? '' : VIDEO_RULE[video],
+    agent === 'crisis' ? '' : PROPOSAL_RULE[ritmo],
+    agent === 'crisis' || ritmo === 'listen' || ritmo === 'invite' ? '' : VIDEO_RULE[video],
     isCreator && agent !== 'crisis' ? CREATOR_CHAT_RULE : '',
     agent === 'crisis' ? '' : continuityPrompt(pastTalks, profile?.timezone ?? 'America/Mexico_City'),
     agent === 'crisis' ? '' : reusePrompt(reusable, !isCreator),
@@ -164,7 +170,7 @@ export async function POST(req: Request) {
     stream = await streamWithFallback(
       system,
       await convertToModelMessages(modelMessages),
-      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video, creator: isCreator }),
+      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video, creator: isCreator, proposals: ritmo === 'propose' || ritmo === 'soothe' }),
       async ({ text: out, provider, tokens, toolCalls, toolResults }) => {
         await supabase.from('messages').insert({
           conversation_id: conversationId, user_id: user.id, role: 'assistant', content: out || '…',
