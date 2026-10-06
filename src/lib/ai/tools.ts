@@ -196,14 +196,14 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
             if (id) return proposal(id, blocks.reduce((a, b) => a + b.minutes, 0), { adjusted: true });
           } else if (base && base.creator_id === userId) {
             const { error: vErr } = await supabase.rpc('save_moment_version', { p_id: base.id, p_blocks: blocks, p_note: m.reason.slice(0, 160) });
-            if (!vErr) return proposal(base.id, blocks.reduce((a, b) => a + b.minutes, 0), { adjusted: true, title: base.title });
+            if (!vErr) return proposal(base.id, blocks.reduce((a, b) => a + b.minutes, 0), { adjusted: true, title: base.title, cover: base.cover });
           }
         }
         // Freno: casi idéntico a uno que ya tiene → se ofrece ese, no se duplica.
         const { data: mine } = await supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('creator_id', userId).neq('status', 'archived')
           .order('updated_at', { ascending: false }).limit(40);
         const twin = (mine ?? []).map(toMomentFlow).find((x) => isNearDuplicate({ title: m.title, objective: m.objective, blocks }, x));
-        if (twin) return { ...proposal(twin.id, twin.required_minutes, { reused: true }), title: twin.title, blocks: twin.blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })) };
+        if (twin) return { ...proposal(twin.id, twin.required_minutes, { reused: true, cover: twin.cover }), title: twin.title, blocks: twin.blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })) };
         const { data, error } = await supabase.from('soi_blueprints').insert({
           creator_id: userId, title: m.title, objective: m.objective, kind: m.kind, source: m.source,
           blocks, steps: [], status: 'private', ...(m.kind === 'challenge' && m.durationDays && m.durationDays >= 2 ? { duration_days: Math.min(30, m.durationDays) } : {}),
@@ -246,7 +246,7 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
         if (!mo || (!mo.official && mo.creator_id !== userId && mo.status !== 'published')) return { ok: false as const, errors: ['Ese Moment no está disponible. Diseña uno con createMoment.'] };
         return {
           ok: true as const, id: mo.official ? mo.slug! : mo.id, title: mo.title, kind: mo.kind, reason, minutes: mo.required_minutes,
-          blocks: mo.blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })), locked: access.routines === false, reused: true,
+          blocks: mo.blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })), locked: access.routines === false, reused: true, cover: mo.cover,
         };
       },
     }),

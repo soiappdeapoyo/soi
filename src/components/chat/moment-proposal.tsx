@@ -9,6 +9,8 @@ export type MomentProposalResult = {
   blocks: { type: ActionType; title: string; minutes: number }[]; locked: boolean;
   /** Un Moment que ya tenía (ofrecido tal cual) o el suyo ajustado como nueva versión. */
   reused?: boolean; adjusted?: boolean;
+  /** Portada (miniatura en el chat). Un Moment recién diseñado la recibe después, al abrirlo. */
+  cover?: string | null;
 };
 
 /**
@@ -19,9 +21,18 @@ export function MomentProposal({ m, onSend }: { m: MomentProposalResult; onSend?
   return (
     <section aria-label={`Moment ${m.title}`} className="mt-3 max-w-md rounded-[20px] bg-soi-sidebar p-3">
       <div className="rounded-lg bg-white p-4 shadow-ring">
-        <p className="nums text-xs text-soi-muted">{m.adjusted ? 'Ajusté tu Moment' : m.reused ? 'Uno que ya tienes' : 'Preparé un Moment'} · {m.minutes} minutos · {MOMENT_KINDS[m.kind]?.label}</p>
-        <h3 className="mt-1 text-[17px] font-medium">{m.title}</h3>
-        {m.reason && <p className="mt-0.5 text-sm text-soi-muted">{m.reason}</p>}
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="nums text-xs text-soi-muted">{m.adjusted ? 'Ajusté tu Moment' : m.reused ? 'Uno que ya tienes' : 'Preparé un Moment'} · {m.minutes} minutos · {MOMENT_KINDS[m.kind]?.label}</p>
+            <h3 className="mt-1 text-[17px] font-medium">{m.title}</h3>
+            {m.reason && <p className="mt-0.5 text-sm text-soi-muted">{m.reason}</p>}
+          </div>
+          {/* En el chat la portada es una miniatura: la conversación sigue siendo la protagonista. */}
+          {m.cover && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={m.cover} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover shadow-ring" />
+          )}
+        </div>
         <ol className="mt-3 flex flex-col gap-1.5">
           {m.blocks.map((b, i) => (
             <li key={i} className="flex items-center gap-2.5 text-sm">

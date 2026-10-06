@@ -15,7 +15,7 @@ import type { OpenerProposal as OpenerProposalData } from '@/lib/opener';
 import { cn } from '@/lib/utils';
 
 type Reflect = (text: string, video: SoiVideo) => void;
-type Props = { message: UIMessage; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null; proposal?: OpenerProposalData | null; onReflected?: Reflect; onSend?: (text: string) => void };
+type Props = { message: UIMessage; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null; proposal?: OpenerProposalData | null; onReflected?: Reflect; onSend?: (text: string) => void; onDecline?: () => void };
 
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -90,7 +90,7 @@ function ToolResult({ part, onReflected, onSend }: { part: ToolPart; onReflected
  * Chat (DESIGN.md §4): el mensaje del usuario aparece al instante (sin animación de entrada);
  * el streaming del asistente no anima tokens: solo crece el texto.
  */
-export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal, onReflected, onSend }: Props) {
+export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal, onReflected, onSend, onDecline }: Props) {
   const mine = message.role === 'user';
   const text = messageText(message);
   const tools = message.parts.filter((p) => p.type.startsWith('tool-') && (p as ToolPart).state === 'output-available') as ToolPart[];
@@ -108,7 +108,7 @@ export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal
         {tools.map((t) => <ToolResult key={t.toolCallId} part={t} onReflected={onReflected} onSend={onSend} />)}
 
         {practice && <PracticeCard practice={practice} />}
-        {proposal && <OpenerProposal p={proposal} />}
+        {proposal && <OpenerProposal p={proposal} onSend={onSend} onDecline={onDecline} />}
 
         {!mine && ttsAllowed && text && (
           <button type="button" onClick={() => onSpeak(text)} className="press tap-target mt-2 inline-flex items-center gap-1 rounded-md text-xs text-soi-muted hover:text-soi-ink" aria-label="Escuchar respuesta">

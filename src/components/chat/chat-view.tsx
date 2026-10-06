@@ -134,6 +134,8 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
     if (el) stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
   }
 
+  // "Ahora no" a la propuesta del saludo: su botón de empezar desaparece de las respuestas rápidas.
+  const [declined, setDeclined] = useState(false);
   const busy = status === 'submitted' || status === 'streaming';
   // Espera visible: hasta que SOI escribe texto (o mientras usa una herramienta).
   const lastMsg = messages.at(-1);
@@ -185,6 +187,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
               onSpeak={speakText}
               practice={m.id === OPENER_ID ? opener?.practice : null}
               proposal={m.id === OPENER_ID ? opener?.proposal : null}
+              onDecline={() => setDeclined(true)}
               onSend={(text) => { stickRef.current = true; sendMessage({ text }); }}
               onReflected={(text, video) => {
                 stickRef.current = true;
@@ -195,7 +198,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
           {/* Respuestas rápidas del saludo: un toque y SOI ajusta (sin escribir). Solo antes del primer mensaje. */}
           {opener && messages.length === 1 && messages[0]?.id === OPENER_ID && opener.replies.length > 0 && (
             <li className="-mt-1 flex flex-wrap gap-2" aria-label="Respuestas rápidas">
-              {opener.replies.map((r) => r.href ? (
+              {opener.replies.filter((r) => !(declined && opener.proposal && r.href === `/m/${opener.proposal.id}/play`)).map((r) => r.href ? (
                 <Link key={r.label} href={r.href} className="press inline-flex h-9 items-center rounded-full bg-soi-ink px-3.5 text-sm text-white">{r.label}</Link>
               ) : (
                 <button key={r.label} type="button" disabled={!canSend && !detectCrisis(r.text ?? '')}

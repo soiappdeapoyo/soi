@@ -78,8 +78,16 @@ export default async function HoyPage() {
 
       {/* Lo que sigue: un solo botón grande. */}
       {next?.moment ? (
-        <section aria-labelledby="next" className="rounded-[20px] bg-soi-ink p-5 text-white">
-          <p id="next" className="text-xs font-medium text-white/60">{next.time ? `A continuación · ${next.time}` : 'A continuación'}</p>
+        <section aria-labelledby="next" className="relative isolate overflow-hidden rounded-[20px] bg-soi-ink p-5 text-white">
+          {/* La portada es la protagonista de Hoy: de fondo, con degradado para que el texto se lea. */}
+          {next.moment.cover && (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={next.moment.cover} alt="" aria-hidden="true" className="absolute inset-0 -z-10 h-full w-full object-cover" />
+              <span aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
+            </>
+          )}
+          <p id="next" className={cn('text-xs font-medium text-white/60', next.moment.cover && 'pt-16 text-white/80')}>{next.time ? `A continuación · ${next.time}` : 'A continuación'}</p>
           <p className="mt-1 text-balance text-[22px] font-semibold leading-snug">{next.moment.title}</p>
           <p className="nums mt-1 text-sm text-white/70">{next.moment.required_minutes} min · {next.moment.blocks.length} {next.moment.blocks.length === 1 ? 'paso' : 'pasos'}</p>
           <PlayLink href={playHref(next.moment, true)} prefetch label={`Reproducir ${next.moment.title}`}
@@ -88,8 +96,15 @@ export default async function HoyPage() {
           </PlayLink>
         </section>
       ) : suggestion ? (
-        <section aria-labelledby="sug" className="rounded-[20px] bg-soi-ink p-5 text-white">
-          <p id="sug" className="text-xs font-medium text-white/60">SOI te propone</p>
+        <section aria-labelledby="sug" className="relative isolate overflow-hidden rounded-[20px] bg-soi-ink p-5 text-white">
+          {suggestion.cover && (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={suggestion.cover} alt="" aria-hidden="true" className="absolute inset-0 -z-10 h-full w-full object-cover" />
+              <span aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
+            </>
+          )}
+          <p id="sug" className={cn('text-xs font-medium text-white/60', suggestion.cover && 'pt-16 text-white/80')}>SOI te propone</p>
           <p className="mt-1 text-balance text-[22px] font-semibold leading-snug">{suggestion.title}</p>
           <p className="nums mt-1 text-sm text-white/70">{suggestion.required_minutes} min</p>
           <PlayLink href={`/m/${suggestion.official ? suggestion.slug : suggestion.id}/play`} prefetch label={`Empezar ${suggestion.title}`}
@@ -111,9 +126,22 @@ export default async function HoyPage() {
               <li key={i.id}>
                 <PlayLink href={playHref(i.moment, true)} label={`${i.done ? 'Repetir' : 'Reproducir desde'} ${i.moment.title}`}
                   className={cn('press flex w-full items-center gap-3 rounded-[14px] bg-white px-3 py-3 text-left shadow-ring', i.done && 'bg-white/60 shadow-none')}>
-                  <span className={cn('nums flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs', i.done ? 'bg-soi-accent-soft text-soi-accent' : i.id === next?.id ? 'bg-soi-ink text-white' : 'bg-soi-tray text-soi-muted')}>
-                    {i.done ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : i.id === next?.id ? <Play className="h-3 w-3 fill-current" aria-hidden="true" /> : n + 1}
-                  </span>
+                  {i.moment.cover ? (
+                    // Miniatura con el estado encima (hecho / sigue).
+                    <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={i.moment.cover} alt="" className={cn('h-full w-full object-cover', i.done && 'opacity-50')} />
+                      {(i.done || i.id === next?.id) && (
+                        <span className={cn('absolute inset-0 flex items-center justify-center', i.done ? 'bg-soi-accent/40 text-white' : 'bg-black/35 text-white')} aria-hidden="true">
+                          {i.done ? <Check className="h-4 w-4" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className={cn('nums flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs', i.done ? 'bg-soi-accent-soft text-soi-accent' : i.id === next?.id ? 'bg-soi-ink text-white' : 'bg-soi-tray text-soi-muted')}>
+                      {i.done ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : i.id === next?.id ? <Play className="h-3 w-3 fill-current" aria-hidden="true" /> : n + 1}
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className={cn('block truncate text-[15px]', i.done ? 'text-soi-muted line-through decoration-black/20' : 'font-medium')}>{i.moment.title}</span>
                     <span className="nums flex items-center gap-2 text-xs text-soi-muted">{i.time ? `${i.time} · ` : ''}{i.moment.required_minutes} min <BlockIcons m={i.moment} /></span>

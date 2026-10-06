@@ -13,6 +13,8 @@ export type OpenerProposal = { id: string; title: string; minutes: number; cover
 /** Un recuerdo concreto: qué Moment, qué día y, si lo escribió, sus palabras. */
 export type OpenerMemory = { title: string; dayLabel: string; learning?: string | null; helped?: boolean | null; evening?: boolean };
 
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
 export type OpenerInput = {
   name: string;
   hour: number;
@@ -31,6 +33,8 @@ export type OpenerInput = {
   /** Lo último que vivió (evidencia). */
   lastRun?: OpenerMemory | null;
   proposal?: (Omit<OpenerProposal, 'why' | 'label'> & { challengeDay?: number | null; planned?: boolean; memory?: OpenerMemory | null }) | null;
+  /** Su último "Ahora no" (2 días): el saludo lo reconoce y propone algo distinto. */
+  declined?: { title: string; dayLabel: string } | null;
 };
 
 export type OpenerPractice = { kind: 'ritual'; href: string; label: string; detail: string; reason: string; locked: false };
@@ -113,9 +117,16 @@ export function buildOpener(i: OpenerInput): Opener {
   // 1) Detectar / recordar: un regreso, o evidencia concreta. Nada genérico.
   // Si la propuesta ya trae el recuerdo de ese mismo Moment, no lo repetimos como evidencia.
   const sameMemory = Boolean(i.proposal?.memory && i.lastRun && i.proposal.memory.title === i.lastRun.title && i.proposal.memory.dayLabel === i.lastRun.dayLabel);
-  const evidence = (away !== null && away >= 2) || missed
+  // Lo que aprendió del último "Ahora no" va antes que la evidencia: es lo más reciente que dijo la persona.
+  const when = i.declined ? (i.declined.dayLabel === 'hoy' ? 'Hace un rato' : cap(i.declined.dayLabel)) : '';
+  const declinedLine = i.declined
+    ? (i.proposal
+      ? `${when} preferiste dejar «${i.declined.title}» para otro momento; lo tomé en cuenta.`
+      : `${when} preferiste dejar «${i.declined.title}» para otro momento, así que no te propongo nada: tú dime qué te gustaría.`)
+    : null;
+  const evidence = declinedLine ?? ((away !== null && away >= 2) || missed
     ? 'Ayer no te vimos, pero aquí seguimos. ¿Retomamos?'
-    : sameMemory ? null : evidenceLine(i);
+    : sameMemory ? null : evidenceLine(i));
 
   // 2) Cómo llega: solo lo que dijo hoy; con evidencia de ánimo bajo, "quizá" (nunca afirmarlo).
   const said = i.checkin ? CHECKIN_SAID[i.checkin] : null;
