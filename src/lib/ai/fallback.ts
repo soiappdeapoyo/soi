@@ -41,14 +41,14 @@ export function parseOrder(value: string | undefined, fallback: ProviderName[]):
 /** Chat: DeepSeek primero (más económico). Tareas estructuradas (router, contenido, moderación): Gemini primero. */
 export const CHAT_ORDER = parseOrder(process.env.AI_CHAT_ORDER, ['deepseek', 'gemini', 'groq']);
 export const TASK_ORDER = parseOrder(process.env.AI_TASK_ORDER, ['gemini', 'groq', 'deepseek']);
+/** Clasificaciones cortas que bloquean la respuesta (router): el proveedor más rápido primero. */
+export const FAST_ORDER = parseOrder(process.env.AI_FAST_ORDER, ['groq', 'deepseek', 'gemini']);
 
 /** Proveedores con clave, en el orden pedido. */
 function configuredProviders(order: ProviderName[]) {
   return order.map((n) => ALL_PROVIDERS.find((p) => p.name === n)!).filter((p) => hasKey(p.name));
 }
 
-// Proveedor sano cacheado 5 min, por orden (el del chat no se mezcla con el de las tareas). En producción: Upstash / Vercel KV.
-const cachedProvider = new Map<string, { name: ProviderName; until: number }>();
 
 export function describeError(error: unknown) {
   const e = error as { statusCode?: number; status?: number; message?: string; responseBody?: string };
@@ -61,41 +61,23 @@ function logFailure(provider: ProviderName, error: unknown) {
   console.error(`[ai] proveedor ${provider} (${MODELS[provider]}) falló: ${describeError(error)}`);
 }
 
-async function healthCheck(p: Provider): Promise<boolean> {
-  try {
-    // Sin reintentos: si el tiempo se agota durante la espera de un reintento solo veríamos "Delay was aborted".
-    await generateText({ model: p.model(), prompt: 'ok', maxOutputTokens: 64, maxRetries: 0, abortSignal: AbortSignal.timeout(10_000) });
-    return true;
-  } catch (error) {
-    logFailure(p.name, error);
-    return false;
-  }
-}
+// Sin "prueba de salud" previa (era un viaje extra antes de responder): se intenta directo y, si un proveedor
+// falló hace poco, pasa al final de la fila durante 2 minutos. Los fallos igual caen al siguiente (firstPartIsError).
+const recentFailure = new Map<ProviderName, number>();
+const FAILURE_TTL = 2 * 60_000;
 
 async function orderedProviders(order: ProviderName[] = TASK_ORDER): Promise<Provider[]> {
   const providers = configuredProviders(order);
-  const key = order.join(',');
   if (!providers.length) {
     console.error('[ai] no hay proveedores configurados: define GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY o DEEPSEEK_API_KEY');
     return [];
   }
-  const cached = cachedProvider.get(key);
-  if (cached && cached.until > Date.now()) {
-    // El sano va primero, pero los demás siguen como respaldo (antes se descartaban).
-    const idx = providers.findIndex((p) => p.name === cached.name);
-    if (idx >= 0) return [...providers.slice(idx), ...providers.slice(0, idx)];
-  }
-  for (let i = 0; i < providers.length; i++) {
-    if (await healthCheck(providers[i]!)) {
-      cachedProvider.set(key, { name: providers[i]!.name, until: Date.now() + 5 * 60_000 });
-      return [...providers.slice(i), ...providers.slice(0, i)];
-    }
-  }
-  return providers;
+  const failed = (p: Provider) => (recentFailure.get(p.name) ?? 0) > Date.now();
+  return [...providers.filter((p) => !failed(p)), ...providers.filter(failed)];
 }
 
 function forget(provider: ProviderName) {
-  for (const [key, c] of cachedProvider) if (c.name === provider) cachedProvider.delete(key);
+  recentFailure.set(provider, Date.now() + FAILURE_TTL);
 }
 
 export class AllProvidersFailedError extends Error {
@@ -193,9 +175,12 @@ export async function diagnoseProviders() {
 /** Generación estructurada con cascada (router, onboarding, ritual, análisis, moderación, adaptación). */
 export async function objectWithFallback<T extends z.ZodTypeAny>(opts: {
   schema: T; instructions: string; prompt: string; timeoutMs?: number;
+  /** Orden de proveedores (por defecto TASK_ORDER; FAST_ORDER para lo que bloquea la respuesta). */
+  order?: ProviderName[];
+  maxOutputTokens?: number;
 }): Promise<{ object: z.infer<T>; provider: ProviderName }> {
   const attempts: { provider: ProviderName; error: string }[] = [];
-  for (const provider of await orderedProviders(TASK_ORDER)) {
+  for (const provider of await orderedProviders(opts.order ?? TASK_ORDER)) {
     try {
       const { output } = await generateText({
         model: provider.model(),
@@ -203,12 +188,14 @@ export async function objectWithFallback<T extends z.ZodTypeAny>(opts: {
         instructions: opts.instructions,
         prompt: opts.prompt,
         providerOptions: PROVIDER_OPTIONS,
+        ...(opts.maxOutputTokens ? { maxOutputTokens: opts.maxOutputTokens } : {}),
         // Con tiempo límite, sin reintentos: si un proveedor no responde, pasamos al siguiente.
         ...(opts.timeoutMs ? { maxRetries: 0, abortSignal: AbortSignal.timeout(opts.timeoutMs) } : {}),
       });
       return { object: output as z.infer<T>, provider: provider.name };
     } catch (error) {
       logFailure(provider.name, error);
+      forget(provider.name);
       attempts.push({ provider: provider.name, error: describeError(error) });
     }
   }

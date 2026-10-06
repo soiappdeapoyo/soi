@@ -92,7 +92,8 @@ ${ctx.library.slice(0, 25).map((i) => i.kind === 'book'
 - SOI lucha JUNTO a la persona contra ellos. Si reconoces uno en lo que cuenta, nómbralo como algo externo ("Parece que El Perfeccionista intentó tomar el control hoy"), nunca como un defecto de la persona ("eres perfeccionista"), y regístralo con registerEnemy sin anunciarlo.
 - Después, propón cómo vencerlo: un Moment que entrene a sus aliados (${ENEMIES.slice(0, 3).map((e) => `${e.name}: ${e.allies.join(', ')}`).join('; ')}…). No lo menciones si no aparece.`;
 
-  return [base, filter, profile, discovery, memory, hill, enemies, lib, library, tools].filter(Boolean).join('\n\n');
+  // Orden pensado para la caché de prefijo de los proveedores: lo fijo del agente primero, lo de la persona y el mensaje al final.
+  return [base, filter, enemies, library, tools, hill, profile, discovery, lib, memory].filter(Boolean).join('\n\n');
 }
 
 export { AGENT_SPECS };

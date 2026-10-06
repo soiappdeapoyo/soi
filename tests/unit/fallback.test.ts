@@ -188,6 +188,20 @@ describe('orden de proveedores', () => {
     expect(provider).toBe('gemini');
     expect(await readText(result)).toBe('hola desde gemini');
   });
+  it('sin prueba de salud: el que falló pasa al final de la fila por 2 minutos', async () => {
+    let calls = 0;
+    deepseekModel.current = () => new MockLanguageModelV4({
+      doStream: async () => { calls++; throw Object.assign(new Error('caído'), { statusCode: 503 }); },
+    });
+    const { streamWithFallback } = await import('@/lib/ai/fallback');
+    expect((await streamWithFallback('x', [{ role: 'user', content: 'hola' }])).provider).toBe('gemini');
+    expect((await streamWithFallback('x', [{ role: 'user', content: 'hola' }])).provider).toBe('gemini');
+    expect(calls).toBe(1); // la segunda vez ya no se intentó primero con DeepSeek
+  });
+  it('el router usa el orden rápido (Groq primero)', async () => {
+    const { FAST_ORDER } = await import('@/lib/ai/fallback');
+    expect(FAST_ORDER[0]).toBe('groq');
+  });
   it('el orden se puede cambiar con una variable', async () => {
     const { parseOrder } = await import('@/lib/ai/fallback');
     expect(parseOrder('groq, deepseek', ['gemini'])).toEqual(['groq', 'deepseek', 'gemini']);

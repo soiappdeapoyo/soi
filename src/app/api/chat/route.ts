@@ -47,6 +47,9 @@ export async function POST(req: Request) {
     isCrisis = route.agent === 'crisis' || route.confidence === 0;
   }
 
+  // El router (agente + eslabón) corre en paralelo con el cobro de la consulta y la conversación, no antes.
+  const routePromise: Promise<RouterResult> = route ? Promise.resolve(route) : classifyIntent(text, history);
+
   let consumed: ConsumeResult = 'unlimited';
   if (isCrisis) {
     await remember(supabase, {
@@ -78,7 +81,7 @@ export async function POST(req: Request) {
   }
 
   // 3) Router + eslabón SOI. Agente elegido en sidebar se respeta (salvo crisis).
-  route ??= await classifyIntent(text, history);
+  route ??= await routePromise;
   const agent: AgentId = isCrisis || route.agent === 'crisis' ? 'crisis' : isAgentId(body.agent) ? body.agent : route.agent;
   if (route.weakestLink && route.weakestLink !== profile?.weakest_link) {
     await supabase.from('user_profiles').update({ weakest_link: route.weakestLink }).eq('user_id', user.id);
@@ -116,7 +119,6 @@ export async function POST(req: Request) {
   const time = timeContextPrompt(profile?.timezone ?? 'America/Mexico_City');
   const hill = agent === 'napoleon_hill' ? (await loadHillMemory(supabase, user.id)).memory : null;
   const system = [
-    time.prompt,
     buildSystemPrompt(agent, {
       profile, memories, tools: toolAccess, weakestLink: route.weakestLink, hill,
       library: ((libraryRows ?? []) as { id: string; kind: 'book' | 'pdf' | 'exercise'; title: string; author: string | null; status: string; external_id: string | null }[])
@@ -125,6 +127,8 @@ export async function POST(req: Request) {
     director,
     agent === 'crisis' ? '' : methods,
     openerText && `TU PRIMER MENSAJE EN ESTA CONVERSACIÓN FUE: "${openerText.replace(/["\n]/g, ' ').slice(0, 900)}". Continúa desde ahí sin repetir el saludo.`,
+    // Lo que cambia cada minuto va al final: así la parte fija del prompt se reutiliza desde la caché del proveedor.
+    time.prompt,
   ].filter(Boolean).join('\n\n');
   const recent = (first > 0 ? messages.slice(first) : messages).slice(-20);
   const modelMessages = recent[0]?.role === 'assistant' ? recent.slice(1) : recent;

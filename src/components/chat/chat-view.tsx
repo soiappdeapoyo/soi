@@ -10,6 +10,8 @@ import { AGENTS, isAgentId, type AgentId } from '@/config/agents';
 import { PAYWALL_MESSAGE } from '@/config/plans';
 import { buttonClass } from '@/components/ui/button';
 import { MessageBubble } from './message-bubble';
+import { Thinking } from './thinking';
+import { TOOL_STATUS } from '@/lib/thinking-phrases';
 import { track } from '@/components/providers/analytics';
 import { detectCrisis } from '@/lib/ai/crisis';
 import type { Opener } from '@/lib/opener';
@@ -133,6 +135,15 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
   }
 
   const busy = status === 'submitted' || status === 'streaming';
+  // Espera visible: hasta que SOI escribe texto (o mientras usa una herramienta).
+  const lastMsg = messages.at(-1);
+  const lastUserText = [...messages].reverse().find((m) => m.role === 'user')?.parts.map((p) => (p.type === 'text' ? p.text : '')).join(' ') ?? '';
+  const assistantText = lastMsg?.role === 'assistant' ? lastMsg.parts.some((p) => p.type === 'text' && p.text.trim().length > 0) : false;
+  const pendingToolPart = lastMsg?.role === 'assistant'
+    ? lastMsg.parts.find((p) => p.type.startsWith('tool-') && (p as { state?: string }).state !== 'output-available' && (p as { state?: string }).state !== 'output-error')
+    : undefined;
+  const pendingTool = pendingToolPart ? TOOL_STATUS[pendingToolPart.type.slice('tool-'.length)] ?? null : null;
+  const waiting = status === 'submitted' || (status === 'streaming' && (!assistantText || Boolean(pendingToolPart)));
   // La crisis siempre pasa, incluso con paywall.
   const canSend = !paywalled || detectCrisis(input);
   const canSubmit = Boolean(input.trim()) && canSend && !busy;
@@ -195,11 +206,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
               ))}
             </li>
           )}
-          {status === 'submitted' && (
-            <li className="flex items-center gap-2 py-1 text-sm text-soi-muted" aria-label="SOI está escribiendo">
-              <span aria-hidden="true" className="h-2 w-2 animate-thinking rounded-full bg-soi-accent" />
-            </li>
-          )}
+          {waiting && <Thinking text={lastUserText} agent={activeAgent ?? agent} tool={pendingTool} />}
         </ul>
         {error && !paywalled && <p role="alert" className="mt-3 text-sm text-soi-danger">{errorText ?? 'Algo falló. Intenta de nuevo en un momento.'}</p>}
       </div>

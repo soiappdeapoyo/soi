@@ -9,7 +9,6 @@ import { recordMomentum } from '@/lib/momentum-server';
 import { ActionCardSchema, EslabonSchema } from '@/lib/action-card';
 import { ACTION_TYPES, MomentKindSchema, parseBlocks, type ActionType } from '@/config/actions';
 import { ownsDocuments, resolveLibraryBlocks } from '@/lib/moments/library-blocks';
-import { enrichGuidedBlocks } from '@/lib/moments/enrich';
 import { generateAutosuggestion, generateGuided, personalContext, saveGuided } from './content-agents';
 import { HillPatchSchema, loadHillMemory, saveHillMemory } from './hill-memory';
 import { ENEMY_IDS } from '@/config/enemies';
@@ -148,9 +147,9 @@ export function buildTools({ supabase, userId, authorName, access }: Ctx) {
         const errors = parsed.errors;
         // Documentos: solo PDFs de la biblioteca de la persona. Libros y ejercicios se resuelven por nombre.
         const docsOk = await ownsDocuments(userId, parsed.blocks);
-        const resolved = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'), { youtube: access.youtube });
-        // Meditaciones, afirmaciones y manifestaciones con contenido real (agentes generadores), no solo tiempo.
-        const { blocks } = await enrichGuidedBlocks(supabase, userId, await profileOf(), resolved, `${m.title}. ${m.objective}`);
+        // Libros y ejercicios por nombre (rápido). El contenido guiado (meditación, manifestación…) lo escriben los agentes
+        // la primera vez que se abre el Moment (con pantalla de "Preparando tu Moment…"), para que el chat responda ya.
+        const blocks = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'), { youtube: access.youtube });
         if (!docsOk) errors.push('Un bloque document usaba un PDF que no está en la biblioteca de la persona; se quitó.');
         if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
         const { data, error } = await supabase.from('soi_blueprints').insert({

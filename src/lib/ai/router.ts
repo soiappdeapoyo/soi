@@ -1,6 +1,6 @@
 import { z } from 'zod/v3';
 import { detectCrisis } from './crisis';
-import { objectWithFallback } from './fallback';
+import { FAST_ORDER, objectWithFallback } from './fallback';
 
 export const RouterSchema = z.object({
   agent: z.enum([
@@ -36,7 +36,10 @@ napoleon_hill (capa de coaching superior) cuando el problema es propósito, logr
 Si el usuario pide validación sin acción o se contradice, usa anti_sycophant.
 Si hay ideación suicida, autolesión o violencia: agent='crisis' sin excepción.`,
       prompt: `Historial reciente:\n${history.slice(-4).join('\n')}\n\nMensaje: ${message}`,
-      timeoutMs: 12_000,
+      timeoutMs: 10_000,
+      // Bloquea la respuesta del chat: el proveedor más rápido primero y salida corta.
+      order: FAST_ORDER,
+      maxOutputTokens: 400,
     });
     return object;
   } catch {
