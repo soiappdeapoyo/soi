@@ -45,7 +45,7 @@ function ToolResult({ part, onReflected, onSend }: { part: ToolPart; onReflected
     return v ? <div className="mt-3"><SoiPlayer video={v} onReflected={onReflected} /></div> : null;
   }
   if (name === 'suggestPractice') return <PracticeCard practice={out as Practice} />;
-  if (name === 'createMoment') {
+  if (name === 'createMoment' || name === 'offerMoment') {
     const r = out as MomentProposalResult | { ok: false };
     return r.ok ? <MomentProposal m={r} onSend={onSend} /> : null;
   }

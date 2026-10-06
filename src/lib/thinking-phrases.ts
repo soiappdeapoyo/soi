@@ -48,6 +48,7 @@ export function thinkingPhrases(text: string, agent: string | undefined, hour: n
 /** Si SOI está usando una herramienta, se dice qué hace (más honesto que una frase genérica). */
 export const TOOL_STATUS: Record<string, string> = {
   createMoment: 'Diseñando tu Moment…',
+  offerMoment: 'Buscando entre tus Moments…',
   createGuidedContent: 'Escribiendo algo para ti…',
   youtubeSearch: 'Buscando el video adecuado…',
   webSearch: 'Buscando información…',

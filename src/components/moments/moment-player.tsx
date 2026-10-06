@@ -19,7 +19,8 @@ import { AUTO_ADVANCE, BlockRunner, MOODS, type BlockOutput } from './block-runn
 import { cn } from '@/lib/utils';
 
 type Props = {
-  moment: { id: string; title: string; objective: string; source: string; author: string | null };
+  /** cover: portada (encabezado al empezar y fondo suave al terminar; nunca durante los pasos). */
+  moment: { id: string; title: string; objective: string; source: string; author: string | null; cover?: string | null };
   blocks: ActionBlock[];
   locked: boolean;
   /** Reto: día que se juega hoy. */
@@ -276,9 +277,25 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     return (
       <Shell title={moment.title} onExit={playlist ? '/hoy' : `/m/${moment.id}`}>
         <div className="flex flex-col items-center gap-5 py-6 text-center">
-          {playlist && <p className="nums text-sm text-soi-muted">Tu día · {playlist.position} de {playlist.total}</p>}
-          {challenge && <p className="nums rounded-lg bg-soi-accent-soft px-3 py-1 text-sm font-medium text-soi-accent">Día {challenge.day} de {challenge.total}</p>}
-          <p className="text-[15px] text-soi-muted">{moment.objective}</p>
+          {/* Encabezado tipo artículo: la portada es la protagonista solo aquí, antes de empezar. */}
+          {moment.cover ? (
+            <div className="relative -mt-2 w-full overflow-hidden rounded-[20px] text-left">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={moment.cover} alt="" className="aspect-[16/10] w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" aria-hidden="true" />
+              <div className="absolute inset-x-0 bottom-0 p-4 text-white">
+                {(playlist || challenge) && <p className="nums text-xs font-medium text-white/85">{playlist ? `Tu día · ${playlist.position} de ${playlist.total}` : `Día ${challenge!.day} de ${challenge!.total}`}</p>}
+                <h2 className="mt-0.5 text-balance text-xl font-semibold leading-snug [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]">{moment.title}</h2>
+                <p className="mt-1 line-clamp-2 text-sm text-white/90">{moment.objective}</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {playlist && <p className="nums text-sm text-soi-muted">Tu día · {playlist.position} de {playlist.total}</p>}
+              {challenge && <p className="nums rounded-lg bg-soi-accent-soft px-3 py-1 text-sm font-medium text-soi-accent">Día {challenge.day} de {challenge.total}</p>}
+              <p className="text-[15px] text-soi-muted">{moment.objective}</p>
+            </>
+          )}
           <fieldset>
             <legend className="text-sm font-medium">¿Cómo llegas?</legend>
             <div className="mt-2 flex gap-1">
@@ -394,7 +411,13 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   /* ---------- Hecho: celebración + mejor versión ---------- */
   return (
     <Shell title={moment.title} onExit="/hoy">
-      <div className="flex flex-col items-center gap-4 py-6 text-center" aria-live="polite">
+      <div className="relative isolate flex flex-col items-center gap-4 py-6 text-center" aria-live="polite">
+        {/* La portada como fondo suave que se desvanece: cierra el Moment con su misma atmósfera. */}
+        {moment.cover && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={moment.cover} alt="" aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 -top-2 -z-10 h-56 w-full rounded-[20px] object-cover opacity-30 [mask-image:linear-gradient(to_bottom,black,transparent)]" />
+        )}
         <div className="relative flex h-24 w-24 items-center justify-center">
           <span aria-hidden="true" className="absolute inset-0 animate-celebrate rounded-full ring-2 ring-soi-accent" />
           <span className="flex h-20 w-20 items-center justify-center rounded-full bg-soi-accent-soft text-soi-accent"><Check className="h-9 w-9" aria-hidden="true" /></span>

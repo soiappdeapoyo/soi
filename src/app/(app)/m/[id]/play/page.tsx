@@ -63,7 +63,7 @@ export default async function PlayMomentPage({ params, searchParams }: { params:
 
   return (
     <MomentPlayer
-      moment={{ id: m.id, title: m.title, objective: m.objective, source: m.source, author: m.author }}
+      moment={{ id: m.id, title: m.title, objective: m.objective, source: m.source, author: m.author, cover: m.cover }}
       blocks={ready}
       locked={!allowed}
       challenge={challenge}

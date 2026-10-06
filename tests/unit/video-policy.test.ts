@@ -10,7 +10,9 @@ import { momentRunOpener } from '@/lib/opener';
 import { buildTools } from '@/lib/ai/tools';
 
 const supabase = {
-  from: () => ({ insert: (row: { blocks: unknown[] }) => ({ select: () => ({ single: async () => ({ data: { id: 'x', required_minutes: row.blocks.length }, error: null }) }) }) }),
+  from: () => ({
+    select: () => { const q: Record<string, unknown> = { eq: () => q, neq: () => q, order: () => q, limit: () => q, then: (r: (v: unknown) => void) => r({ data: [] }) }; return q; },
+    insert: (row: { blocks: unknown[] }) => ({ select: () => ({ single: async () => ({ data: { id: 'x', required_minutes: row.blocks.length }, error: null }) }) }) }),
 } as never;
 const opts = { toolCallId: 't', messages: [] } as never;
 const blocks = [

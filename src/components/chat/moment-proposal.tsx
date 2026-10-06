@@ -7,6 +7,8 @@ import { ACTIONS, MOMENT_KINDS, type ActionType, type MomentKind } from '@/confi
 export type MomentProposalResult = {
   ok: true; id: string; title: string; kind: MomentKind; reason: string; minutes: number;
   blocks: { type: ActionType; title: string; minutes: number }[]; locked: boolean;
+  /** Un Moment que ya tenía (ofrecido tal cual) o el suyo ajustado como nueva versión. */
+  reused?: boolean; adjusted?: boolean;
 };
 
 /**
@@ -17,7 +19,7 @@ export function MomentProposal({ m, onSend }: { m: MomentProposalResult; onSend?
   return (
     <section aria-label={`Moment ${m.title}`} className="mt-3 max-w-md rounded-[20px] bg-soi-sidebar p-3">
       <div className="rounded-lg bg-white p-4 shadow-ring">
-        <p className="nums text-xs text-soi-muted">Preparé un Moment de {m.minutes} minutos · {MOMENT_KINDS[m.kind]?.label}</p>
+        <p className="nums text-xs text-soi-muted">{m.adjusted ? 'Ajusté tu Moment' : m.reused ? 'Uno que ya tienes' : 'Preparé un Moment'} · {m.minutes} minutos · {MOMENT_KINDS[m.kind]?.label}</p>
         <h3 className="mt-1 text-[17px] font-medium">{m.title}</h3>
         {m.reason && <p className="mt-0.5 text-sm text-soi-muted">{m.reason}</p>}
         <ol className="mt-3 flex flex-col gap-1.5">

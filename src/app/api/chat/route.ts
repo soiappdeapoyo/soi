@@ -7,6 +7,8 @@ import { streamWithFallback, AllProvidersFailedError } from '@/lib/ai/fallback';
 import { buildSystemPrompt } from '@/lib/ai/prompts';
 import { buildTools } from '@/lib/ai/tools';
 import { isCreatorAccount } from '@/lib/creators/profile';
+import { continuityPrompt, loadContinuity } from '@/lib/ai/continuity';
+import { findReusable, reusePrompt } from '@/lib/moments/reuse';
 
 /** Cuenta de creador: su contenido es 100% suyo. SOI acompaña, no genera. */
 const CREATOR_CHAT_RULE = 'CUENTA DE CREADOR: esta persona crea su propio contenido. No diseñes Moments ni escribas meditaciones, afirmaciones o manifestaciones para ella (no tienes esas herramientas). Acompáñala conversando, con preguntas; si quiere crear algo, invítala a hacerlo con su propio material en el constructor de Moments.';
@@ -92,10 +94,11 @@ export async function POST(req: Request) {
   }
 
   // 4) RAG + accesos de herramientas
-  const [isCreator, memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }] = await Promise.all([
+  const [isCreator, memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }, pastTalks, reusable] = await Promise.all([
     isCreatorAccount(supabase, user.id),
     isCrisis ? Promise.resolve([]) : recall(supabase, user.id, text, {
-      categories: ['perfil_usuario', 'evidencia', 'conversacion', 'manifestacion', 'afirmacion', 'pensamiento', 'emocion', 'accion', 'resultado'],
+      // Las conversaciones pasadas llegan aparte, con fecha (continuidad).
+      categories: ['perfil_usuario', 'evidencia', 'manifestacion', 'afirmacion', 'pensamiento', 'emocion', 'accion', 'resultado'],
       count: 4,
     }),
     canAccess(user.id, 'youtube_embed'),
@@ -108,6 +111,9 @@ export async function POST(req: Request) {
     isCrisis ? Promise.resolve(null) : todayCheckin(supabase, user.id, profile?.timezone),
     isCrisis ? Promise.resolve({ data: [] }) : supabase.from('library_items').select('id, kind, title, author, status, external_id')
       .eq('user_id', user.id).order('updated_at', { ascending: false }).limit(25),
+    // Continuidad y reutilizar antes de crear (reglas + embeddings; sin tokens extra del modelo).
+    isCrisis ? Promise.resolve([]) : loadContinuity(supabase, user.id, text, body.conversationId).catch(() => []),
+    isCrisis ? Promise.resolve([]) : findReusable(supabase, user.id, text).catch(() => []),
   ]);
   const toolAccess = { youtube: yt.allowed, evidence: ev.allowed, routines: rt.allowed, ritual: ri.allowed };
   // Si SOI abrió la conversación, el saludo va como contexto (algunos proveedores exigen que el historial empiece por el usuario).
@@ -134,6 +140,8 @@ export async function POST(req: Request) {
     director,
     agent === 'crisis' ? '' : VIDEO_RULE[video],
     isCreator && agent !== 'crisis' ? CREATOR_CHAT_RULE : '',
+    agent === 'crisis' ? '' : continuityPrompt(pastTalks, profile?.timezone ?? 'America/Mexico_City'),
+    agent === 'crisis' ? '' : reusePrompt(reusable, !isCreator),
     agent === 'crisis' ? '' : methods,
     openerText && `TU PRIMER MENSAJE EN ESTA CONVERSACIÓN FUE: "${openerText.replace(/["\n]/g, ' ').slice(0, 900)}". Continúa desde ahí sin repetir el saludo.`,
     // Lo que cambia cada minuto va al final: así la parte fija del prompt se reutiliza desde la caché del proveedor.

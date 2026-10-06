@@ -14,6 +14,9 @@ import { HillPatchSchema, loadHillMemory, saveHillMemory } from './hill-memory';
 import { ENEMY_IDS } from '@/config/enemies';
 import { recordEnemy } from '@/lib/battles';
 import { scheduleAutoCover } from '@/lib/moments/auto-cover';
+import { forkOfficial, getMoment } from '@/lib/moments/server';
+import { isNearDuplicate } from '@/lib/moments/reuse';
+import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import type { VideoPolicy } from '@/lib/momentum';
 import type { UserProfile } from '@/types/database';
 
@@ -163,6 +166,7 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
           source: z.string().max(160).optional().describe('Autor y obra de la técnica, si aplica'),
         })).min(2).max(20),
         durationDays: z.number().int().optional().describe('Solo retos (kind challenge): cuántos días dura, de 2 a 30'),
+        basedOn: z.string().max(60).optional().describe('id de un Moment que ya tiene y que estás ajustando: se guarda como nueva versión de ese mismo Moment (no uno nuevo)'),
       }),
       execute: async (m) => {
         const parsed = parseBlocks(m.blocks.map((b, i) => ({ ...b, id: `b${i + 1}` })));
@@ -180,6 +184,26 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
         const blocks = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'), { youtube: access.youtube });
         if (!docsOk) errors.push('Un bloque document usaba un PDF que no está en la biblioteca de la persona; se quitó.');
         if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
+        const proposal = (id: string, minutes: number, extra: Record<string, unknown> = {}) => ({
+          ok: true as const, id, title: m.title, kind: m.kind, reason: m.reason, minutes,
+          blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })), locked: access.routines === false, ...extra,
+        });
+        // Ajustar uno existente: nueva versión del mismo Moment (propio) o tu copia de un oficial.
+        if (m.basedOn) {
+          const base = await getMoment(supabase, m.basedOn);
+          if (base?.official) {
+            const id = await forkOfficial(supabase, userId, base, blocks).catch(() => null);
+            if (id) return proposal(id, blocks.reduce((a, b) => a + b.minutes, 0), { adjusted: true });
+          } else if (base && base.creator_id === userId) {
+            const { error: vErr } = await supabase.rpc('save_moment_version', { p_id: base.id, p_blocks: blocks, p_note: m.reason.slice(0, 160) });
+            if (!vErr) return proposal(base.id, blocks.reduce((a, b) => a + b.minutes, 0), { adjusted: true, title: base.title });
+          }
+        }
+        // Freno: casi idéntico a uno que ya tiene → se ofrece ese, no se duplica.
+        const { data: mine } = await supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('creator_id', userId).neq('status', 'archived')
+          .order('updated_at', { ascending: false }).limit(40);
+        const twin = (mine ?? []).map(toMomentFlow).find((x) => isNearDuplicate({ title: m.title, objective: m.objective, blocks }, x));
+        if (twin) return { ...proposal(twin.id, twin.required_minutes, { reused: true }), title: twin.title, blocks: twin.blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })) };
         const { data, error } = await supabase.from('soi_blueprints').insert({
           creator_id: userId, title: m.title, objective: m.objective, kind: m.kind, source: m.source,
           blocks, steps: [], status: 'private', ...(m.kind === 'challenge' && m.durationDays && m.durationDays >= 2 ? { duration_days: Math.min(30, m.durationDays) } : {}),
@@ -209,6 +233,22 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
       description: 'Napoleon Hill: guarda o actualiza la memoria longitudinal del propósito de la persona (propósito principal definido, meta, fecha, por qué, qué dará a cambio, plan, obstáculo, miedo, conocimiento que falta, mastermind, etapa del ciclo, compromisos). Úsala en silencio cuando la persona defina o cambie algo.',
       inputSchema: HillPatchSchema,
       execute: async (patch) => ({ ok: await saveHillMemory(supabase, userId, patch) }),
+    }),
+
+    offerMoment: tool({
+      description: 'Ofrece un Moment que la persona YA tiene (o uno oficial) tal cual, en lugar de diseñar uno nuevo. Usa el id de la lista "MOMENTS QUE YA TIENE".',
+      inputSchema: z.object({
+        id: z.string().min(2).max(60).describe('id del Moment (uuid) u oficial (slug)'),
+        reason: z.string().max(160).describe('Por qué este Moment ahora, en una frase cálida'),
+      }),
+      execute: async ({ id, reason }) => {
+        const mo = await getMoment(supabase, id);
+        if (!mo || (!mo.official && mo.creator_id !== userId && mo.status !== 'published')) return { ok: false as const, errors: ['Ese Moment no está disponible. Diseña uno con createMoment.'] };
+        return {
+          ok: true as const, id: mo.official ? mo.slug! : mo.id, title: mo.title, kind: mo.kind, reason, minutes: mo.required_minutes,
+          blocks: mo.blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })), locked: access.routines === false, reused: true,
+        };
+      },
     }),
 
     createGuidedContent: tool({
