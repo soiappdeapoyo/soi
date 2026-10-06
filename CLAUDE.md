@@ -105,7 +105,7 @@ Deseo, fe, autosugestión, decisión, persistencia.
 | Iconos | lucide-react |
 | Base de datos | Supabase (PostgreSQL + pgvector) |
 | Auth | Supabase Auth (`@supabase/ssr`) — **Google OAuth** + magic link |
-| LLM | Gemini `gemini-3.8-flash` → Groq `openai/gpt-oss-120b` → DeepSeek `deepseek-flash` (opcional). IDs por env en `src/lib/ai/models.ts` (`AI_MODEL_*`); solo entran a la cascada los proveedores con clave |
+| LLM | **Chat:** DeepSeek `deepseek-flash` → Gemini `gemini-3.8-flash` → Groq `openai/gpt-oss-120b` (`AI_CHAT_ORDER`). **Tareas estructuradas** (router, contenido de agentes, clasificación, moderación de texto): Gemini → Groq → DeepSeek (`AI_TASK_ORDER`). IDs por env en `src/lib/ai/models.ts` (`AI_MODEL_*`); solo entran a la cascada los proveedores con clave. Embeddings y moderación de imágenes: Gemini |
 | Orquestación | Vercel AI SDK **v7** (`ai@7`, `@ai-sdk/react@4`): `UIMessage.parts`, `DefaultChatTransport`, `instructions`, `isStepCount`, `Output.object`. Guías en `node_modules/ai/docs/08-migration-guides` |
 | Voz | **Voz guía neuronal: Gemini TTS** (`gemini-3.8-flash-tts`, env `AI_MODEL_TTS`) vía `/api/tts` → MP3 (`@breezystack/lamejs`) en caché (`voice-cache`, por texto + voz + estilo; lo generado sirve a todas las personas). Estilos (`src/config/voices.ts`): guide, calm, breath, energy, chat. Voces: Sulafat (cálida, por defecto), Vindemiatrix, Achernar, Enceladus, Algieba, Achird. Tope: 20 min de audio nuevo por persona y día (`tts_usage`). Respaldo: `speechSynthesis`. Solo trial/SOI+ (`tts`) |
 | Video | YouTube Data API v3 |

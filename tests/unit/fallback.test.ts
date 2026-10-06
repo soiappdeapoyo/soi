@@ -45,6 +45,8 @@ const models = { gemini: retiredModel as () => MockLanguageModelV4, groq: () => 
 
 vi.mock('@ai-sdk/google', () => ({ google: () => models.gemini() }));
 vi.mock('@ai-sdk/groq', () => ({ groq: () => models.groq() }));
+const deepseekModel = { current: () => okModel('hola desde deepseek') };
+vi.mock('@ai-sdk/deepseek', () => ({ createDeepSeek: () => () => deepseekModel.current() }));
 
 async function readText(result: { textStream: AsyncIterable<string> }) {
   let out = '';
@@ -151,6 +153,46 @@ describe('streamWithFallback', () => {
     const { object, provider } = await objectWithFallback({ schema: z.object({ ok: z.boolean() }), instructions: 'x', prompt: 'y' });
     expect(provider).toBe('groq');
     expect(object).toEqual({ ok: true });
+  });
+});
+
+describe('orden de proveedores', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'test';
+    process.env.GROQ_API_KEY = 'test';
+    process.env.DEEPSEEK_API_KEY = 'test';
+    models.gemini = () => okModel('hola desde gemini');
+    models.groq = () => okModel('hola desde groq');
+    deepseekModel.current = () => okModel('hola desde deepseek');
+  });
+  it('el chat usa DeepSeek primero; las tareas estructuradas siguen con Gemini', async () => {
+    const { streamWithFallback, objectWithFallback } = await import('@/lib/ai/fallback');
+    const { provider } = await streamWithFallback('x', [{ role: 'user', content: 'hola' }]);
+    expect(provider).toBe('deepseek');
+    models.gemini = () => new MockLanguageModelV4({
+      doGenerate: async () => ({ content: [{ type: 'text', text: '{"ok":true}' }], finishReason: { unified: 'stop', raw: undefined }, usage, warnings: [] }),
+    });
+    const { z } = await import('zod/v3');
+    expect((await objectWithFallback({ schema: z.object({ ok: z.boolean() }), instructions: 'x', prompt: 'y' })).provider).toBe('gemini');
+  });
+  it('si DeepSeek falla, el chat sigue con Gemini', async () => {
+    deepseekModel.current = () => new MockLanguageModelV4({
+      doGenerate: async () => { throw Object.assign(new Error('402 saldo insuficiente'), { statusCode: 402 }); },
+      doStream: async () => { throw Object.assign(new Error('402 saldo insuficiente'), { statusCode: 402 }); },
+    });
+    const { streamWithFallback } = await import('@/lib/ai/fallback');
+    const { provider, result } = await streamWithFallback('x', [{ role: 'user', content: 'hola' }]);
+    expect(provider).toBe('gemini');
+    expect(await readText(result)).toBe('hola desde gemini');
+  });
+  it('el orden se puede cambiar con una variable', async () => {
+    const { parseOrder } = await import('@/lib/ai/fallback');
+    expect(parseOrder('groq, deepseek', ['gemini'])).toEqual(['groq', 'deepseek', 'gemini']);
+    expect(parseOrder('', ['deepseek', 'gemini', 'groq'])).toEqual(['deepseek', 'gemini', 'groq']);
+    expect(parseOrder('openai,gemini', ['deepseek'])).toEqual(['gemini', 'groq', 'deepseek']);
   });
 });
 

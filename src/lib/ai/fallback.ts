@@ -29,13 +29,26 @@ const ALL_PROVIDERS: Provider[] = [
   { name: 'deepseek', model: () => createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY ?? '' })(MODELS.deepseek) },
 ];
 
-/** Cascada Gemini → Groq → DeepSeek, solo con los proveedores que tienen clave. */
-function configuredProviders() {
-  return ALL_PROVIDERS.filter((p) => hasKey(p.name));
+const NAMES: ProviderName[] = ['gemini', 'groq', 'deepseek'];
+
+/** Orden de la cascada desde una variable ("deepseek,gemini,groq"); lo que falte se agrega al final. */
+export function parseOrder(value: string | undefined, fallback: ProviderName[]): ProviderName[] {
+  const listed = (value ?? '').split(',').map((x) => x.trim()).filter((x): x is ProviderName => (NAMES as string[]).includes(x));
+  const base = listed.length ? listed : fallback;
+  return [...new Set([...base, ...NAMES])];
 }
 
-// Proveedor sano cacheado 5 min. En producción: Upstash Redis / Vercel KV.
-let cachedProvider: { name: ProviderName; until: number } | null = null;
+/** Chat: DeepSeek primero (más económico). Tareas estructuradas (router, contenido, moderación): Gemini primero. */
+export const CHAT_ORDER = parseOrder(process.env.AI_CHAT_ORDER, ['deepseek', 'gemini', 'groq']);
+export const TASK_ORDER = parseOrder(process.env.AI_TASK_ORDER, ['gemini', 'groq', 'deepseek']);
+
+/** Proveedores con clave, en el orden pedido. */
+function configuredProviders(order: ProviderName[]) {
+  return order.map((n) => ALL_PROVIDERS.find((p) => p.name === n)!).filter((p) => hasKey(p.name));
+}
+
+// Proveedor sano cacheado 5 min, por orden (el del chat no se mezcla con el de las tareas). En producción: Upstash / Vercel KV.
+const cachedProvider = new Map<string, { name: ProviderName; until: number }>();
 
 export function describeError(error: unknown) {
   const e = error as { statusCode?: number; status?: number; message?: string; responseBody?: string };
@@ -59,20 +72,22 @@ async function healthCheck(p: Provider): Promise<boolean> {
   }
 }
 
-async function orderedProviders(): Promise<Provider[]> {
-  const providers = configuredProviders();
+async function orderedProviders(order: ProviderName[] = TASK_ORDER): Promise<Provider[]> {
+  const providers = configuredProviders(order);
+  const key = order.join(',');
   if (!providers.length) {
     console.error('[ai] no hay proveedores configurados: define GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY o DEEPSEEK_API_KEY');
     return [];
   }
-  if (cachedProvider && cachedProvider.until > Date.now()) {
+  const cached = cachedProvider.get(key);
+  if (cached && cached.until > Date.now()) {
     // El sano va primero, pero los demás siguen como respaldo (antes se descartaban).
-    const idx = providers.findIndex((p) => p.name === cachedProvider!.name);
+    const idx = providers.findIndex((p) => p.name === cached.name);
     if (idx >= 0) return [...providers.slice(idx), ...providers.slice(0, idx)];
   }
   for (let i = 0; i < providers.length; i++) {
     if (await healthCheck(providers[i]!)) {
-      cachedProvider = { name: providers[i]!.name, until: Date.now() + 5 * 60_000 };
+      cachedProvider.set(key, { name: providers[i]!.name, until: Date.now() + 5 * 60_000 });
       return [...providers.slice(i), ...providers.slice(0, i)];
     }
   }
@@ -80,7 +95,7 @@ async function orderedProviders(): Promise<Provider[]> {
 }
 
 function forget(provider: ProviderName) {
-  if (cachedProvider?.name === provider) cachedProvider = null;
+  for (const [key, c] of cachedProvider) if (c.name === provider) cachedProvider.delete(key);
 }
 
 export class AllProvidersFailedError extends Error {
@@ -127,7 +142,7 @@ export async function streamWithFallback(
   onEnd?: (args: StreamEnd) => Promise<void> | void,
 ) {
   const attempts: { provider: ProviderName; error: string }[] = [];
-  for (const provider of await orderedProviders()) {
+  for (const provider of await orderedProviders(CHAT_ORDER)) {
     try {
       const result = streamText({
         model: provider.model(),
@@ -180,7 +195,7 @@ export async function objectWithFallback<T extends z.ZodTypeAny>(opts: {
   schema: T; instructions: string; prompt: string; timeoutMs?: number;
 }): Promise<{ object: z.infer<T>; provider: ProviderName }> {
   const attempts: { provider: ProviderName; error: string }[] = [];
-  for (const provider of await orderedProviders()) {
+  for (const provider of await orderedProviders(TASK_ORDER)) {
     try {
       const { output } = await generateText({
         model: provider.model(),

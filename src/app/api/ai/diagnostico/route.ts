@@ -1,5 +1,5 @@
 import { getSessionUser } from '@/lib/supabase/server';
-import { diagnoseProviders } from '@/lib/ai/fallback';
+import { diagnoseProviders, CHAT_ORDER, TASK_ORDER } from '@/lib/ai/fallback';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +23,8 @@ export async function GET() {
   };
   return Response.json({
     ok: results.some((r) => r.ok),
+    chatOrder: CHAT_ORDER,
+    taskOrder: TASK_ORDER,
     providers: results.map((r) => ({ ...r, hint: hint(r) })),
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
