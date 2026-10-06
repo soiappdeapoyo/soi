@@ -16,6 +16,7 @@ import { loadIdentityView } from '@/lib/identity/view';
 import { intensityLabel, loadBattles } from '@/lib/battles';
 import { ENEMIES } from '@/config/enemies';
 import { DayPlanner } from '@/components/moments/day-planner';
+import { PrepareCounter } from '@/components/battles/battle-actions';
 import { loadDayPlan, refOf, suggestForPart } from '@/lib/day-plan';
 import { OFFICIAL_MOMENTS } from '@/config/official-moments';
 import { summarizeRuns, type Progress, type RunRow } from '@/lib/rewards';
@@ -341,110 +342,138 @@ async function DayTab({ supabase, userId }: { supabase: Sb; userId: string }) {
  * Mi Nuevo Yo: no se acumulan Moments, se acumula EVIDENCIA DE IDENTIDAD.
  * Visión → Identidades (nivel) → Capacidades → La evidencia ("SOI ha observado que…") → Tu historia.
  */
+/** "Ver todo": lo detallado queda a un toque, sin cargar la primera vista. */
+function More({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <details className="group">
+      <summary className="press flex cursor-pointer list-none items-center justify-center gap-1.5 rounded-[14px] py-3 text-sm text-soi-muted hover:bg-black/[0.03]">
+        {label} <ArrowRight className="h-3.5 w-3.5 rotate-90 transition-transform duration-[var(--dur-fast)] group-open:-rotate-90" aria-hidden="true" />
+      </summary>
+      <div className="mt-4 flex flex-col gap-8">{children}</div>
+    </details>
+  );
+}
+
+/**
+ * Mi Nuevo Yo, en simple: en quién te estás convirtiendo, lo que sumaste esta semana y el siguiente paso.
+ * Visión, capacidades, observaciones e historia quedan en "Ver todo".
+ */
 async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }) {
   const profile = await getProfile(userId);
   const tz = profile?.timezone ?? 'America/Mexico_City';
   const v = await loadIdentityView(supabase, userId, profile, tz);
   const fmt = (iso: string) => new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric', timeZone: tz }).format(new Date(iso));
   const name = profile?.display_name?.split(/\s+/)[0];
+  const main = v.active[0];
+  const week = v.evidence.filter((e) => Date.now() - Date.parse(e.at) < 7 * 86_400_000);
+  const last = v.evidence[0];
+
+  if (!main) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-[15px] text-soi-muted">Elige en quién te quieres convertir. Cada Moment que vivas será una prueba de que ya lo estás siendo.</p>
+        <IdentitySetup auto compact={false} />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-8">
-      <section aria-labelledby="ny-vision">
-        <h2 id="ny-vision" className="mb-2 text-sm font-medium text-soi-muted">Tu visión</h2>
-        {v.vision.aim || v.vision.goals.length ? (
-          <div className="rounded-[20px] bg-soi-ink p-4 text-white">
-            {v.vision.aim && <p className="text-lg font-medium leading-snug">{v.vision.aim}</p>}
-            {(v.vision.target || v.vision.deadline) && <p className="mt-1 text-sm text-white/80">{[v.vision.target, v.vision.deadline && `para ${v.vision.deadline}`].filter(Boolean).join(' · ')}</p>}
-            {v.vision.goals.length > 0 && (
-              <ul className="mt-3 flex flex-wrap gap-1.5">{v.vision.goals.map((g, i) => <li key={i} className="rounded-full bg-white/15 px-2.5 py-1 text-xs">{g}</li>)}</ul>
-            )}
-          </div>
-        ) : (
-          <Link href="/chat?agent=napoleon_hill" className="press block rounded-[20px] bg-soi-sidebar p-4 text-sm text-soi-muted hover:shadow-soft">
-            Aún no defines tu propósito. <span className="text-soi-accent underline underline-offset-4">Constrúyelo con Napoleon Hill</span>: qué quieres, para cuándo y qué darás a cambio.
-          </Link>
-        )}
-      </section>
+    <div className="flex flex-col gap-4">
+      <Link href={`/mi-vida/yo/${main.id}`} className="press block rounded-[20px] bg-soi-ink p-5 text-white">
+        <p className="text-sm text-white/70">{name ? `${name}, te estás convirtiendo en` : 'Te estás convirtiendo en'}</p>
+        <p className="mt-1 text-balance text-[24px] font-semibold leading-tight">{main.name}</p>
+        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-label={`Hacia el nivel ${main.level.level + 1}`} aria-valuemin={0} aria-valuemax={main.level.next} aria-valuenow={main.level.current}>
+          <div className="h-full origin-left rounded-full bg-white" style={{ transform: `scaleX(${main.level.progress})` }} />
+        </div>
+        <p className="nums mt-2 text-sm text-white/80">Nivel {main.level.level} · {main.evidenceCount} {main.evidenceCount === 1 ? 'evidencia' : 'evidencias'}</p>
+      </Link>
 
-      <section aria-labelledby="ny-ids">
-        <h2 id="ny-ids" className="mb-2 text-sm font-medium text-soi-muted">{name ? `${name}, estás convirtiéndote en…` : 'Estás convirtiéndote en…'}</h2>
-        {v.active.length ? (
-          <ul className="flex flex-col gap-2">
-            {v.active.map((i) => (
-              <li key={i.id}>
-                <Link href={`/mi-vida/yo/${i.id}`} className="press block rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-[17px] font-semibold">{i.name}</p>
-                    <p className="nums shrink-0 text-sm font-medium text-soi-accent">Nivel {i.level.level}</p>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-soi-tray" role="progressbar" aria-label={`Hacia el nivel ${i.level.level + 1}`} aria-valuemin={0} aria-valuemax={i.level.next} aria-valuenow={i.level.current}>
-                    <div className="h-full origin-left rounded-full bg-soi-accent-fill" style={{ transform: `scaleX(${i.level.progress})` }} />
-                  </div>
-                  <p className="nums mt-1.5 text-xs text-soi-muted">
-                    {i.evidenceCount ? `Basado en ${i.evidenceCount} ${i.evidenceCount === 1 ? 'evidencia' : 'evidencias'}` : 'Tu primera evidencia llega con el próximo Moment'}
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <div className={v.active.length ? 'mt-3' : ''}><IdentitySetup auto={v.active.length === 0} compact={v.active.length > 0} /></div>
-      </section>
-
-      {v.capacities.length > 0 && (
-        <section aria-labelledby="ny-caps">
-          <h2 id="ny-caps" className="mb-2 text-sm font-medium text-soi-muted">Has desarrollado</h2>
-          <ul className="flex flex-col gap-2.5 rounded-[20px] bg-white p-4 shadow-ring">
-            {v.capacities.map((c) => (
-              <li key={c.name} className="grid grid-cols-[7.5rem_1fr_auto] items-center gap-3">
-                <span className="truncate text-sm">{c.name}</span>
-                <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-accent-fill" style={{ transform: `scaleX(${c.level.progress})` }} /></span>
-                <span className="nums text-xs text-soi-muted">Nivel {c.level.level}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {v.active.length > 1 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {v.active.slice(1).map((i) => (
+            <li key={i.id}><Link href={`/mi-vida/yo/${i.id}`} className="press nums inline-flex rounded-full bg-white px-3 py-1.5 text-sm shadow-ring">{i.name} · Nv {i.level.level}</Link></li>
+          ))}
+        </ul>
       )}
 
-      <section aria-labelledby="ny-ev">
-        <h2 id="ny-ev" className="mb-2 text-sm font-medium text-soi-muted">La evidencia</h2>
-        {v.observations.length ? (
-          <div className="rounded-[20px] bg-soi-accent-soft p-4">
-            <p className="text-sm font-medium text-soi-accent">SOI ha observado que:</p>
-            <ul className="mt-2 flex flex-col gap-1.5">{v.observations.map((o) => <li key={o} className="flex gap-2 text-[15px]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-soi-accent" aria-hidden="true" />{o}</li>)}</ul>
-          </div>
+      {/* La recompensa primero: lo que ya hiciste. */}
+      <div className="rounded-[20px] bg-soi-accent-soft p-4">
+        {week.length ? (
+          <>
+            <p className="nums text-[17px] font-semibold text-soi-accent">Esta semana sumaste {week.length} {week.length === 1 ? 'evidencia' : 'evidencias'}</p>
+            {last && <p className="mt-1 text-sm text-soi-ink/80">Lo último: {last.note ? `«${last.note.slice(0, 90)}${last.note.length > 90 ? '…' : ''}»` : last.title}</p>}
+          </>
         ) : (
-          <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">
-            {v.evidence.length ? `Llevas ${v.evidence.length} ${v.evidence.length === 1 ? 'evidencia' : 'evidencias'}. Con un par de meses de práctica, SOI te mostrará cómo estás cambiando (no motivación: evidencia).` : 'Cada Moment que vivas, cada reflexión y cada regreso se vuelven evidencia de quién te estás convirtiendo.'}
-          </p>
+          <p className="text-[15px] text-soi-ink/80">Esta semana aún no hay evidencias. Un Moment pequeño basta para empezar.</p>
         )}
-      </section>
+        <Link href="/hoy" className={buttonClass('primary', 'md', 'mt-3 w-full')}>Sumar una evidencia</Link>
+      </div>
 
-      <section aria-labelledby="ny-story">
-        <h2 id="ny-story" className="mb-2 text-sm font-medium text-soi-muted">Tu historia</h2>
-        <div className="flex flex-col gap-4">
-          <WeeklyStory />
-          {v.story.length ? (
-            <ol className="relative flex flex-col gap-4 border-l border-black/10 pl-4">
-              {v.story.map((e, i) => (
-                <li key={i} className="relative">
-                  <span aria-hidden="true" className="absolute -left-[1.3rem] top-1.5 h-2.5 w-2.5 rounded-full bg-soi-accent-fill" />
-                  <p className="text-xs text-soi-muted">{fmt(e.at)}</p>
-                  <p className="text-[15px] leading-relaxed">{e.text}</p>
+      <More label="Ver todo">
+        <section aria-labelledby="ny-vision">
+          <h2 id="ny-vision" className="mb-2 text-sm font-medium text-soi-muted">Tu visión</h2>
+          {v.vision.aim || v.vision.goals.length ? (
+            <div className="rounded-[20px] bg-white p-4 shadow-ring">
+              {v.vision.aim && <p className="text-[17px] font-medium leading-snug">{v.vision.aim}</p>}
+              {(v.vision.target || v.vision.deadline) && <p className="mt-1 text-sm text-soi-muted">{[v.vision.target, v.vision.deadline && `para ${v.vision.deadline}`].filter(Boolean).join(' · ')}</p>}
+              {v.vision.goals.length > 0 && <ul className="mt-3 flex flex-wrap gap-1.5">{v.vision.goals.map((g, i) => <li key={i} className="rounded-full bg-soi-tray px-2.5 py-1 text-xs">{g}</li>)}</ul>}
+            </div>
+          ) : (
+            <Link href="/chat?agent=napoleon_hill" className="press block rounded-[20px] bg-soi-sidebar p-4 text-sm text-soi-muted">
+              Aún no defines tu propósito. <span className="text-soi-accent underline underline-offset-4">Constrúyelo con Napoleon Hill</span>.
+            </Link>
+          )}
+        </section>
+
+        {v.capacities.length > 0 && (
+          <section aria-labelledby="ny-caps">
+            <h2 id="ny-caps" className="mb-2 text-sm font-medium text-soi-muted">Has desarrollado</h2>
+            <ul className="flex flex-col gap-2.5 rounded-[20px] bg-white p-4 shadow-ring">
+              {v.capacities.map((c) => (
+                <li key={c.name} className="grid grid-cols-[7.5rem_1fr_auto] items-center gap-3">
+                  <span className="truncate text-sm">{c.name}</span>
+                  <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-accent-fill" style={{ transform: `scaleX(${c.level.progress})` }} /></span>
+                  <span className="nums text-xs text-soi-muted">Nivel {c.level.level}</span>
                 </li>
               ))}
-            </ol>
-          ) : <p className="text-sm text-soi-muted">Tu historia empieza con tu primer Moment.</p>}
-        </div>
-      </section>
+            </ul>
+          </section>
+        )}
+
+        {v.observations.length > 0 && (
+          <section aria-labelledby="ny-ev" className="rounded-[20px] bg-white p-4 shadow-ring">
+            <h2 id="ny-ev" className="text-sm font-medium text-soi-accent">SOI ha observado que:</h2>
+            <ul className="mt-2 flex flex-col gap-1.5">{v.observations.map((o) => <li key={o} className="flex gap-2 text-[15px]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-soi-accent" aria-hidden="true" />{o}</li>)}</ul>
+          </section>
+        )}
+
+        <section aria-labelledby="ny-story">
+          <h2 id="ny-story" className="mb-2 text-sm font-medium text-soi-muted">Tu historia</h2>
+          <div className="flex flex-col gap-4">
+            <WeeklyStory />
+            {v.story.length ? (
+              <ol className="relative flex flex-col gap-4 border-l border-black/10 pl-4">
+                {v.story.map((e, i) => (
+                  <li key={i} className="relative">
+                    <span aria-hidden="true" className="absolute -left-[1.3rem] top-1.5 h-2.5 w-2.5 rounded-full bg-soi-accent-fill" />
+                    <p className="text-xs text-soi-muted">{fmt(e.at)}</p>
+                    <p className="text-[15px] leading-relaxed">{e.text}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : <p className="text-sm text-soi-muted">Tu historia empieza con tu primer Moment.</p>}
+          </div>
+        </section>
+
+        <IdentitySetup auto={false} compact />
+      </More>
     </div>
   );
 }
 
 /**
- * Batallas: SOI no lucha contra la persona; lucha JUNTO a ella contra sus enemigos interiores
- * (patrones, no diagnósticos). Victorias, enemigo más frecuente, mapa de la Fortaleza Interior y jefes por meta.
+ * Batallas, en simple: primero lo que ya venciste (recompensa), luego UN enemigo para hoy con un solo botón.
+ * El mapa, los jefes por meta y los 13 enemigos quedan en "Ver todos".
  */
 async function BattlesTab({ supabase, userId }: { supabase: Sb; userId: string }) {
   const profile = await getProfile(userId);
@@ -452,103 +481,102 @@ async function BattlesTab({ supabase, userId }: { supabase: Sb; userId: string }
   const maxI = Math.max(2, ...b.active.map((e) => e.intensity));
   const maxA = Math.max(1, ...b.allies.map((a) => a.level.level));
   const seen = new Set(b.active.map((e) => e.enemy.id));
+  const wins = b.defeated.reduce((a, d) => a + d.victories30, 0);
+  const focus = b.active[0];
+  const minutes = (e: (typeof ENEMIES)[number]) => e.counter.blocks.reduce((a, x) => a + (x.minutes ?? 0), 0);
 
   return (
-    <div className="flex flex-col gap-8">
-      <p className="rounded-[20px] bg-soi-ink p-4 text-[15px] leading-relaxed text-white">
-        No eres tus pensamientos, ni tus emociones, ni tus patrones automáticos. Los enemigos interiores aparecen en todos nosotros;
-        la diferencia está en reconocerlos y entrenar a tus aliados para responder de otra manera.
-      </p>
+    <div className="flex flex-col gap-4">
+      <p className="px-1 text-[15px] italic leading-relaxed text-soi-muted">No eres tus pensamientos. Son patrones que aparecen en todos; SOI los enfrenta contigo.</p>
 
-      <section aria-labelledby="bt-won">
-        <h2 id="bt-won" className="mb-2 text-sm font-medium text-soi-muted">En los últimos 30 días</h2>
-        {b.defeated.length ? (
-          <div className="rounded-[20px] bg-white p-4 shadow-ring">
-            <p className="text-sm font-medium">Has derrotado:</p>
-            <ul className="mt-2 flex flex-col gap-1">
-              {b.defeated.map((d) => (
-                <li key={d.enemy.id} className="nums flex items-center gap-2 text-[15px]"><Check className="h-4 w-4 text-soi-accent" aria-hidden="true" />{d.enemy.name} ({d.victories30} {d.victories30 === 1 ? 'vez' : 'veces'})</li>
+      {wins > 0 && (
+        <div className="rounded-[20px] bg-soi-accent-soft p-4">
+          <p className="nums text-[17px] font-semibold text-soi-accent">Les ganaste {wins} {wins === 1 ? 'vez' : 'veces'} este mes</p>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {b.defeated.map((d) => <li key={d.enemy.id} className="nums inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-sm"><Check className="h-3.5 w-3.5 text-soi-accent" aria-hidden="true" />{d.enemy.name} ×{d.victories30}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {focus ? (
+        <section aria-labelledby="bt-focus" className="rounded-[20px] bg-soi-ink p-5 text-white">
+          <p id="bt-focus" className="text-xs font-medium text-white/60">{wins ? 'El que más aparece ahora' : 'Apareció en tus días'}</p>
+          <p className="mt-1 text-[22px] font-semibold leading-snug">{focus.enemy.name}</p>
+          <p className="mt-0.5 text-[15px] italic text-white/75">«{focus.enemy.whisper}»</p>
+          <p className="mt-3 text-sm text-white/80">Lo vence: {focus.enemy.allies.slice(0, 2).join(' y ')}.</p>
+          <div className="mt-4"><PrepareCounter enemy={focus.enemy.id} label={`Enfrentarlo · ${minutes(focus.enemy)} min`}
+            className="press tap-target flex w-full items-center justify-center gap-2 rounded-[14px] bg-white py-3 text-[16px] font-semibold text-soi-ink disabled:opacity-60" /></div>
+          <Link href={`/mi-vida/batallas/${focus.enemy.id}`} className="press mt-2 block py-1.5 text-center text-sm text-white/70">Conocerlo mejor</Link>
+        </section>
+      ) : (
+        <p className="rounded-[20px] bg-soi-sidebar p-4 text-[15px] text-soi-muted">
+          Hoy no hay batallas. Cuando un patrón intente ganar terreno en tus conversaciones, SOI te lo dirá aquí y te dará cómo vencerlo.
+        </p>
+      )}
+
+      <More label="Ver todos los enemigos">
+        <section aria-labelledby="bt-map">
+          <h2 id="bt-map" className="mb-2 text-sm font-medium text-soi-muted">Tu Fortaleza Interior</h2>
+          <div className="grid gap-3 rounded-[20px] bg-white p-4 shadow-ring sm:grid-cols-2">
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soi-accent">Aliados</p>
+              {b.allies.length ? (
+                <ul className="flex flex-col gap-1.5">{b.allies.slice(0, 8).map((a) => (
+                  <li key={a.name} className="grid grid-cols-[6.5rem_1fr] items-center gap-2 text-sm"><span className="truncate">{a.name}</span>
+                    <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-accent-fill" style={{ transform: `scaleX(${Math.min(1, a.level.level / maxA)})` }} /></span></li>
+                ))}</ul>
+              ) : <p className="text-sm text-soi-muted">Se fortalecen con cada Moment.</p>}
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soi-danger">Enemigos</p>
+              {b.active.length ? (
+                <ul className="flex flex-col gap-1.5">{b.active.slice(0, 8).map((e) => (
+                  <li key={e.enemy.id}>
+                    <Link href={`/mi-vida/batallas/${e.enemy.id}`} className="press grid grid-cols-[6.5rem_1fr] items-center gap-2 text-sm"><span className="truncate">{e.enemy.name.replace(/^(El|La) /, '')}</span>
+                      <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-danger/70" style={{ transform: `scaleX(${Math.min(1, e.intensity / maxI)})` }} /></span></Link>
+                  </li>
+                ))}</ul>
+              ) : <p className="text-sm text-soi-muted">Ningún enemigo activo ahora.</p>}
+            </div>
+            <p className="text-xs text-soi-subtle sm:col-span-2">No representa quién eres: es el estado actual de tu entrenamiento.</p>
+          </div>
+        </section>
+
+        {b.bosses.length > 0 && (
+          <section aria-labelledby="bt-boss">
+            <h2 id="bt-boss" className="mb-2 text-sm font-medium text-soi-muted">En tus metas</h2>
+            <ul className="flex flex-col gap-2">
+              {b.bosses.map((boss) => (
+                <li key={boss.goal} className="rounded-[20px] bg-white p-4 shadow-ring">
+                  <p className="font-medium">{boss.goal}</p>
+                  <p className="mt-1 text-sm text-soi-muted">Aquí aparece{boss.top.length > 1 ? 'n' : ''} {boss.top.slice(0, 2).map((t) => t.enemy.name).join(' y ')}.</p>
+                  <Link href={`/mi-vida/batallas/${boss.top[0]!.enemy.id}`} className="mt-2 inline-block text-sm font-medium text-soi-accent underline underline-offset-4">Cómo vencer a {boss.top[0]!.enemy.name}</Link>
+                </li>
               ))}
             </ul>
-            {b.mostFrequent && <p className="mt-3 text-sm text-soi-muted">El enemigo que más aparece sigue siendo: <Link href={`/mi-vida/batallas/${b.mostFrequent.enemy.id}`} className="font-medium text-soi-ink underline underline-offset-4">{b.mostFrequent.enemy.name}</Link>.</p>}
-          </div>
-        ) : (
-          <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">
-            {b.totalEvents30 ? `SOI notó ${b.totalEvents30} ${b.totalEvents30 === 1 ? 'vez' : 'veces'} que un enemigo intentó ganar terreno. Cada Moment que entrena a sus aliados cuenta como victoria.` : 'Cuando un enemigo intente ganar terreno (en tus conversaciones con SOI), aparecerá aquí junto con la forma de vencerlo.'}
-          </p>
+          </section>
         )}
-      </section>
 
-      <section aria-labelledby="bt-map">
-        <h2 id="bt-map" className="mb-2 text-sm font-medium text-soi-muted">Tu Fortaleza Interior</h2>
-        <div className="grid gap-3 rounded-[20px] bg-white p-4 shadow-ring sm:grid-cols-2">
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soi-accent">Aliados</p>
-            {b.allies.length ? (
-              <ul className="flex flex-col gap-1.5">{b.allies.slice(0, 8).map((a) => (
-                <li key={a.name} className="grid grid-cols-[6.5rem_1fr] items-center gap-2 text-sm"><span className="truncate">{a.name}</span>
-                  <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-accent-fill" style={{ transform: `scaleX(${Math.min(1, a.level.level / maxA)})` }} /></span></li>
-              ))}</ul>
-            ) : <p className="text-sm text-soi-muted">Se fortalecen con cada Moment.</p>}
-          </div>
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-soi-danger">Enemigos</p>
-            {b.active.length ? (
-              <ul className="flex flex-col gap-1.5">{b.active.slice(0, 8).map((e) => (
-                <li key={e.enemy.id}>
-                  <Link href={`/mi-vida/batallas/${e.enemy.id}`} className="press grid grid-cols-[6.5rem_1fr] items-center gap-2 text-sm"><span className="truncate">{e.enemy.name.replace(/^(El|La) /, '')}</span>
-                    <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-danger/70" style={{ transform: `scaleX(${Math.min(1, e.intensity / maxI)})` }} /></span></Link>
-                </li>
-              ))}</ul>
-            ) : <p className="text-sm text-soi-muted">Ningún enemigo activo ahora.</p>}
-          </div>
-          <p className="text-xs text-soi-subtle sm:col-span-2">No representa quién eres: es el estado actual de tu entrenamiento.</p>
-        </div>
-      </section>
-
-      {b.bosses.length > 0 && (
-        <section aria-labelledby="bt-boss">
-          <h2 id="bt-boss" className="mb-2 text-sm font-medium text-soi-muted">Batallas importantes</h2>
-          <ul className="flex flex-col gap-2">
-            {b.bosses.map((boss) => {
-              const max = Math.max(...boss.top.map((t) => t.count));
+        <section aria-labelledby="bt-all">
+          <h2 id="bt-all" className="mb-2 text-sm font-medium text-soi-muted">Los 13 enemigos interiores</h2>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {[...b.active.map((e) => e.enemy), ...ENEMIES.filter((e) => !seen.has(e.id))].map((enemy) => {
+              const st = b.enemies.find((x) => x.enemy.id === enemy.id)!;
               return (
-                <li key={boss.goal} className="rounded-[20px] bg-white p-4 shadow-ring">
-                  <p className="text-xs text-soi-muted">Meta</p>
-                  <p className="font-medium">{boss.goal}</p>
-                  <ul className="mt-3 flex flex-col gap-1.5">{boss.top.map((t) => (
-                    <li key={t.enemy.id} className="grid grid-cols-[7rem_1fr] items-center gap-2 text-sm"><span className="truncate">{t.enemy.name.replace(/^(El|La) /, '')}</span>
-                      <span className="h-2 overflow-hidden rounded-full bg-soi-tray"><span className="block h-full origin-left rounded-full bg-soi-danger/70" style={{ transform: `scaleX(${t.count / max})` }} /></span></li>
-                  ))}</ul>
-                  <p className="mt-3 text-sm text-soi-muted">En esta meta, {boss.top.slice(0, 2).map((t) => t.enemy.name).join(' y ')} {boss.top.length > 1 ? 'son los que más aparecen' : 'es el que más aparece'}. Podemos preparar un plan para enfrentarlos.</p>
-                  <div className="mt-2"><Link href={`/mi-vida/batallas/${boss.top[0]!.enemy.id}`} className="text-sm font-medium text-soi-accent underline underline-offset-4">Ver cómo vencer a {boss.top[0]!.enemy.name}</Link></div>
+                <li key={enemy.id}>
+                  <Link href={`/mi-vida/batallas/${enemy.id}`} className="press block h-full rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="font-medium">{enemy.name}</p>
+                      <p className={st.intensity > 0 ? 'text-xs font-medium text-soi-danger' : 'text-xs text-soi-subtle'}>{intensityLabel(st.intensity)}</p>
+                    </div>
+                    <p className="mt-0.5 text-sm italic text-soi-muted">«{enemy.whisper}»</p>
+                  </Link>
                 </li>
               );
             })}
           </ul>
         </section>
-      )}
-
-      <section aria-labelledby="bt-all">
-        <h2 id="bt-all" className="mb-2 text-sm font-medium text-soi-muted">Los enemigos interiores</h2>
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {[...b.active.map((e) => e.enemy), ...ENEMIES.filter((e) => !seen.has(e.id))].map((enemy) => {
-            const st = b.enemies.find((x) => x.enemy.id === enemy.id)!;
-            return (
-              <li key={enemy.id}>
-                <Link href={`/mi-vida/batallas/${enemy.id}`} className="press block h-full rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="font-medium">{enemy.name}</p>
-                    <p className={st.intensity > 0 ? 'text-xs font-medium text-soi-danger' : 'text-xs text-soi-subtle'}>{intensityLabel(st.intensity)}</p>
-                  </div>
-                  <p className="mt-0.5 text-sm italic text-soi-muted">«{enemy.whisper}»</p>
-                  {st.pattern && <p className="mt-1 text-xs text-soi-muted">{st.pattern}</p>}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+      </More>
     </div>
   );
 }

@@ -17,11 +17,15 @@ export function NavLink({ href, className, activeClassName, children, title, ari
   const pathname = usePathname();
   const params = useSearchParams();
   const [path, query] = href.split('?');
-  const agent = query ? new URLSearchParams(query).get('agent') : null;
+  const q = query ? new URLSearchParams(query) : null;
+  const agent = q?.get('agent') ?? null;
+  const tab = q?.get('tab') ?? null;
   const active = match
     ? isTabActive(pathname, { match })
     : agent
     ? pathname === path && params.get('agent') === agent
+    : tab
+    ? pathname === path && (params.get('tab') ?? 'dia') === tab
     : pathname === path || (path !== '/chat' && pathname.startsWith(`${path}/`));
 
   return (

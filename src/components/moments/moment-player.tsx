@@ -26,6 +26,10 @@ type Props = {
   challenge?: { day: number; total: number } | null;
   ttsAllowed: boolean;
   voice?: string | null;
+  /** Lista de reproducción de Hoy: número, total y lo que sigue. */
+  playlist?: { position: number; total: number; next: { href: string; title: string; minutes: number } | null } | null;
+  /** Empezar sin pantalla previa (al pasar solo al siguiente Moment de la lista). */
+  autoStart?: boolean;
 };
 
 type Phase = 'before' | 'run' | 'after' | 'done';
@@ -44,7 +48,7 @@ function fmt(s: number) {
  * - Barra de tiempo LINEAL (es tiempo real). Halo de respiración solo en respiración y meditación.
  * - Una sola celebración al final (800 ms). Las salidas se guardan al pasar de bloque.
  */
-export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice }: Props) {
+export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice, playlist, autoStart }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('before');
   const [runId, setRunId] = useState<string | null>(null);
@@ -168,6 +172,17 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, phase]);
 
+  // La voz del primer paso se prepara desde que se abre el reproductor (mientras eliges cómo llegas): empieza sin espera.
+  useEffect(() => {
+    if (!voiceOn || !ttsAllowed || !blocks[0]) return;
+    const first = blocks[0];
+    void import('@/lib/voice/tts').then(({ prefetchSpeech }) => {
+      if (first.type === 'breathing') { prefetchSpeech('Inhala…', 'breath'); prefetchSpeech('Exhala…', 'breath'); }
+      else { const s = blockSpeech(first); prefetchSpeech(s.text, s.style, 3); }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Silenciar corta la lectura en curso; al salir del reproductor, también.
   useEffect(() => {
     if (voiceOn) return;
@@ -193,6 +208,15 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     setRunning(true);
     track('moment_started', { moment: moment.id });
   }
+
+  // Lista de Hoy: al pasar solo al siguiente, empieza sin pantalla previa (la voz ya quedó habilitada con el primer toque).
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || phase !== 'before') return;
+    autoStarted.current = true;
+    void start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   async function complete() {
     if (!runId) return;
@@ -244,8 +268,9 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   /* ---------- Antes ---------- */
   if (phase === 'before') {
     return (
-      <Shell title={moment.title} onExit={`/m/${moment.id}`}>
+      <Shell title={moment.title} onExit={playlist ? '/hoy' : `/m/${moment.id}`}>
         <div className="flex flex-col items-center gap-5 py-6 text-center">
+          {playlist && <p className="nums text-sm text-soi-muted">Tu día · {playlist.position} de {playlist.total}</p>}
           {challenge && <p className="nums rounded-lg bg-soi-accent-soft px-3 py-1 text-sm font-medium text-soi-accent">Día {challenge.day} de {challenge.total}</p>}
           <p className="text-[15px] text-soi-muted">{moment.objective}</p>
           <fieldset>
@@ -282,7 +307,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     const out = outputs[shownBlock.id] ?? {};
     const timeUp = remaining <= 0 && !AUTO_ADVANCE.has(block.type);
     return (
-      <Shell title={moment.title} onExit={`/m/${moment.id}`} progress={{ index, total: blocks.length }}
+      <Shell title={moment.title} onExit={playlist ? '/hoy' : `/m/${moment.id}`} progress={{ index, total: blocks.length }}
         voice={ttsAllowed ? { on: voiceOn, toggle: () => setVoiceOn((v) => !v) } : undefined}>
         <div className="flex flex-1 flex-col">
           <div className="mt-2 flex items-center gap-3">
@@ -394,7 +419,10 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
           </p>
         )}
 
-        {!proposal ? (
+        {playlist && <UpNext playlist={playlist} />}
+
+        {/* En la lista de Hoy lo que sigue es el siguiente Moment: sin más opciones que distraigan. */}
+        {playlist ? null : !proposal ? (
           <div className="mt-2 grid w-full gap-2 sm:grid-cols-2">
             <Button onClick={improve} disabled={improving}><Sparkles className="h-4 w-4" aria-hidden="true" /> {improving ? 'Preparando tu versión…' : 'Mejorar mi Moment'}</Button>
             <Link href="/evidencias/nueva" className={buttonClass('outline')}><Star className="h-4 w-4" aria-hidden="true" /> Llevar al Muro</Link>
@@ -430,6 +458,47 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
         )}
       </div>
     </Shell>
+  );
+}
+
+/**
+ * Lo que sigue en la lista de Hoy: cuenta regresiva de 8 s y pasa solo al siguiente (como una lista de
+ * reproducción). Se puede quedar aquí. Sin cuenta regresiva con movimiento reducido: solo el botón.
+ */
+function UpNext({ playlist }: { playlist: NonNullable<Props['playlist']> }) {
+  const router = useRouter();
+  const [left, setLeft] = useState(8);
+  const [stay, setStay] = useState(false);
+  const next = playlist.next;
+  useEffect(() => {
+    if (!next || stay) return;
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setStay(true); return; }
+    if (left <= 0) { router.push(next.href); return; }
+    const t = setTimeout(() => setLeft((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [left, stay, next, router]);
+
+  if (!next) {
+    return (
+      <div className="w-full rounded-[20px] bg-soi-accent-soft p-4 text-center">
+        <p className="text-[17px] font-semibold">Viviste todo tu día</p>
+        <p className="mt-1 text-sm text-soi-muted">Lo que planeaste, lo hiciste. Eso es identidad.</p>
+        <Link href="/hoy" className={buttonClass('primary', 'md', 'mt-3')}>Volver a Hoy</Link>
+      </div>
+    );
+  }
+  return (
+    <div className="w-full rounded-[20px] bg-soi-sidebar p-3 text-left">
+      <p className="px-1 text-xs font-medium text-soi-muted">A continuación</p>
+      <Link href={next.href} className="press mt-2 flex items-center gap-3 rounded-[14px] bg-white p-3 shadow-ring">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-soi-ink text-white"><Play className="h-4 w-4" aria-hidden="true" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-medium">{next.title}</span>
+          <span className="nums block text-xs text-soi-muted">{next.minutes} min{!stay ? ` · empieza en ${left} s` : ''}</span>
+        </span>
+      </Link>
+      {!stay && <button type="button" onClick={() => setStay(true)} className="press mt-1 w-full py-2 text-sm text-soi-muted">Quedarme aquí</button>}
+    </div>
   );
 }
 

@@ -96,3 +96,23 @@ export async function suggestForPart(supabase: SupabaseClient, userId: string, p
     return true;
   }).slice(0, limit);
 }
+
+/** Ruta del reproductor en modo "lista de Hoy". */
+export const playHref = (m: Pick<MomentFlow, 'id' | 'official' | 'slug'>, auto = false) =>
+  `/m/${m.official ? m.slug : m.id}/play?lista=hoy${auto ? '&auto=1' : ''}`;
+
+/**
+ * La lista de reproducción de Hoy: lo pendiente de Mi día, en su orden. Al estar en `currentRef`, el siguiente es
+ * el próximo pendiente después de él (y si no hay, el primero pendiente antes: nada queda sin vivir).
+ */
+export function playQueue(items: Pick<DayItemView, 'ref' | 'done' | 'moment'>[], currentRef: string) {
+  const idx = items.findIndex((i) => i.ref === currentRef);
+  if (idx < 0) return null;
+  const pending = (i: Pick<DayItemView, 'ref' | 'done'>) => !i.done && i.ref !== currentRef;
+  const after = items.slice(idx + 1).find(pending) ?? items.slice(0, idx).find(pending) ?? null;
+  return {
+    position: items.filter((i) => i.done).length + 1,
+    total: items.length,
+    next: after?.moment ? { href: playHref(after.moment, true), title: after.moment.title, minutes: after.moment.required_minutes } : null,
+  };
+}

@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { Plus, Settings, Flame, Shield } from 'lucide-react';
 import { AGENTS, PRACTICE_AGENTS } from '@/config/agents';
-import { MY_SPACE, PRIMARY_TABS } from '@/config/navigation';
+import { CREATE_LINKS, MY_LIFE, PRIMARY_TABS } from '@/config/navigation';
 import { Icon } from '@/components/ui/icon';
 import { buttonClass } from '@/components/ui/button';
 import { NavLink } from './nav-link';
@@ -59,11 +59,22 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
               ))}
             </ul>
           )}
-          <p className={cn(section, 'pt-2')}>Prácticas</p>
+          <p className={cn(section, 'pt-2')}>Mi Vida</p>
+          <ul className="flex flex-col gap-0.5">
+            {MY_LIFE.map((s) => (
+              <li key={s.href}>
+                <NavLink href={s.href} className={item} activeClassName={active} title={s.label}>
+                  <Icon name={s.icon} className="h-4 w-4 shrink-0" /> <span className={hide}>{s.label}</span>
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+
+          <p className={section}>Habla con</p>
           <ul className="flex flex-col gap-0.5">
             {PRACTICE_AGENTS.map((id) => {
               const a = AGENTS[id];
-              const href = id === 'rutinas' ? '/rutinas' : `/chat?agent=${id}`;
+              const href = `/chat?agent=${id}`;
               return (
                 <li key={id}>
                   <NavLink href={href} className={item} activeClassName={active} title={a.label}>
@@ -75,9 +86,9 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
             })}
           </ul>
 
-          <p className={section}>Mi espacio</p>
+          <p className={section}>Crear</p>
           <ul className="flex flex-col gap-0.5">
-            {MY_SPACE.map((s) => (
+            {CREATE_LINKS.map((s) => (
               <li key={s.href}>
                 <NavLink href={s.href} className={item} activeClassName={active} title={s.label}>
                   <Icon name={s.icon} className="h-4 w-4 shrink-0" /> <span className={hide}>{s.label}</span>
@@ -117,7 +128,7 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
           <NavLink href="/ajustes" className={item} activeClassName={active} title="Ajustes">
             <Settings className="h-4 w-4 shrink-0" aria-hidden="true" /><span className={hide}>Ajustes</span>
           </NavLink>
-          <NavLink href="/perfil" className={item} activeClassName={active} title="Mi perfil">
+          <NavLink href="/yo" className={item} activeClassName={active} title="Yo">
             {data.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={data.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full" />

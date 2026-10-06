@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { unlockAudio } from '@/lib/voice/player';
 import { toast } from 'sonner';
 import { Play, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /** Preparar (o reutilizar) el Moment para combatir a un enemigo y empezarlo. */
-export function PrepareCounter({ enemy, label }: { enemy: string; label: string }) {
+export function PrepareCounter({ enemy, label, className }: { enemy: string; label: string; className?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   async function go() {
@@ -17,6 +18,9 @@ export function PrepareCounter({ enemy, label }: { enemy: string; label: string 
     setBusy(false);
     if (!res.ok || !json.ok) { toast(json.message ?? 'No se pudo preparar.'); return; }
     router.push(json.play ? `/m/${json.id}/play` : `/m/${json.id}`);
+  }
+  if (className) {
+    return <button type="button" onClick={() => { unlockAudio(); void go(); }} disabled={busy} className={className}><Play className="h-4 w-4 fill-current" aria-hidden="true" /> {busy ? 'Preparando…' : label}</button>;
   }
   return <Button size="sm" onClick={go} disabled={busy}><Play className="h-4 w-4" aria-hidden="true" /> {busy ? 'Preparando…' : label}</Button>;
 }

@@ -10,11 +10,13 @@ import { blocksForDay, challengeLength, challengeState } from '@/lib/moments/cha
 import { buttonClass } from '@/components/ui/button';
 import { todayISO } from '@/lib/utils';
 import { MomentPlayer } from '@/components/moments/moment-player';
+import { loadDayPlan, playQueue, refOf } from '@/lib/day-plan';
 
 export const metadata: Metadata = { title: 'Moment en curso' };
 
-export default async function PlayMomentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PlayMomentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ lista?: string; auto?: string }> }) {
   const { id } = await params;
+  const { lista, auto } = await searchParams;
   const { supabase, user } = await getSessionUser();
   if (!user) redirect(`/login?next=/m/${id}/play`);
   const m = await getMoment(supabase, id);
@@ -51,6 +53,10 @@ export default async function PlayMomentPage({ params }: { params: Promise<{ id:
     challenge = { day: st.currentDay!, total };
     toPlay = blocksForDay(blocks, st.currentDay!);
   }
+  // Lista de reproducción de Hoy (Mi día): qué número es y qué sigue.
+  const queue = lista === 'hoy'
+    ? playQueue((await loadDayPlan(supabase, user.id, profile?.timezone ?? 'America/Mexico_City')).items, refOf(m))
+    : null;
   const ready = await resolveVideoBlocks(supabase, user.id, await resolveLibraryBlocks(toPlay, { youtube: access.youtube_embed }), access.youtube_embed);
 
   return (
@@ -59,6 +65,8 @@ export default async function PlayMomentPage({ params }: { params: Promise<{ id:
       blocks={ready}
       locked={!allowed}
       challenge={challenge}
+      playlist={queue}
+      autoStart={Boolean(queue) && auto === '1' && allowed}
       ttsAllowed={access.tts && (profile?.tts_enabled ?? true)}
       voice={profile?.voice_preference}
     />

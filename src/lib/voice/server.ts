@@ -63,7 +63,7 @@ export async function synthesize(text: string, voiceId: string | null | undefine
     voice,
     instructions: VOICE_STYLES[style],
     outputFormat: 'wav',
-    abortSignal: AbortSignal.timeout(25_000),
+    abortSignal: AbortSignal.timeout(45_000),
     maxRetries: 1,
   });
   const pcm = pcmFromWav(audio.uint8Array);

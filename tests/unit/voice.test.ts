@@ -35,8 +35,8 @@ describe('voz guía (cliente)', () => {
   it('el primer fragmento es corto para empezar rápido', () => {
     const text = `Cierra los ojos. ${'Respira profundo y suelta los hombros. '.repeat(30)}`;
     const chunks = chunkForVoice(text);
-    expect(chunks[0]!.length).toBeLessThanOrEqual(220);
-    expect(chunks.slice(1).every((c) => c.length <= 600)).toBe(true);
+    expect(chunks[0]!.length).toBeLessThanOrEqual(140);
+    expect(chunks.slice(1).every((c) => c.length <= 260)).toBe(true);
     expect(chunks.join(' ').replace(/\s+/g, ' ').trim()).toBe(text.replace(/\s+/g, ' ').trim());
   });
   it('cada acción tiene el estilo de guía adecuado', () => {

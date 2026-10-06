@@ -5,7 +5,7 @@ import { hasKey } from '@/lib/ai/models';
 import { cachedVoice, normalizeSpeech, synthesize, voiceKey } from '@/lib/voice/server';
 import { guideVoice, VOICE_STYLES, type VoiceStyle } from '@/config/voices';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const Body = z.object({
   text: z.string().min(1).max(2000),

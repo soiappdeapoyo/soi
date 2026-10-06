@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
     ],
   },
+  // Secciones retiradas: redirigen antes de renderizar (sin pasar por el esqueleto de carga).
+  async redirects() {
+    return [{ source: '/comunidad', destination: '/impulso', permanent: false }];
+  },
   async headers() {
     return [{
       source: '/(.*)',

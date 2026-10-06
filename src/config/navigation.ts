@@ -20,11 +20,17 @@ export function hidesBottomNav(pathname: string) {
   return /^\/m\/[^/]+\/play$/.test(pathname) || /^\/rutinas\/[^/]+$/.test(pathname);
 }
 
-/** Accesos secundarios (sidebar y menú móvil). */
-export const MY_SPACE = [
-  { href: '/ritual', label: 'Ritual diario', icon: 'Sunrise' },
-  { href: '/evidencias', label: 'Muro de Evidencias', icon: 'Star' },
-  { href: '/comunidad', label: 'Comunidad', icon: 'Users' },
+/** Accesos directos a Mi Vida (sidebar y menú móvil): lo que alimenta Hoy y tu identidad. */
+export const MY_LIFE = [
+  { href: '/mi-vida?tab=dia', label: 'Mi día', icon: 'CalendarClock' },
+  { href: '/mi-vida?tab=nuevo-yo', label: 'Mi Nuevo Yo', icon: 'Crown' },
+  { href: '/mi-vida?tab=batallas', label: 'Batallas', icon: 'Flame' },
+  { href: '/mi-vida?tab=biblioteca', label: 'Biblioteca', icon: 'BookMarked' },
+] as const;
+
+/** Crear: diseñar Moments y (con perfil de creador) publicarlos. */
+export const CREATE_LINKS = [
+  { href: '/m/nuevo', label: 'Crear un Moment', icon: 'Layers' },
   { href: '/creadores', label: 'Estudio de creador', icon: 'PenLine' },
 ] as const;
 

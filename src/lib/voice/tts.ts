@@ -27,8 +27,11 @@ export function isSpeaking() {
   return speaking;
 }
 
-/** Frases agrupadas para la voz neuronal: la primera corta (empieza rápido), las demás de hasta ~600 caracteres. */
-export function chunkForVoice(text: string, first = 220, rest = 600): string[] {
+/**
+ * Frases agrupadas para la voz neuronal. La primera muy corta (empieza rápido) y las demás de ~260 caracteres:
+ * con fragmentos de 600 la generación tardaba casi lo que dura el audio, se agotaba el tiempo y la voz "se acababa".
+ */
+export function chunkForVoice(text: string, first = 140, rest = 260): string[] {
   const parts = splitForSpeech(text, rest);
   const out: string[] = [];
   let cur = '';
@@ -67,17 +70,18 @@ function fetchAudio(text: string, style: VoiceStyle, voice?: string): Promise<st
   if (cached) return cached;
   const p = (async () => {
     if (neuralOff) return null;
-    try {
-      const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, style, ...(voice ? { voice } : {}) }) });
-      if (res.status === 204) {
-        if (res.headers.get('x-soi-tts') !== 'error') neuralOff = true; // sin acceso, sin clave o tope diario
-        return null;
-      }
-      if (!res.ok) return null;
-      return URL.createObjectURL(await res.blob());
-    } catch {
-      return null;
+    // Un reintento: un fragmento que falla por tiempo casi siempre sale a la segunda.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, style, ...(voice ? { voice } : {}) }) });
+        if (res.status === 204) {
+          if (res.headers.get('x-soi-tts') !== 'error') { neuralOff = true; return null; } // sin acceso, sin clave o tope diario
+          continue;
+        }
+        if (res.ok) return URL.createObjectURL(await res.blob());
+      } catch { /* reintento */ }
     }
+    return null;
   })();
   audioCache.set(key, p);
   void p.then((u) => { if (!u) audioCache.delete(key); });
@@ -85,10 +89,9 @@ function fetchAudio(text: string, style: VoiceStyle, voice?: string): Promise<st
 }
 
 /** Prepara el audio de un texto (p. ej. el siguiente paso del Moment) para que empiece sin espera. */
-export function prefetchSpeech(text: string, style: VoiceStyle = 'guide') {
+export function prefetchSpeech(text: string, style: VoiceStyle = 'guide', count = 2) {
   if (!supported() || neuralOff) return;
-  const chunks = chunkForVoice(text.slice(0, 6000));
-  if (chunks[0]) void fetchAudio(chunks[0], style);
+  for (const c of chunkForVoice(text.slice(0, 6000)).slice(0, count)) void fetchAudio(c, style);
 }
 
 function playUrl(url: string, mine: number): Promise<void> {
@@ -119,11 +122,14 @@ export async function speak(text: string, opts?: Opts & { voice?: string }) {
   if (!chunks.length) return;
   speaking = true;
   try {
-    let next = fetchAudio(chunks[0]!, style, opts?.voice);
+    // Se preparan 2 fragmentos por adelantado mientras suena el actual (la voz no se corta entre párrafos).
+    const ahead = (i: number) => (i < chunks.length ? fetchAudio(chunks[i]!, style, opts?.voice) : null);
+    let next = ahead(0)!; // el primero se pide primero
+    ahead(1); ahead(2);
     for (let i = 0; i < chunks.length; i++) {
       const url = await next;
       if (mine !== generation) return;
-      if (i + 1 < chunks.length) next = fetchAudio(chunks[i + 1]!, style, opts?.voice); // el siguiente se prepara mientras suena este
+      if (i + 1 < chunks.length) { next = ahead(i + 1)!; ahead(i + 3); }
       if (url) await playUrl(url, mine);
       else await browserSpeak(chunks[i]!, mine, opts?.rate ?? (style === 'calm' || style === 'breath' ? 0.85 : 1));
       if (opts?.pauseMs && mine === generation && i + 1 < chunks.length) await new Promise((r) => setTimeout(r, opts.pauseMs));
