@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@/lib/integrations/youtube', () => ({ searchYouTube: async () => [{ id: 'v1', title: 'Charla', channel: 'Canal', thumbnail: '' }] }));
 vi.mock('@/lib/ai/rag', () => ({ remember: async () => {} }));
+vi.mock('@/lib/moments/auto-cover', () => ({ scheduleAutoCover: () => {} }));
 vi.mock('@/lib/moments/library-blocks', () => ({ ownsDocuments: async () => true, resolveLibraryBlocks: async (b: unknown) => b }));
 
 import { videoPolicy } from '@/lib/momentum';

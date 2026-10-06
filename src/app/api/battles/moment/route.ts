@@ -3,6 +3,7 @@ import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess } from '@/lib/billing/check-access';
 import { ENEMY_IDS, enemyById } from '@/config/enemies';
 import { parseBlocks } from '@/config/actions';
+import { scheduleAutoCover } from '@/lib/moments/auto-cover';
 
 const Body = z.object({ enemy: z.enum(ENEMY_IDS) });
 
@@ -22,5 +23,6 @@ export async function POST(req: Request) {
     kind: enemy.counter.kind, source: enemy.counter.source.slice(0, 200), blocks, steps: [], status: 'private',
   }).select('id').single();
   if (error) return Response.json({ ok: false, message: 'No se pudo preparar.' }, { status: 500 });
+  scheduleAutoCover(data.id as string, { title: enemy.counter.title, objective: enemy.description, kind: enemy.counter.kind, blocks });
   return Response.json({ ok: true, id: data.id, play: (await canAccess(user.id, 'routine_execution')).allowed });
 }

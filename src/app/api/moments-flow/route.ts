@@ -1,3 +1,4 @@
+import { scheduleAutoCover } from '@/lib/moments/auto-cover';
 import { getSessionUser } from '@/lib/supabase/server';
 import { MomentInput, validBlocks, textOfBlocks, dbError } from '@/lib/moments/input';
 import { ownsDocuments, publishDocuments } from '@/lib/moments/library-blocks';
@@ -31,6 +32,8 @@ export async function POST(req: Request) {
     duration_days: m.kind === 'challenge' ? m.durationDays : 1,
   }).select('id').single();
   if (error) return dbError(error.message);
+  // Portada automática si la persona no sube una (nunca pisa la suya).
+  scheduleAutoCover(data.id as string, { title: m.title, objective: m.objective, kind: m.kind, blocks });
   return Response.json({ ok: true, id: data.id });
 }
 

@@ -13,6 +13,7 @@ import { generateAutosuggestion, generateGuided, personalContext, saveGuided } f
 import { HillPatchSchema, loadHillMemory, saveHillMemory } from './hill-memory';
 import { ENEMY_IDS } from '@/config/enemies';
 import { recordEnemy } from '@/lib/battles';
+import { scheduleAutoCover } from '@/lib/moments/auto-cover';
 import type { VideoPolicy } from '@/lib/momentum';
 import type { UserProfile } from '@/types/database';
 
@@ -172,6 +173,8 @@ export function buildTools({ supabase, userId, authorName, access, video = 'quic
           blocks, steps: [], status: 'private', ...(m.kind === 'challenge' && m.durationDays && m.durationDays >= 2 ? { duration_days: Math.min(30, m.durationDays) } : {}),
         }).select('id, required_minutes').single();
         if (error) return { ok: false as const, errors: ['No se pudo guardar el Moment.'] };
+        // Portada aesthetic automática (después de responder: el chat no espera).
+        scheduleAutoCover(data.id as string, { title: m.title, objective: m.objective, kind: m.kind, blocks });
         return {
           ok: true as const, id: data.id as string, title: m.title, kind: m.kind, reason: m.reason,
           minutes: data.required_minutes as number, blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })),

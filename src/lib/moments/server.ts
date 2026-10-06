@@ -4,7 +4,8 @@ import { OFFICIAL_MOMENTS, officialMoment } from '@/config/official-moments';
 import { searchYouTube, type YouTubeVideo } from '@/lib/integrations/youtube';
 import { remember } from '@/lib/ai/rag';
 import { flattenBlocks, type MomentRef } from './flatten';
-import { MOMENT_FIELDS, toMomentFlow, type MomentFlow } from './types';
+import { MOMENT_FIELDS, officialCover, toMomentFlow, type MomentFlow } from './types';
+import { createAdminClient } from '@/lib/supabase/server';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -100,6 +101,8 @@ export async function forkOfficial(supabase: SupabaseClient, userId: string, m: 
     blocks: blocks ?? m.blocks, parent_slug: m.slug, status: 'private', steps: [],
   }).select('id').single();
   if (error) throw new Error(error.message);
+  // Tu copia lleva la misma portada del oficial (un archivo de la app: 0 KB extra). cover_path solo lo escribe el servidor.
+  await createAdminClient().from('soi_blueprints').update({ cover_path: officialCover(m.slug!) }).eq('id', data.id).is('cover_path', null);
   return data.id as string;
 }
 
