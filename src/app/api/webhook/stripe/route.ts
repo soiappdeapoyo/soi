@@ -2,6 +2,7 @@ import type Stripe from 'stripe';
 import { createAdminClient } from '@/lib/supabase/server';
 import { getStripe } from '@/lib/billing/stripe';
 import { creatorShare } from '@/config/creators';
+import { activateFromCheckout } from '@/lib/billing/activate';
 
 export async function POST(req: Request) {
   const sig = req.headers.get('stripe-signature');
@@ -9,7 +10,8 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
   try {
     event = getStripe().webhooks.constructEvent(body, sig!, process.env.STRIPE_WEBHOOK_SECRET!);
-  } catch {
+  } catch (err) {
+    console.error('[stripe] webhook con firma inválida (revisa STRIPE_WEBHOOK_SECRET):', (err as Error).message);
     return new Response('Firma inválida', { status: 400 });
   }
 
@@ -38,15 +40,9 @@ export async function POST(req: Request) {
         break;
       }
 
-      if (userId && s.mode === 'subscription') {
-        await db.from('user_profiles').update({
-          plan: 'soi_plus',
-          is_paywalled: false,
-          stripe_customer_id: s.customer as string,
-          stripe_subscription_id: s.subscription as string,
-          subscription_status: 'active',
-          subscription_ends_at: null,
-        }).eq('user_id', userId);
+      if (s.mode === 'subscription' && !(await activateFromCheckout(s))) {
+        // 500 para que Stripe reintente.
+        return new Response('No se pudo activar la suscripción', { status: 500 });
       }
       break;
     }

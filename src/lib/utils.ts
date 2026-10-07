@@ -40,5 +40,15 @@ export function hourInTz(timeZone = 'America/Mexico_City', now = new Date()) {
 }
 
 export function appUrl(path = '') {
-  return `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}${path}`;
+  return `${baseUrl()}${path}`;
+}
+
+// Sin APP_URL, en Vercel se usa su dominio (producción o la vista previa) en vez de localhost.
+function baseUrl() {
+  const explicit = process.env.APP_URL?.trim().replace(/\/$/, '');
+  if (explicit && !(process.env.VERCEL && explicit.includes('localhost'))) return explicit;
+  const vercelHost = process.env.VERCEL_ENV === 'production'
+    ? process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL
+    : process.env.VERCEL_URL;
+  return vercelHost ? `https://${vercelHost}` : 'http://localhost:3000';
 }

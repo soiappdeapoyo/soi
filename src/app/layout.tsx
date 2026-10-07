@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from 'next';
+import { appUrl } from '@/lib/utils';
 import { Analytics } from '@vercel/analytics/next';
 import { Toaster } from 'sonner';
 import { AnalyticsProvider } from '@/components/providers/analytics';
 import { ServiceWorkerRegister } from '@/components/providers/sw-register';
 import './globals.css';
 
-const url = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+const url = appUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(url),
