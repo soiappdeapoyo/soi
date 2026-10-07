@@ -1,4 +1,5 @@
 import type { Eslabon } from '@/config/agents';
+import { dateInTz } from './utils';
 
 /**
  * SOI Momentum Director — lógica pura y testeable.
@@ -34,13 +35,13 @@ function plural(n: number, one: string, many: string) {
  * avance de metas 15 · reflexión 10 · Moments propios (versiones y pasos) 10 · inspiración (videos terminados) 5.
  * Sin castigo: lo que falta se nombra como "por retomar", nunca como fallo.
  */
-export function computeMomentum(events: MomentumEvent[], streak: number, now = new Date()): MomentumResult {
+export function computeMomentum(events: MomentumEvent[], streak: number, now = new Date(), timeZone = 'America/Mexico_City'): MomentumResult {
   const since = now.getTime() - 7 * DAY;
   const recent = events.filter((e) => Date.parse(e.created_at) >= since);
   const counts = Object.fromEntries(MOMENTUM_KINDS.map((k) => [k, 0])) as Record<MomentumKind, number>;
   for (const e of recent) counts[e.kind] = (counts[e.kind] ?? 0) + 1;
 
-  const activeDays = new Set(recent.map((e) => e.created_at.slice(0, 10))).size;
+  const activeDays = new Set(recent.map((e) => dateInTz(e.created_at, timeZone))).size;
   const actions = counts.action_completed + counts.ritual_completed + counts.routine_completed + counts.moment_completed;
   const goals = counts.evidence_saved + counts.goal_set + counts.blueprint_completed;
   const blueprints = counts.blueprint_implemented + counts.blueprint_step;
