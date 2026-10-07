@@ -1,11 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/server';
 
-/** Términos y aviso de privacidad: se suben en /panel → Términos y se muestran en /terminos y /privacidad. */
+/** Términos y avisos de privacidad: se suben en /panel → Términos y se muestran en su página pública. */
 export const LEGAL_KINDS = {
   terminos: { title: 'Términos de uso', path: '/terminos' },
   privacidad: { title: 'Aviso de privacidad', path: '/privacidad' },
+  privacidad_corto: { title: 'Aviso de privacidad simplificado', path: '/privacidad/simplificado' },
 } as const;
 export type LegalKind = keyof typeof LEGAL_KINDS;
+export const LEGAL_KIND_IDS = Object.keys(LEGAL_KINDS) as [LegalKind, ...LegalKind[]];
 export const isLegalKind = (k: unknown): k is LegalKind => typeof k === 'string' && k in LEGAL_KINDS;
 
 export const LEGAL_MAX_CHARS = 200_000;

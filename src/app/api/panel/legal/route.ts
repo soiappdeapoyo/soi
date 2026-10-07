@@ -2,15 +2,15 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/server';
 import { adminFromRequest, audit } from '@/lib/admin/auth';
-import { LEGAL_KINDS, LEGAL_MAX_CHARS } from '@/lib/legal';
+import { LEGAL_KIND_IDS, LEGAL_KINDS, LEGAL_MAX_CHARS } from '@/lib/legal';
 
 const Body = z.object({
-  kind: z.enum(['terminos', 'privacidad']),
+  kind: z.enum(LEGAL_KIND_IDS),
   content: z.string().trim().min(1).max(LEGAL_MAX_CHARS),
   fileName: z.string().trim().max(200).nullish(),
 });
 
-/** Publica una versión nueva de los términos o del aviso de privacidad. Queda en la auditoría. */
+/** Publica una versión nueva de un documento legal (términos o avisos de privacidad). Queda en la auditoría. */
 export async function POST(req: Request) {
   const admin = await adminFromRequest();
   if (!admin) return new Response('No encontrado', { status: 404 });
