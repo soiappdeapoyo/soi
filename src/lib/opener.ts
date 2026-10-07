@@ -125,7 +125,8 @@ export function buildOpener(i: OpenerInput): Opener {
   const part = partOfDay(i.hour);
 
   if (i.agent && AGENT_OPENERS[i.agent]) {
-    return { text: `${hello} ${AGENT_OPENERS[i.agent]}`, practice: null, proposal: null, replies: [], links: [], kind: 'agent' };
+    return { text: `${hello} ${AGENT_OPENERS[i.agent]}`, practice: null, proposal: null, replies: [], kind: 'agent',
+      links: [{ label: 'Proponme algo', text: 'Proponme algo para ahora.' }, { label: 'Solo quiero conversar', text: 'Hoy solo quiero conversar.' }] };
   }
 
   // Primera vez: qué es SOI en una frase y una pregunta abierta. Sin chips: todavía no hay nada que elegir.
@@ -194,7 +195,11 @@ export function buildOpener(i: OpenerInput): Opener {
 
   // Máximo 3 chips (lo principal) y lo secundario como enlaces discretos. El botón de empezar vive en la tarjeta.
   const replies: OpenerReply[] = thread ? THREAD_REPLIES : !i.checkin ? CHECKIN_REPLIES : [];
-  const links: OpenerReply[] = [proposal ? { label: 'Otra idea', text: 'Proponme otra cosa para ahora.' } : { label: 'Proponme algo', text: 'Proponme algo para ahora.' }];
+  // Siempre las dos puertas: hacer algo, o solo conversar.
+  const links: OpenerReply[] = [
+    proposal ? { label: 'Otra idea', text: 'Proponme otra cosa para ahora.' } : { label: 'Proponme algo', text: 'Proponme algo para ahora.' },
+    { label: 'Solo quiero conversar', text: 'Hoy solo quiero conversar.' },
+  ];
   const ritualReady = !proposal && i.ritualAvailable && i.lastRitualDate !== i.today && (missed || part === 'manana');
   if (ritualReady) links.push({ label: 'Mi ritual de hoy', href: '/ritual' });
 

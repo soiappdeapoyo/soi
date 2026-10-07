@@ -19,6 +19,9 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { PROPOSAL_TOOLS } from './proposal-gate';
 import { forkOfficial, getMoment } from '@/lib/moments/server';
 import { isNearDuplicate } from '@/lib/moments/reuse';
+import { polishMoment } from '@/lib/moments/polish';
+import { partOfDay } from '@/lib/day-plan';
+import { hourInTz } from '@/lib/utils';
 import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import type { VideoPolicy } from '@/lib/momentum';
 import type { UserProfile } from '@/types/database';
@@ -34,6 +37,10 @@ type Ctx = {
   creator?: boolean;
   /** false = escuchar o pedir permiso: sin herramientas que proponen (ver proposalMode). */
   proposals?: boolean;
+  /** Llega con ansiedad: el Moment empieza regulando. */
+  anxiety?: boolean;
+  /** Zona horaria (la portada se elige según la hora del chat). */
+  timeZone?: string;
 };
 
 /** Herramientas que generan contenido: una cuenta de creador no las tiene (todo su contenido es suyo). */
@@ -48,7 +55,7 @@ export function buildTools(ctx: Ctx): ReturnType<typeof allTools> {
   return Object.fromEntries(Object.entries(tools).filter(([k]) => !off.has(k))) as ReturnType<typeof allTools>;
 }
 
-function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx) {
+function allTools({ supabase, userId, authorName, access, video = 'quick', anxiety, timeZone }: Ctx) {
   // Un solo video por respuesta: lo que se muestre primero cierra la puerta al otro.
   let videoShown = false;
   // Perfil para personalizar el contenido de los agentes (con el cliente de esta conversación; si falla, sin perfil).
@@ -157,7 +164,9 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
     }),
 
     createMoment: tool({
-      description: 'Diseña un SOI Moment ÚNICO para esta persona: un flujo corto de acciones (3 a 6) con intención, objetivo y resultado esperado, listo para comenzar. Primero llena `understanding` con lo que te contó (sus palabras) y úsalo en el título y en cada paso. Nada genérico.',
+      description: `Diseña un SOI Moment ÚNICO para esta persona: una experiencia corta (3 a 6 pasos) con intención, objetivo y resultado esperado, lista para comenzar. Primero llena \`understanding\` y \`libraryCheck\`.
+FORMA (arco): 1) Llegar: 30–90 s para aterrizar (respiración con patrón adecuado: calma 4-6 para soltar, 4-7-8 antes de dormir, caja para enfocar, coherencia para equilibrar; o escaneo corporal). 2) Núcleo: 1–3 acciones de la técnica que encaja con su eslabón — Pensamientos: reframe (con SU pensamiento), affirmation, writing; Emociones: body_scan, meditation (guion completo), gratitude, letter; Acciones: next_step, pomodoro, checklist, agenda; Resultados: tracking, goal, celebration. 3) Integrar: UNA pregunta (reflection) o escritura breve. 4) Llevarlo a la vida: next_step concreto (qué, cuándo) o celebración.
+PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, guion, afirmación, escena) usa sus palabras, su meta, su gente, su hora. Ajusta la duración al tiempo que tiene. La voz lee todo: frases cortas, naturales. Cita la fuente cuando uses la técnica de un autor.`,
       inputSchema: z.object({
         understanding: z.object({
           situation: z.string().min(10).max(300).describe('Qué le pasa, con sus palabras y un detalle concreto'),
@@ -175,7 +184,7 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
           type: z.enum(ACTION_TYPES.filter((t) => t !== 'moment' && t !== 'image') as [ActionType, ...ActionType[]]), // la imagen la sube una persona
           title: z.string().min(2).max(80),
           minutes: z.number().int().min(1).max(30),
-          config: z.record(z.unknown()).describe('breathing:{inhale,exhale} meditation:{guide} timer:{instruction} writing:{prompt} visualization:{scene} checklist:{items[]} video:{query} walk:{instruction} gratitude:{count} reading:{book,pages} reflection:{question} affirmation:{text,repeat} goal:{prompt} emotion_log:{question} rest:{instruction,variant} celebration:{message} next_step:{instruction} canvas:{prompt} mind_map:{center,branches} quiz:{questions:[{q,options[],answer,explain}]} music:{query} audio:{mode:"record",prompt} photo:{prompt} agenda:{prompt,defaultTime:"HH:MM"} pomodoro:{focus,rest,cycles} contract:{commitment,consequence} weekly_review:{} tracking:{metric,unit,target} stretching:{sequence[],secondsEach} book:{title,author,mode:"summary"|"read",pages} document:{itemId,title,prompt} (solo PDFs de su biblioteca) exercise:{query (inglés),name (español),sets,reps|seconds,rest}'),
+          config: z.record(z.unknown()).describe('breathing:{pattern:"calma"|"caja"|"478"|"coherencia"} o {inhale,hold,exhale,holdOut} reframe:{thought (su pensamiento, con sus palabras)} body_scan:{areas[],secondsEach} letter:{to,prompt} meditation:{guide} timer:{instruction} writing:{prompt} visualization:{scene} checklist:{items[]} video:{query} walk:{instruction} gratitude:{count} reading:{book,pages} reflection:{question} affirmation:{text,repeat} goal:{prompt} emotion_log:{question} rest:{instruction,variant} celebration:{message} next_step:{instruction} canvas:{prompt} mind_map:{center,branches} quiz:{questions:[{q,options[],answer,explain}]} music:{query} audio:{mode:"record",prompt} photo:{prompt} agenda:{prompt,defaultTime:"HH:MM"} pomodoro:{focus,rest,cycles} contract:{commitment,consequence} weekly_review:{} tracking:{metric,unit,target} stretching:{sequence[],secondsEach} book:{title,author,mode:"summary"|"read",pages} document:{itemId,title,prompt} (solo PDFs de su biblioteca) exercise:{query (inglés),name (español),sets,reps|seconds,rest}'),
           day: z.number().int().min(1).max(30).optional().describe('Solo en retos (kind challenge): día al que pertenece el bloque'),
           source: z.string().max(160).optional().describe('Autor y obra de la técnica, si aplica'),
         })).min(2).max(20),
@@ -195,9 +204,11 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
         const docsOk = await ownsDocuments(userId, parsed.blocks);
         // Libros y ejercicios por nombre (rápido). El contenido guiado (meditación, manifestación…) lo escriben los agentes
         // la primera vez que se abre el Moment (con pantalla de "Preparando tu Moment…"), para que el chat responda ya.
-        const blocks = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'), { youtube: access.youtube });
+        let blocks = await resolveLibraryBlocks(docsOk ? parsed.blocks : parsed.blocks.filter((b) => b.type !== 'document'), { youtube: access.youtube });
         if (!docsOk) errors.push('Un bloque document usaba un PDF que no está en la biblioteca de la persona; se quitó.');
         if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
+        // Pulido por reglas: llegar (con ansiedad), cerrar, y respetar el tiempo que tiene.
+        ({ blocks } = polishMoment(blocks, { minutes: m.understanding?.minutes ?? null, anxiety: Boolean(anxiety) }));
         const proposal = (id: string, minutes: number, extra: Record<string, unknown> = {}) => ({
           ok: true as const, id, title: m.title, kind: m.kind, reason: m.reason, minutes,
           blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })), locked: access.routines === false, ...extra,
@@ -235,7 +246,11 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
           try { after(write); } catch { void write(); }
         }
         // Portada aesthetic automática (después de responder: el chat no espera).
-        scheduleAutoCover(data.id as string, { title: m.title, objective: m.objective, kind: m.kind, blocks });
+        scheduleAutoCover(data.id as string, {
+          title: m.title, objective: m.objective, kind: m.kind, blocks,
+          context: m.understanding ? `${m.understanding.situation}. ${m.understanding.wants}` : null,
+          part: partOfDay(hourInTz(timeZone ?? 'America/Mexico_City')),
+        });
         return {
           ok: true as const, id: data.id as string, title: m.title, kind: m.kind, reason: m.reason,
           minutes: data.required_minutes as number, blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })),

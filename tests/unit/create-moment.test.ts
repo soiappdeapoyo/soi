@@ -38,7 +38,7 @@ describe('herramienta createMoment', () => {
     expect(out).toMatchObject({ ok: true, id: 'm-1', minutes: 14, locked: false });
     expect((out.blocks as unknown[]).length).toBe(3);
     expect(inserts[0]).toMatchObject({ creator_id: 'u-1', status: 'private', kind: 'recovery' });
-    expect((inserts[0]!.blocks as { config: Record<string, unknown> }[])[0]!.config).toEqual({ inhale: 4, exhale: 6 });
+    expect((inserts[0]!.blocks as { config: Record<string, unknown> }[])[0]!.config).toEqual({ inhale: 4, hold: 0, exhale: 6, holdOut: 0 });
   });
 
   it('si quedan menos de 2 bloques válidos devuelve los errores para que la IA corrija', async () => {

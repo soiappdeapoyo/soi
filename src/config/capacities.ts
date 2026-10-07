@@ -24,6 +24,7 @@ export const ACTION_CAPACITY: Partial<Record<ActionType, Capacity[]>> = {
   walk: ['Salud'], exercise: ['Salud', 'Disciplina'], stretching: ['Salud'],
   reading: ['Aprendizaje'], book: ['Aprendizaje'], document: ['Aprendizaje'], video: ['Aprendizaje'], quiz: ['Aprendizaje'],
   emotion_log: ['Calma'], photo: ['Constancia'], audio: ['Confianza'], music: ['Calma'],
+  reframe: ['Claridad', 'Confianza'], body_scan: ['Calma', 'Paciencia'], letter: ['Claridad', 'Confianza'],
 };
 
 export const KIND_CAPACITY: Partial<Record<MomentKind, Capacity>> = {

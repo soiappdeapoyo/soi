@@ -24,7 +24,7 @@ describe('saludo: detectar → recordar → sugerir → acompañar', () => {
     expect(o.text).toContain('¿O cómo llegas hoy: con energía, neutral o con algo de carga?');
     // Máximo 3 chips; el botón de empezar vive en la tarjeta y lo secundario va como enlace.
     expect(o.replies.map((r) => r.label)).toEqual(['Con energía', 'Neutral', 'Con algo de carga']);
-    expect(o.links.map((r) => r.label)).toEqual(['Otra idea']);
+    expect(o.links.map((r) => r.label)).toEqual(['Otra idea', 'Solo quiero conversar']);
   });
 
   it('en la mañana sugiere lo de la mañana y explica por qué con un recuerdo en sus palabras', () => {

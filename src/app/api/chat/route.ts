@@ -156,7 +156,10 @@ export async function POST(req: Request) {
     text, userTurns, previousAssistant: prev?.role === 'assistant' ? textOf(prev) : null, anxiety: state === 'anxiety',
     // Lo que contó en esta conversación y si ya hablaron del tema antes: decide si ya entiende lo suficiente.
     userTexts: messages.filter((m) => m.role === 'user').map(textOf), hasHistory: pastTalks.length > 0,
+    // Si ya propuso un Moment en esta conversación, no insiste.
+    alreadyProposed: messages.some((m) => m.role === 'assistant' && m.parts.some((p) => p.type === 'tool-createMoment' || p.type === 'tool-offerMoment')),
   });
+  const canPropose = ritmo === 'propose' || ritmo === 'prepare' || ritmo === 'soothe';
   // Video rápido o dentro del Moment (nunca los dos), según cómo llega.
   const video = videoPolicy(state ? STATE_INTERVENTION[state] : null, text);
   const time = timeContextPrompt(profile?.timezone ?? 'America/Mexico_City');
@@ -169,7 +172,7 @@ export async function POST(req: Request) {
     }),
     director,
     agent === 'crisis' ? '' : PROPOSAL_RULE[ritmo],
-    agent === 'crisis' || ritmo === 'listen' || ritmo === 'invite' ? '' : VIDEO_RULE[video],
+    agent === 'crisis' || !canPropose ? '' : VIDEO_RULE[video],
     isCreator && agent !== 'crisis' ? CREATOR_CHAT_RULE : '',
     agent === 'crisis' ? '' : continuityPrompt(pastTalks, profile?.timezone ?? 'America/Mexico_City'),
     agent === 'crisis' ? '' : libraryPrompt(reusable, !isCreator),
@@ -195,7 +198,7 @@ export async function POST(req: Request) {
     stream = await streamWithFallback(
       system,
       await convertToModelMessages(modelMessages),
-      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video, creator: isCreator, proposals: ritmo === 'propose' || ritmo === 'soothe' }),
+      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video, creator: isCreator, proposals: canPropose, anxiety: state === 'anxiety', timeZone: profile?.timezone ?? 'America/Mexico_City' }),
       async ({ text: out, provider, tokens, toolCalls, toolResults }) => {
         await userSaved;
         await supabase.from('messages').insert({

@@ -11,7 +11,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Icon } from '@/components/ui/icon';
-import { ACTIONS, ACTION_TYPES, MOMENT_KINDS, defaultBlock, exerciseSeconds, type ActionBlock, type ActionType, type MomentKind } from '@/config/actions';
+import { ACTIONS, ACTION_TYPES, MOMENT_KINDS, defaultBlock, exerciseSeconds, type ActionBlock, type ActionType, type MomentKind, BREATH_PATTERNS, type BreathPattern } from '@/config/actions';
 import { CREATOR_REVENUE_SHARE, formatPrice } from '@/config/creators';
 import { cn } from '@/lib/utils';
 import { AudioField, ImageField, QuizEditor, YoutubeField } from './builder-fields';
@@ -21,7 +21,14 @@ import { GuidedField } from './guided-field';
 type Field = { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'lines' | 'select' | 'time' | 'audio' | 'quiz' | 'book' | 'document' | 'exercise' | 'image' | 'youtube'; options?: { value: string; label: string }[]; min?: number; max?: number };
 
 const FIELDS: Record<ActionType, Field[]> = {
-  breathing: [{ key: 'inhale', label: 'Inhalar (s)', kind: 'number', min: 2, max: 8 }, { key: 'exhale', label: 'Exhalar (s)', kind: 'number', min: 2, max: 10 }],
+  breathing: [
+    { key: 'pattern', label: 'Patrón', kind: 'select', options: [{ value: '', label: 'Personalizado' }, ...(Object.entries(BREATH_PATTERNS) as [string, { label: string }][]).map(([value, p]) => ({ value, label: p.label }))] },
+    { key: 'inhale', label: 'Inhalar (s)', kind: 'number', min: 2, max: 8 }, { key: 'hold', label: 'Sostener (s)', kind: 'number', min: 0, max: 8 },
+    { key: 'exhale', label: 'Exhalar (s)', kind: 'number', min: 2, max: 10 }, { key: 'holdOut', label: 'Pausa al final (s)', kind: 'number', min: 0, max: 8 },
+  ],
+  reframe: [{ key: 'thought', label: 'Pensamiento a trabajar (opcional: si lo dejas vacío, la persona escribe el suyo)', kind: 'textarea' }],
+  body_scan: [{ key: 'areas', label: 'Zonas del cuerpo (una por línea)', kind: 'lines' }, { key: 'secondsEach', label: 'Segundos por zona', kind: 'number', min: 10, max: 60 }],
+  letter: [{ key: 'to', label: 'Para quién', kind: 'text' }, { key: 'prompt', label: 'Indicación', kind: 'textarea' }],
   meditation: [{ key: 'guide', label: 'Guion de la meditación (la voz lo lee completo)', kind: 'textarea' }],
   timer: [{ key: 'instruction', label: 'Instrucción', kind: 'textarea' }],
   writing: [{ key: 'prompt', label: 'Pregunta para escribir', kind: 'text' }],
@@ -111,8 +118,15 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
   const set = (i: number, patch: Partial<ActionBlock>) => setBlocks((bs) => bs.map((b, j) => (j === i ? { ...b, ...patch } : b)));
   // Pomodoro y estiramiento: la duración del bloque se deriva de su configuración.
   const setCfg = (i: number, key: string, value: unknown) => patchCfg(i, { [key]: value });
-  const patchCfg = (i: number, patch: Record<string, unknown>) => setBlocks((bs) => bs.map((b, j) => {
+  const patchCfg = (i: number, patchIn: Record<string, unknown>) => setBlocks((bs) => bs.map((b, j) => {
+    let patch = patchIn;
     if (j !== i) return b;
+    // Respiración: elegir un patrón rellena sus tiempos; tocar un tiempo vuelve a "Personalizado".
+    if (b.type === 'breathing') {
+      const pat = patch.pattern as BreathPattern | '' | undefined;
+      if (pat !== undefined) patch = pat ? { pattern: pat, ...BREATH_PATTERNS[pat].timing } : { pattern: undefined };
+      else if (['inhale', 'hold', 'exhale', 'holdOut'].some((k) => k in patch)) patch = { ...patch, pattern: undefined };
+    }
     const config = Object.fromEntries(Object.entries({ ...b.config, ...patch }).filter(([, v]) => v !== undefined));
     if (b.type === 'exercise') {
       const secs = exerciseSeconds(config as { sets?: number; reps?: number; seconds?: number; rest?: number });
@@ -300,7 +314,7 @@ export function MomentBuilder({ initial, nestable, isCreator, creatorName }: { i
                           : f.kind === 'lines' ? <Textarea id={id} rows={3} value={((v as string[]) ?? []).join('\n')} onChange={(e) => setCfg(i, f.key, e.target.value.split('\n').slice(0, 10))} />
                           : f.kind === 'number' ? <Input id={id} type="number" min={f.min} max={f.max} value={Number(v ?? f.min ?? 1)} className="nums"
                               onChange={(e) => setCfg(i, f.key, Math.max(f.min ?? 1, Math.min(f.max ?? 100, Number(e.target.value) || (f.min ?? 1))))} />
-                          : f.kind === 'select' ? <Select id={id} value={String(v)} onChange={(e) => setCfg(i, f.key, e.target.value)}>{f.options!.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
+                          : f.kind === 'select' ? <Select id={id} value={String(v ?? '')} onChange={(e) => setCfg(i, f.key, e.target.value)}>{f.options!.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
                           : f.kind === 'time' ? <Input id={id} type="time" value={String(v ?? '07:00')} onChange={(e) => setCfg(i, f.key, e.target.value)} className="nums" />
                           : f.kind === 'audio' ? <AudioField id={id} value={v as string | undefined} onChange={(url) => setCfg(i, f.key, url)} />
                           : f.kind === 'image' ? <ImageField id={id} value={v as string | undefined} onChange={(path) => setCfg(i, f.key, path)} />

@@ -20,7 +20,7 @@ describe('al abrir el chat', () => {
     const o = buildOpener({ ...base, thread: { quote: 'El trabajo me tiene sin dormir', dayLabel: 'ayer' } });
     expect(o.text).toBe('Buenos días, Lucía. Ayer me contaste: «El trabajo me tiene sin dormir». ¿Cómo siguió?');
     expect(o.replies.map((r) => r.label)).toEqual(['Mejor', 'Sigue igual', 'Hoy es otra cosa']);
-    expect(o.links.map((r) => r.label)).toEqual(['Proponme algo']);
+    expect(o.links.map((r) => r.label)).toEqual(['Proponme algo', 'Solo quiero conversar']);
     expect(o.kind).toBe('thread');
   });
   it('tema sensible: pregunta con cuidado, sin citar', () => {

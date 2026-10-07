@@ -12,7 +12,19 @@ import type { ActionBlock, MomentKind } from '@/config/actions';
  * - Nunca pisa una portada elegida por la persona (solo escribe si cover_path sigue vacío). Ella puede cambiarla después.
  */
 
-type CoverInput = { title: string; objective?: string | null; kind?: MomentKind | string | null; blocks?: Pick<ActionBlock, 'type'>[] };
+type CoverInput = {
+  title: string; objective?: string | null; kind?: MomentKind | string | null; blocks?: Pick<ActionBlock, 'type'>[];
+  /** De qué hablaron (sus palabras) y en qué parte del día: la foto acompaña su momento real. */
+  context?: string | null; part?: 'manana' | 'tarde' | 'noche' | null;
+};
+
+/** Escenas por parte del día (luz y ambiente), para cuando el título no dice nada concreto. */
+const BY_PART: Record<'manana' | 'tarde' | 'noche', string[]> = {
+  manana: ['sunrise horizon', 'morning light window', 'coffee sunrise', 'misty morning field'],
+  tarde: ['golden hour field', 'afternoon sunlight leaves', 'calm lake afternoon'],
+  noche: ['night sky moon', 'candle warm light', 'starry sky', 'city lights night'],
+};
+const CALM_TYPES = new Set(['breathing', 'meditation', 'rest', 'body_scan', 'visualization']);
 type Photo = { key: string; url: string };
 
 const WIDTH = 640;
@@ -37,6 +49,9 @@ const BY_KIND: Record<string, string[]> = {
   community: ['friends sunset', 'campfire'],
 };
 const WORDS: [RegExp, string][] = [
+  [/correr|running|caminar|gimnasio|ejercicio/i, 'morning run path'],
+  [/trabajo|jefe|oficina|proyecto|cliente/i, 'minimal desk plant'],
+  [/familia|hijos|niñ|mamá|papá/i, 'family hands warm light'],
   [/dorm|noche|sats|sueñ/i, 'night sky moon'],
   [/mañana|despert|amanec/i, 'sunrise horizon'],
   [/dinero|riqueza|abundan|negocio/i, 'golden light minimal'],
@@ -46,8 +61,12 @@ const WORDS: [RegExp, string][] = [
 
 /** Respaldo sin IA: palabras del título, luego el tipo de acción dominante, luego el tipo de Moment. */
 export function coverQueryByRules(m: CoverInput, pick = Math.random): string {
-  const text = `${m.title} ${m.objective ?? ''}`;
+  const text = `${m.title} ${m.objective ?? ''} ${m.context ?? ''}`;
   for (const [re, q] of WORDS) if (re.test(text)) return q;
+  // La hora manda en lo sereno: de noche, nada de amaneceres; de mañana, luz de inicio.
+  const calm = m.kind === 'recovery' || (m.blocks ?? []).some((b) => CALM_TYPES.has(b.type));
+  if (m.part === 'noche' && calm) return BY_PART.noche[Math.floor(pick() * BY_PART.noche.length)]!;
+  if (m.part === 'manana' && (m.kind === 'daily' || m.kind === 'growth')) return BY_PART.manana[Math.floor(pick() * BY_PART.manana.length)]!;
   const types = new Map<string, number>();
   for (const b of m.blocks ?? []) types.set(b.type, (types.get(b.type) ?? 0) + 1);
   const top = [...types.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
@@ -65,7 +84,7 @@ async function coverQueryByAI(m: CoverInput): Promise<string | null> {
     const { object } = await objectWithFallback({
       schema: z.object({ query: z.string().min(3).max(40) }),
       instructions: 'Eliges la foto de portada de un momento de bienestar. Responde una escena aesthetic, serena y luminosa en INGLÉS, de 2 a 4 palabras, que se pueda buscar en un banco de fotos: paisajes, naturaleza, objetos, luz. Sin personas, sin texto, sin marcas. Ejemplos: "misty forest", "journal coffee", "sunrise horizon".',
-      prompt: `Título: ${m.title}\nObjetivo: ${m.objective ?? ''}\nTipo: ${m.kind ?? ''}\nAcciones: ${(m.blocks ?? []).map((b) => b.type).join(', ')}`,
+      prompt: `Título: ${m.title}\nObjetivo: ${m.objective ?? ''}\nTipo: ${m.kind ?? ''}\nAcciones: ${(m.blocks ?? []).map((b) => b.type).join(', ')}${m.context ? `\nDe qué hablaron: ${m.context.slice(0, 300)}` : ''}${m.part ? `\nParte del día en que lo vivirá: ${m.part === 'manana' ? 'mañana (luz de amanecer, inicio)' : m.part === 'tarde' ? 'tarde (luz dorada, pausa)' : 'noche (escena nocturna, cálida, tenue; nada de amaneceres)'}` : ''}`,
       order: FAST_ORDER, timeoutMs: 6000, maxOutputTokens: 60,
     });
     const q = object.query.toLowerCase().replace(/[^a-z\s-]/g, '').trim();

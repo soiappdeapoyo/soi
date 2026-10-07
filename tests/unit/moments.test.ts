@@ -31,7 +31,7 @@ describe('catálogo de acciones', () => {
   });
   it('aplica valores por defecto (respiración 4/6)', () => {
     const { blocks } = parseBlocks([{ id: 'r', type: 'breathing', title: 'Respira', minutes: 2, config: {} }]);
-    expect(blocks[0]!.config).toEqual({ inhale: 4, exhale: 6 });
+    expect(blocks[0]!.config).toEqual({ inhale: 4, hold: 0, exhale: 6, holdOut: 0 });
   });
 });
 

@@ -163,7 +163,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
       void import('@/lib/voice/tts').then(({ prefetchSpeech, stopSpeaking }) => {
         stopSpeaking();
         prefetchSpeech('Inhala…', 'breath');
-        prefetchSpeech('Exhala…', 'breath');
+        prefetchSpeech('Exhala…', 'breath'); prefetchSpeech('Sostén…', 'breath');
       }).catch(() => {});
     } else {
       void say(text, style);
@@ -173,7 +173,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     if (following && voiceOn && ttsAllowed) {
       const n = blockSpeech(following);
       void import('@/lib/voice/tts').then(({ prefetchSpeech }) => {
-        if (following.type === 'breathing') { prefetchSpeech('Inhala…', 'breath'); prefetchSpeech('Exhala…', 'breath'); }
+        if (following.type === 'breathing') { prefetchSpeech('Inhala…', 'breath'); prefetchSpeech('Exhala…', 'breath'); prefetchSpeech('Sostén…', 'breath'); }
         else prefetchSpeech(n.text, n.style);
       }).catch(() => {});
     }
@@ -185,7 +185,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     if (!voiceOn || !ttsAllowed || !blocks[0]) return;
     const first = blocks[0];
     void import('@/lib/voice/tts').then(({ prefetchSpeech }) => {
-      if (first.type === 'breathing') { prefetchSpeech('Inhala…', 'breath'); prefetchSpeech('Exhala…', 'breath'); }
+      if (first.type === 'breathing') { prefetchSpeech('Inhala…', 'breath'); prefetchSpeech('Exhala…', 'breath'); prefetchSpeech('Sostén…', 'breath'); }
       else { const s = blockSpeech(first); prefetchSpeech(s.text, s.style, 3); }
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -18,8 +18,8 @@ export function blockSpeech(b: Pick<ActionBlock, 'type' | 'title' | 'config'>): 
   let slow = false;
   switch (b.type) {
     case 'breathing': {
-      const i = num(c.inhale, 4); const e = num(c.exhale, 6);
-      parts.push(`Inhala por la nariz durante ${i} segundos. Exhala lento durante ${e} segundos. Sigue el círculo.`);
+      const i = num(c.inhale, 4); const e = num(c.exhale, 6); const h = num(c.hold, 0); const ho = num(c.holdOut, 0);
+      parts.push(`Inhala por la nariz durante ${i} segundos.${h ? ` Sostén el aire ${h} segundos.` : ''} Exhala lento durante ${e} segundos.${ho ? ` Quédate sin aire ${ho} segundos.` : ''} Sigue el círculo y mi voz.`);
       slow = true; break;
     }
     case 'meditation': parts.push(str(c.guide)); slow = true; break;
@@ -63,6 +63,9 @@ export function blockSpeech(b: Pick<ActionBlock, 'type' | 'title' | 'config'>): 
       break;
     }
     case 'image': parts.push(str(c.caption)); break;
+    case 'reframe': parts.push(c.thought ? `Vamos a mirar este pensamiento: ${str(c.thought)}.` : 'Escribe el pensamiento que hoy te frena.', 'Luego, los hechos a favor y en contra. Y al final, un pensamiento más justo y útil.'); break;
+    case 'body_scan': parts.push('Cierra los ojos. Vamos a recorrer tu cuerpo, una zona a la vez, sin cambiar nada.'); slow = true; break;
+    case 'letter': parts.push(`Escribe una carta para ${str(c.to)}.`, str(c.prompt)); break;
     case 'document': parts.push(`Lee el documento ${str(c.title)}.`, str(c.prompt)); break;
     case 'exercise': {
       const sets = num(c.sets, 3);

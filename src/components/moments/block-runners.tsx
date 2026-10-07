@@ -50,7 +50,7 @@ export type RunnerProps = {
 export const MOODS = ['😞', '😕', '😐', '🙂', '😄'] as const;
 
 /** Bloques que avanzan solos cuando se acaba el tiempo. El resto espera a que la persona toque "Siguiente". */
-export const AUTO_ADVANCE = new Set(['breathing', 'meditation', 'visualization', 'timer', 'rest', 'pomodoro', 'stretching']);
+export const AUTO_ADVANCE = new Set(['breathing', 'meditation', 'visualization', 'timer', 'rest', 'pomodoro', 'stretching', 'body_scan']);
 
 const lead = 'text-[17px] leading-relaxed text-soi-ink text-pretty';
 
@@ -59,25 +59,53 @@ function cfg<T>(b: ActionBlock) {
 }
 
 /** Halo de respiración del ritual (la animación expresiva de SOI). Se detiene en pausa; estático con movimiento reducido. */
-function BreathHalo({ running, inhale = 4, exhale = 6, label, onPhase }: { running: boolean; inhale?: number; exhale?: number; label?: string; onPhase?: (p: 'in' | 'out') => void }) {
-  const cycle = (inhale + exhale) * 1000;
-  const [phase, setPhase] = useState<'in' | 'out'>('in');
+type BreathPhase = 'in' | 'hold' | 'out' | 'rest';
+const PHASE_LABEL: Record<BreathPhase, string> = { in: 'Inhala', hold: 'Sostén', out: 'Exhala', rest: 'Pausa' };
+
+/** Fase de la respiración en un instante (ciclo: inhala → sostén → exhala → pausa; las pausas pueden ser 0). */
+export function breathPhase(ms: number, t: { inhale: number; hold?: number; exhale: number; holdOut?: number }): { phase: BreathPhase; length: number } {
+  const steps: [BreathPhase, number][] = [['in', t.inhale], ['hold', t.hold ?? 0], ['out', t.exhale], ['rest', t.holdOut ?? 0]];
+  const cycle = steps.reduce((a, [, s]) => a + s, 0) * 1000;
+  let at = ms % cycle;
+  for (const [phase, s] of steps) {
+    if (s <= 0) continue;
+    if (at < s * 1000) return { phase, length: s };
+    at -= s * 1000;
+  }
+  return { phase: 'in', length: t.inhale };
+}
+
+/**
+ * Halo de respiración: crece al inhalar, se sostiene, se suelta al exhalar (la única expresividad del reproductor).
+ * La transición dura lo que dura cada fase; con movimiento reducido, cambia sin animar.
+ */
+function BreathHalo({ running, inhale = 4, hold = 0, exhale = 6, holdOut = 0, label, onPhase }: {
+  running: boolean; inhale?: number; hold?: number; exhale?: number; holdOut?: number; label?: string; onPhase?: (p: BreathPhase) => void;
+}) {
+  const [state, setState] = useState<{ phase: BreathPhase; length: number }>({ phase: 'in', length: inhale });
   useEffect(() => {
     if (!running) return;
     const start = Date.now();
-    const t = setInterval(() => setPhase((Date.now() - start) % cycle < inhale * 1000 ? 'in' : 'out'), 200);
+    const tick = () => setState((prev) => {
+      const next = breathPhase(Date.now() - start, { inhale, hold, exhale, holdOut });
+      return next.phase === prev.phase ? prev : next;
+    });
+    tick();
+    const t = setInterval(tick, 150);
     return () => clearInterval(t);
-  }, [running, cycle, inhale]);
-  // La guía dice "Inhala… / Exhala…" en cada cambio de fase.
+  }, [running, inhale, hold, exhale, holdOut]);
+  // La guía dice "Inhala… / Sostén… / Exhala… / Pausa…" en cada cambio de fase.
   useEffect(() => {
-    if (running) onPhase?.(phase);
+    if (running) onPhase?.(state.phase);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, running]);
+  }, [state.phase, running]);
+  const big = state.phase === 'in' || state.phase === 'hold';
   return (
     <div className="relative mx-auto flex h-40 w-40 items-center justify-center">
-      <span data-breath-halo aria-hidden="true" style={{ animationDuration: `${inhale + exhale}s`, animationPlayState: running ? 'running' : 'paused' }}
-        className="absolute inset-3 animate-breathe rounded-full bg-soi-accent-soft" />
-      <span className="relative text-xl font-medium" aria-live="polite">{label ?? (running ? (phase === 'in' ? 'Inhala' : 'Exhala') : 'En pausa')}</span>
+      <span data-breath-halo aria-hidden="true"
+        style={{ transform: `scale(${running ? (big ? 1.12 : 0.86) : 1})`, transition: `transform ${state.phase === 'in' || state.phase === 'out' ? state.length : 0.3}s var(--ease-breath)` }}
+        className="absolute inset-3 rounded-full bg-soi-accent-soft" />
+      <span className="relative text-xl font-medium" aria-live="polite">{label ?? (running ? PHASE_LABEL[state.phase] : 'En pausa')}</span>
     </div>
   );
 }
@@ -86,8 +114,40 @@ export function BlockRunner(p: RunnerProps) {
   const { block: b, output, setOutput } = p;
   switch (b.type) {
     case 'breathing': {
-      const c = cfg<{ inhale: number; exhale: number }>(b);
-      return <BreathHalo running={p.running} inhale={c.inhale} exhale={c.exhale} onPhase={(ph) => p.cue(ph === 'in' ? 'Inhala…' : 'Exhala…', 'breath')} />;
+      const c = cfg<{ inhale: number; hold?: number; exhale: number; holdOut?: number }>(b);
+      return <BreathHalo running={p.running} inhale={c.inhale} hold={c.hold ?? 0} exhale={c.exhale} holdOut={c.holdOut ?? 0} onPhase={(ph) => p.cue(`${PHASE_LABEL[ph]}…`, 'breath')} />;
+    }
+    case 'body_scan': return <BodyScanRunner {...p} />;
+    case 'reframe': {
+      const f = output.fields ?? {};
+      const thought = (b.config as { thought?: string }).thought;
+      const set = (k: string, v: string) => { const fields = { ...f, [k]: v }; setOutput({ ...output, type: b.type, fields, text: fields.alternative ?? '' }); };
+      const steps: [string, string, string][] = [
+        ['thought', 'El pensamiento', thought ? `«${thought}» — ¿lo dirías con otras palabras?` : '¿Qué pensamiento te está frenando? Escríbelo tal cual suena en tu cabeza.'],
+        ['evidence', 'La evidencia', '¿Qué hechos lo apoyan y cuáles lo contradicen? Solo hechos, no interpretaciones.'],
+        ['alternative', 'Un pensamiento más justo', '¿Cómo lo diría alguien que te quiere y ve todos los hechos? Escríbelo en una frase que te sirva hoy.'],
+      ];
+      return (
+        <div className="flex flex-col gap-4">
+          {steps.map(([k, title, q], i) => (
+            <div key={k}>
+              <label htmlFor={`b-${b.id}-${k}`} className="text-sm font-medium"><span className="nums text-soi-accent">{i + 1}.</span> {title}</label>
+              <p className="text-[15px] text-soi-muted">{q}</p>
+              <Textarea id={`b-${b.id}-${k}`} rows={k === 'evidence' ? 4 : 2} value={f[k] ?? (k === 'thought' ? thought ?? '' : '')} maxLength={1000} onChange={(e) => set(k, e.target.value)} className="mt-1" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+    case 'letter': {
+      const c = cfg<{ to: string; prompt: string }>(b);
+      return (
+        <div className="flex flex-col gap-3">
+          <p className="text-[15px] text-soi-muted">{c.prompt}</p>
+          <label htmlFor={`b-${b.id}`} className="font-medium italic">Para {c.to}:</label>
+          <Textarea id={`b-${b.id}`} rows={8} value={output.text ?? ''} maxLength={4000} onChange={(e) => setOutput({ ...output, type: b.type, text: e.target.value })} />
+        </div>
+      );
     }
     case 'meditation': {
       // Guion completo (agente Calma o el creador): la voz lo lee; aquí se puede seguir con la vista.
@@ -282,5 +342,24 @@ function DoneToggle({ done, onChange, label }: { done: boolean; onChange: (d: bo
       className={cn('press inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm', done ? 'bg-soi-accent-soft text-soi-accent' : 'bg-white shadow-ring')}>
       <Check className="h-4 w-4" aria-hidden="true" /> {done ? 'Hecho' : label}
     </button>
+  );
+}
+
+/** Escaneo corporal: una zona a la vez, la voz la nombra al cambiar. */
+function BodyScanRunner(p: RunnerProps) {
+  const c = cfg<{ areas: string[]; secondsEach: number }>(p.block);
+  const i = Math.min(c.areas.length - 1, Math.floor(p.elapsed / c.secondsEach));
+  const area = c.areas[i]!;
+  useEffect(() => {
+    if (p.running) p.cue(i === 0 ? `Lleva tu atención a ${area}. Nota lo que sientes, sin cambiar nada.` : `Ahora, ${area}.`, 'calm');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i, p.running]);
+  return (
+    <div className="flex flex-col items-center gap-4 text-center">
+      <BreathHalo running={p.running} label=" " />
+      <p className="text-sm text-soi-muted"><span className="nums">{i + 1} de {c.areas.length}</span></p>
+      <p key={area} className="animate-enter-fade text-balance text-2xl font-medium">{area.charAt(0).toUpperCase() + area.slice(1)}</p>
+      <p className="text-[15px] text-soi-muted">Nota lo que sientes. Si hay tensión, suéltala al exhalar.</p>
+    </div>
   );
 }

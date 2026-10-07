@@ -10,8 +10,24 @@ import type { Eslabon } from '@/config/agents';
 const text = (max: number) => z.string().trim().min(1).max(max);
 const FRAME = z.string().regex(/^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/[A-Za-z0-9_\-/]+\.jpg$/);
 
+/** Patrones de respiración con su fuente (la voz guía cada fase: Inhala · Sostén · Exhala · Pausa). */
+export const BREATH_PATTERNS = {
+  calma: { label: 'Calma 4-6', source: 'Exhalación prolongada (activa el sistema parasimpático)', timing: { inhale: 4, hold: 0, exhale: 6, holdOut: 0 } },
+  caja: { label: 'Caja 4-4-4-4', source: 'Respiración en caja (box breathing)', timing: { inhale: 4, hold: 4, exhale: 4, holdOut: 4 } },
+  '478': { label: '4-7-8 para dormir', source: 'Andrew Weil — respiración 4-7-8', timing: { inhale: 4, hold: 7, exhale: 8, holdOut: 0 } },
+  coherencia: { label: 'Coherencia 5-5', source: 'Coherencia cardíaca (5 respiraciones por minuto)', timing: { inhale: 5, hold: 0, exhale: 5, holdOut: 0 } },
+} as const;
+export type BreathPattern = keyof typeof BREATH_PATTERNS;
+
 export const ACTION_CONFIG = {
-  breathing: z.object({ inhale: z.number().int().min(2).max(8).default(4), exhale: z.number().int().min(2).max(10).default(6) }),
+  breathing: z.object({
+    pattern: z.enum(['calma', 'caja', '478', 'coherencia']).optional(),
+    inhale: z.number().int().min(2).max(8).default(4),
+    /** Sostener tras inhalar / tras exhalar (segundos; 0 = sin pausa). */
+    hold: z.number().int().min(0).max(8).default(0),
+    exhale: z.number().int().min(2).max(10).default(6),
+    holdOut: z.number().int().min(0).max(8).default(0),
+  }).transform((c) => (c.pattern ? { ...c, ...BREATH_PATTERNS[c.pattern].timing } : c)),
   /** Guion completo de la meditación (lo genera el agente Calma o lo escribe el creador); la voz lo lee. */
   meditation: z.object({ guide: text(4000), itemId: z.string().uuid().optional() }),
   timer: z.object({ instruction: text(400) }),
@@ -114,6 +130,18 @@ export const ACTION_CONFIG = {
     path: z.string().regex(/^[0-9a-f-]{36}\/images\/[0-9a-f-]{36}\.(webp|jpg|png)$/),
     caption: z.string().trim().max(600).optional(),
   }),
+  /** Reencuadre de un pensamiento (terapia cognitiva, Aaron Beck): pensamiento → evidencia → uno más justo y útil. */
+  reframe: z.object({ thought: z.string().trim().max(300).optional() }),
+  /** Escaneo corporal (Jon Kabat-Zinn): la atención recorre el cuerpo, zona por zona, guiada por voz. */
+  body_scan: z.object({
+    areas: z.array(text(40)).min(3).max(10).default(['los pies', 'las piernas', 'el abdomen', 'el pecho', 'los hombros', 'la cara']),
+    secondsEach: z.number().int().min(10).max(60).default(20),
+  }),
+  /** Carta: a tu yo futuro, a alguien, o para soltar algo. */
+  letter: z.object({
+    to: z.string().trim().min(2).max(80).default('mi yo de dentro de un año'),
+    prompt: z.string().trim().max(300).default('Cuéntale cómo estás hoy, qué estás construyendo y qué quieres que recuerde.'),
+  }),
   next_step: z.object({ instruction: text(240) }),
   moment: z.object({ momentId: z.string().uuid().optional(), slug: z.string().max(60).optional() })
     .refine((c) => c.momentId || c.slug, { message: 'Un Moment anidado necesita momentId o slug' }),
@@ -159,6 +187,9 @@ export const ACTIONS: Record<ActionType, { label: string; icon: string; minutes:
   image: { label: 'Imagen', icon: 'Image', minutes: 1, eslabon: 'emocion', output: 'none', hint: 'Una imagen tuya para contemplar, con su texto' },
   document: { label: 'Documento', icon: 'FileText', minutes: 10, eslabon: 'pensamiento', output: 'none', hint: 'Un PDF: artículo, guía o ebook' },
   exercise: { label: 'Ejercicio', icon: 'Dumbbell', minutes: 4, eslabon: 'accion', output: 'none', hint: 'Calistenia, gimnasio o estiramiento con animación' },
+  reframe: { label: 'Reencuadre', icon: 'Brain', minutes: 4, eslabon: 'pensamiento', output: 'text', hint: 'Cambia un pensamiento que te frena por uno más justo y útil' },
+  body_scan: { label: 'Escaneo corporal', icon: 'PersonStanding', minutes: 3, eslabon: 'emocion', output: 'none', hint: 'Recorre tu cuerpo con atención, guiado por voz' },
+  letter: { label: 'Carta', icon: 'PenLine', minutes: 6, eslabon: 'pensamiento', output: 'text', hint: 'A tu yo futuro, a alguien o para soltar algo' },
   next_step: { label: 'Próximo paso', icon: 'ArrowRight', minutes: 2, eslabon: 'accion', output: 'text', hint: 'La acción concreta que sigue' },
   moment: { label: 'Otro Moment', icon: 'Layers', minutes: 0, eslabon: 'accion', output: 'none', hint: 'Reutiliza un Moment como bloque' },
 };
