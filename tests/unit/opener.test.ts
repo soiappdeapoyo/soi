@@ -22,7 +22,9 @@ describe('saludo: detectar → recordar → sugerir → acompañar', () => {
     const o = buildOpener({ ...base, proposal: { id: 'brian_tracy_5min', title: 'Ritual de 5 minutos', minutes: 5, cover: null } });
     expect(o.text).not.toMatch(/Imagino que|llegas con poca energía/);
     expect(o.text).toContain('¿O cómo llegas hoy: con energía, neutral o con algo de carga?');
-    expect(o.replies.map((r) => r.label)).toEqual(['Empezar', 'Con energía', 'Neutral', 'Con algo de carga', 'Otra idea']);
+    // Máximo 3 chips; el botón de empezar vive en la tarjeta y lo secundario va como enlace.
+    expect(o.replies.map((r) => r.label)).toEqual(['Con energía', 'Neutral', 'Con algo de carga']);
+    expect(o.links.map((r) => r.label)).toEqual(['Otra idea']);
   });
 
   it('en la mañana sugiere lo de la mañana y explica por qué con un recuerdo en sus palabras', () => {

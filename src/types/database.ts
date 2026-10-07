@@ -31,6 +31,8 @@ export type UserProfile = {
   weakest_link: Eslabon | null;
   plan: Plan;
   trial_ends_at: string;
+  /** Alta del perfil (select *). */
+  created_at?: string;
   free_queries_remaining: number;
   is_paywalled: boolean;
   stripe_customer_id: string | null;

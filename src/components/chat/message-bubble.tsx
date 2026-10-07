@@ -1,16 +1,27 @@
 'use client';
 
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Volume2, Star, Lock, BellRing, Layers } from 'lucide-react';
 import type { UIMessage } from 'ai';
-import { SoiPlayer, type SoiVideo } from '@/components/media/soi-player';
-import { PracticeCard, type Practice } from './practice-card';
-import { ActionCardView, type ActionCardResult } from './action-card-view';
-import { MomentProposal, type MomentProposalResult } from './moment-proposal';
-import { OpenerProposal } from './opener-proposal';
-import { GuidedCard, type GuidedResult } from './guided-card';
+import type { SoiVideo } from '@/components/media/soi-player';
+import type { Practice } from './practice-card';
+import type { ActionCardResult } from './action-card-view';
+import type { MomentProposalResult } from './moment-proposal';
+import type { GuidedResult } from './guided-card';
+
+// Bajo demanda: al abrir el chat solo hace falta el saludo (texto simple). El Markdown y las tarjetas
+// (video, Moment, contenido guiado, propuestas) se cargan cuando aparecen. Mientras carga el Markdown, texto plano.
+const Markdown = dynamic(() => import('./markdown'), { loading: () => null });
+const SoiPlayer = dynamic(() => import('@/components/media/soi-player').then((m) => m.SoiPlayer));
+const PracticeCard = dynamic(() => import('./practice-card').then((m) => m.PracticeCard));
+const ActionCardView = dynamic(() => import('./action-card-view').then((m) => m.ActionCardView));
+const MomentProposal = dynamic(() => import('./moment-proposal').then((m) => m.MomentProposal));
+const OpenerProposal = dynamic(() => import('./opener-proposal').then((m) => m.OpenerProposal));
+const GuidedCard = dynamic(() => import('./guided-card').then((m) => m.GuidedCard));
+
+/** Texto con Markdown solo si lo necesita (negritas, listas, enlaces): el resto se pinta directo, sin cargar nada. */
+const NEEDS_MD = /(\*\*|__|^\s*[-*+] |^\s*\d+\. |\[[^\]]+\]\(|^#{1,6} |`)/m;
 import type { OpenerProposal as OpenerProposalData } from '@/lib/opener';
 import { cn } from '@/lib/utils';
 
@@ -101,7 +112,7 @@ export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal
           <p className="whitespace-pre-wrap">{text}</p>
         ) : text ? (
           <div className="prose max-w-none text-[15px] leading-relaxed text-soi-ink prose-p:my-2 prose-a:text-soi-accent prose-a:underline prose-strong:font-medium prose-strong:text-soi-ink">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+            {NEEDS_MD.test(text) ? <Markdown text={text} /> : text.split(/\n{2,}/).map((p, i) => <p key={i} className="whitespace-pre-line">{p}</p>)}
           </div>
         ) : null}
 

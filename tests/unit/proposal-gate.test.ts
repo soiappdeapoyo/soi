@@ -35,8 +35,7 @@ describe('saludo sin imponer', () => {
     expect(o.proposal).toBeNull();
     expect(o.practice).toBeNull();
     expect(o.text).not.toMatch(/te propongo/);
-    const labels = o.replies.map((r) => r.label);
-    expect(labels).toContain('Proponme algo');
-    expect(labels).toContain('Mi ritual de hoy');
+    expect(o.replies.length).toBeLessThanOrEqual(3);
+    expect(o.links.map((r) => r.label)).toEqual(['Proponme algo', 'Mi ritual de hoy']);
   });
 });

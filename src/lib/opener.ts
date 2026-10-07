@@ -35,11 +35,20 @@ export type OpenerInput = {
   proposal?: (Omit<OpenerProposal, 'why' | 'label'> & { challengeDay?: number | null; planned?: boolean; memory?: OpenerMemory | null }) | null;
   /** Su último "Ahora no" (2 días): el saludo lo reconoce y propone algo distinto. */
   declined?: { title: string; dayLabel: string } | null;
+  /** Lo pendiente (últimos 3 días): el saludo lo retoma con sus palabras. quote null = tema sensible, sin citar. */
+  thread?: { quote: string | null; dayLabel: string } | null;
+  /** Nunca ha conversado ni vivido un Moment: presentación breve y una sola pregunta abierta. */
+  firstTime?: boolean;
 };
 
 export type OpenerPractice = { kind: 'ritual'; href: string; label: string; detail: string; reason: string; locked: false };
 export type OpenerReply = { label: string; text?: string; href?: string };
-export type Opener = { text: string; practice: OpenerPractice | null; proposal: OpenerProposal | null; replies: OpenerReply[] };
+/** Para medir qué saludo funciona mejor (PostHog). */
+export type OpenerKind = 'first' | 'thread' | 'checkin' | 'proposal' | 'agent' | 'run';
+/**
+ * replies: hasta 3 chips (lo principal, un toque). links: lo secundario, como enlaces discretos ("Proponme algo", el ritual).
+ */
+export type Opener = { text: string; practice: OpenerPractice | null; proposal: OpenerProposal | null; replies: OpenerReply[]; links: OpenerReply[]; kind: OpenerKind };
 
 const AGENT_OPENERS: Partial<Record<AgentId, string>> = {
   manifestacion: 'Hablemos de lo que quieres vivir como si ya fuera tuyo. ¿Qué deseo tienes presente hoy?',
@@ -51,6 +60,13 @@ const AGENT_OPENERS: Partial<Record<AgentId, string>> = {
   anti_sycophant: 'Aquí te voy a hablar con cariño y con honestidad. ¿Qué quieres mirar de frente?',
   napoleon_hill: 'Empecemos por lo esencial: ¿qué quieres exactamente, y qué estás haciendo hoy para conseguirlo?',
 };
+
+/** Al retomar lo pendiente: tres respuestas de un toque. */
+const THREAD_REPLIES: OpenerReply[] = [
+  { label: 'Mejor', text: 'Mejor, gracias por preguntar.' },
+  { label: 'Sigue igual', text: 'Sigue igual.' },
+  { label: 'Hoy es otra cosa', text: 'Hoy es otra cosa.' },
+];
 
 const CHECKIN_REPLIES: OpenerReply[] = [
   { label: 'Con energía', text: 'Hoy llego con energía.' },
@@ -108,7 +124,15 @@ export function buildOpener(i: OpenerInput): Opener {
   const part = partOfDay(i.hour);
 
   if (i.agent && AGENT_OPENERS[i.agent]) {
-    return { text: `${hello} ${AGENT_OPENERS[i.agent]}`, practice: null, proposal: null, replies: [] };
+    return { text: `${hello} ${AGENT_OPENERS[i.agent]}`, practice: null, proposal: null, replies: [], links: [], kind: 'agent' };
+  }
+
+  // Primera vez: qué es SOI en una frase y una pregunta abierta. Sin chips: todavía no hay nada que elegir.
+  if (i.firstTime) {
+    return {
+      text: `Hola${name ? `, ${name}` : ''}. Soy SOI: te acompaño a sentirte mejor con pequeños momentos para tu mente y tu día. Para empezar, ¿qué te trae por aquí hoy?`,
+      practice: null, proposal: null, replies: [], links: [], kind: 'first',
+    };
   }
 
   const missed = i.lastRitualDate ? dayGap(i.lastRitualDate, i.today) >= 2 : false;
@@ -157,21 +181,26 @@ export function buildOpener(i: OpenerInput): Opener {
     : proposal || suggest ? '¿O cómo llegas hoy: con energía, neutral o con algo de carga?' : '¿Cómo llegas hoy: con energía, neutral o con algo de carga?';
 
   const intro = i.onboardingCompleted || i.checkin ? null : 'Soy SOI y estoy aquí para acompañarte.';
-  const text = [hello, intro, evidence, said ?? maybe, suggest, ask].filter(Boolean).join(' ');
+  // Lo pendiente manda: retomar lo que contó vale más que preguntar cómo llega (nunca las dos preguntas).
+  const thread = i.thread
+    ? (i.thread.quote
+      ? `${cap(i.thread.dayLabel)} me contaste: «${i.thread.quote}». ¿Cómo siguió?`
+      : `${cap(i.thread.dayLabel)} hablamos de algo importante para ti. ¿Cómo sigues hoy?`)
+    : null;
+  const text = thread
+    ? [hello, declinedLine, suggest, thread].filter(Boolean).join(' ')
+    : [hello, intro, evidence, said ?? maybe, suggest, ask].filter(Boolean).join(' ');
 
-  // Escuchar primero: sin señal fuerte no hay tarjeta; la propuesta está a un toque ("Proponme algo") si la quiere.
-  const replies: OpenerReply[] = [];
-  if (proposal) replies.push({ label: proposal.label, href: `/m/${proposal.id}/play?from=chat` });
-  if (!i.checkin) replies.push(...CHECKIN_REPLIES);
-  replies.push(proposal ? { label: 'Otra idea', text: 'Proponme otra cosa para ahora.' } : { label: 'Proponme algo', text: 'Proponme algo para ahora.' });
+  // Máximo 3 chips (lo principal) y lo secundario como enlaces discretos. El botón de empezar vive en la tarjeta.
+  const replies: OpenerReply[] = thread ? THREAD_REPLIES : !i.checkin ? CHECKIN_REPLIES : [];
+  const links: OpenerReply[] = [proposal ? { label: 'Otra idea', text: 'Proponme otra cosa para ahora.' } : { label: 'Proponme algo', text: 'Proponme algo para ahora.' }];
   const ritualReady = !proposal && i.ritualAvailable && i.lastRitualDate !== i.today && (missed || part === 'manana');
-  if (ritualReady) replies.push({ label: 'Mi ritual de hoy', href: '/ritual' });
-  if (i.lastConversationTitle) replies.push({ label: `Seguir con «${i.lastConversationTitle.slice(0, 28)}»`, text: `Sigamos con lo que hablamos: ${i.lastConversationTitle}.` });
+  if (ritualReady) links.push({ label: 'Mi ritual de hoy', href: '/ritual' });
 
-  // El ritual ya no es una tarjeta en el saludo: es un chip (la persona decide).
+  // El ritual ya no es una tarjeta en el saludo: es un enlace (la persona decide).
   const practice = null;
 
-  return { text, practice, proposal, replies: replies.slice(0, 5) };
+  return { text, practice, proposal, replies: replies.slice(0, 3), links, kind: thread ? 'thread' : proposal ? 'proposal' : 'checkin' };
 }
 
 /**
@@ -198,5 +227,5 @@ export function momentRunOpener(r: { title: string; helped: boolean | null; mood
         { label: 'Algo me costó', text: 'Algo me costó en este Moment.' },
         { label: 'Quiero repetirlo mañana', text: 'Quiero repetirlo mañana. ¿Me lo recuerdas?' },
       ];
-  return { text, practice: null, proposal: null, replies };
+  return { text, practice: null, proposal: null, replies, links: [], kind: 'run' };
 }

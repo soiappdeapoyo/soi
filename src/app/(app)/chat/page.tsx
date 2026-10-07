@@ -7,6 +7,7 @@ import { isAgentId, type Eslabon } from '@/config/agents';
 import { buildOpener, momentRunOpener } from '@/lib/opener';
 import { resolveRefs } from '@/lib/day-plan';
 import { openerContext } from '@/lib/opener-context';
+import { loadThread } from '@/lib/opener-thread';
 import { todayISO } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Chat' };
@@ -27,7 +28,7 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
   const { agent: agentParam, run: runParam } = await searchParams;
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
-  const [{ profile, access }, { data: last }] = await Promise.all([
+  const [{ profile, access }, { data: last, error: lastError }] = await Promise.all([
     getAccessMap(user.id),
     supabase.from('conversations').select('title').eq('user_id', user.id).eq('is_archived', false)
       .order('last_message_at', { ascending: false }).limit(1).maybeSingle(),
@@ -52,10 +53,20 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
   const ref = run ? (run.moment_id ? `m:${run.moment_id}` : `s:${run.moment_slug}`) : null;
   const ranMoment = ref ? (await resolveRefs(supabase, [ref])).get(ref) : null;
   // Lo que SOI ya sabe (progreso, check-in, retos, lo que más te ayuda) para anticipar y proponer.
-  const known = agent || ranMoment ? {} : await openerContext(supabase, user.id, profile, { hour: base.hour, today: base.today }, access.routine_execution);
+  const plain = !agent && !ranMoment;
+  // Lo que SOI ya sabe, lo pendiente (3 días) y si es la primera vez: todo en paralelo.
+  // "Primera vez" solo con certeza: perfil reciente, sin descubrimiento hecho y sin conversaciones ni Moments
+  // (si alguna consulta falla, no se asume: mejor un saludo normal que presentarse a quien ya conoce SOI).
+  const newProfile = Boolean(profile?.created_at && Date.now() - Date.parse(profile.created_at) < 2 * 86_400_000) && !profile?.onboarding_completed;
+  const [known, thread, runs] = await Promise.all([
+    plain ? openerContext(supabase, user.id, profile, { hour: base.hour, today: base.today }, access.routine_execution) : Promise.resolve({}),
+    plain ? loadThread(supabase, user.id, tz).catch(() => null) : Promise.resolve(null),
+    plain && newProfile && !last && !lastError ? supabase.from('moment_runs').select('id', { count: 'exact', head: true }).eq('user_id', user.id) : Promise.resolve(null),
+  ]);
+  const firstTime = Boolean(runs && !runs.error && runs.count === 0);
   const opener = ranMoment && run
     ? momentRunOpener({ title: ranMoment.title, helped: run.helped as boolean | null, moodBefore: run.mood_before as number | null, moodAfter: run.mood_after as number | null, name: base.name })
-    : buildOpener({ ...base, ...known, agent });
+    : buildOpener({ ...base, ...known, agent, thread, firstTime });
 
   return (
     <ChatView

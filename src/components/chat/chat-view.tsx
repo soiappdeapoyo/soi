@@ -16,6 +16,7 @@ import { track } from '@/components/providers/analytics';
 import { detectCrisis } from '@/lib/ai/crisis';
 import type { Opener } from '@/lib/opener';
 import { unlockAudio } from '@/lib/voice/player';
+import { DictationButton } from './dictation';
 
 type Props = {
   conversationId?: string;
@@ -57,6 +58,23 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
   );
 
   const [input, setInput] = useState('');
+  // Medición (PostHog): qué saludo se mostró, cómo llega el primer mensaje (chip, escrito, dictado) y cuánto tardó.
+  const openedAt = useRef(Date.now());
+  const firstSent = useRef(false);
+  const dictated = useRef(false);
+  function firstMessage(via: 'chip' | 'link' | 'typed' | 'voice') {
+    if (firstSent.current || initialMessages.length) return;
+    firstSent.current = true;
+    track('chat_first_message', { via, opener: opener?.kind ?? null, ms: Date.now() - openedAt.current });
+  }
+  useEffect(() => {
+    // Lo que no hace falta para el saludo se precarga cuando el navegador está libre (la primera respuesta llega sin espera).
+    const preload = () => { void import('./markdown'); void import('./moment-proposal'); };
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    if (ric) ric(preload); else setTimeout(preload, 1500);
+    if (opener && !initialMessages.length) track('chat_opened', { opener: opener.kind });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // El transporte se crea una vez. Un fetch envuelto lee los headers de SOI (conversación y agente).
   // `conversationId` y `agent` viajan en el body de cada petición.
@@ -155,6 +173,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
     if (!canSubmit) return;
     stickRef.current = true;
     track('chat_message_sent', { agent: agent ?? 'auto' });
+    firstMessage(dictated.current ? 'voice' : 'typed');
     sendMessage({ text: input.trim() });
     setInput('');
     // En el teléfono se sale del modo escritura (se cierra el teclado) para ver la respuesta.
@@ -196,17 +215,38 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
             />
           ))}
           {/* Respuestas rápidas del saludo: un toque y SOI ajusta (sin escribir). Solo antes del primer mensaje. */}
-          {opener && messages.length === 1 && messages[0]?.id === OPENER_ID && opener.replies.length > 0 && (
-            <li className="-mt-1 flex flex-wrap gap-2" aria-label="Respuestas rápidas">
-              {opener.replies.filter((r) => !(declined && opener.proposal && r.href === `/m/${opener.proposal.id}/play?from=chat`)).map((r) => r.href ? (
-                <Link key={r.label} href={r.href} className="press inline-flex h-9 items-center rounded-full bg-soi-ink px-3.5 text-sm text-white">{r.label}</Link>
-              ) : (
-                <button key={r.label} type="button" disabled={!canSend && !detectCrisis(r.text ?? '')}
-                  onClick={() => { stickRef.current = true; track('opener_reply', { label: r.label }); sendMessage({ text: r.text ?? r.label }); }}
-                  className="press inline-flex h-9 items-center rounded-full bg-white px-3.5 text-sm text-soi-ink shadow-ring hover:shadow-soft disabled:opacity-40">
-                  {r.label}
-                </button>
-              ))}
+          {/* Respuestas del saludo: hasta 3 chips y, debajo, lo secundario como enlaces discretos. Solo antes del primer mensaje. */}
+          {opener && messages.length === 1 && messages[0]?.id === OPENER_ID && (opener.replies.length > 0 || opener.links.length > 0) && (
+            <li className="-mt-1 flex flex-col gap-2.5" aria-label="Respuestas rápidas">
+              {opener.replies.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {opener.replies.map((r) => r.href ? (
+                    <Link key={r.label} href={r.href} className="press inline-flex h-9 items-center rounded-full bg-soi-ink px-3.5 text-sm text-white">{r.label}</Link>
+                  ) : (
+                    <button key={r.label} type="button" disabled={!canSend && !detectCrisis(r.text ?? '')}
+                      onClick={() => { stickRef.current = true; track('opener_reply', { label: r.label }); firstMessage('chip'); sendMessage({ text: r.text ?? r.label }); }}
+                      className="press inline-flex h-9 items-center rounded-full bg-white px-3.5 text-sm text-soi-ink shadow-ring hover:shadow-soft disabled:opacity-40">
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {opener.links.filter(() => !declined).length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-1 text-sm text-soi-muted">
+                  {opener.links.map((r, n) => (
+                    <span key={r.label} className="inline-flex items-center gap-1">
+                      {n > 0 && <span aria-hidden="true">·</span>}
+                      {r.href ? (
+                        <Link href={r.href} className="press rounded px-1 py-1 underline-offset-4 hover:text-soi-ink hover:underline">{r.label}</Link>
+                      ) : (
+                        <button type="button" disabled={!canSend}
+                          onClick={() => { stickRef.current = true; track('opener_reply', { label: r.label }); firstMessage('link'); sendMessage({ text: r.text ?? r.label }); }}
+                          className="press rounded px-1 py-1 underline-offset-4 hover:text-soi-ink hover:underline disabled:opacity-40">{r.label}</button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
             </li>
           )}
           {waiting && <Thinking text={lastUserText} agent={activeAgent ?? agent} tool={pendingTool} />}
@@ -234,7 +274,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }}
-            placeholder={paywalled ? 'Pasa a SOI+ para seguir conversando' : 'Escríbele a SOI…'}
+            placeholder={paywalled ? 'Pasa a SOI+ para seguir conversando' : 'Cuéntame lo que traes…'}
             rows={1}
             maxLength={4000}
             enterKeyHint="send"
@@ -242,6 +282,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
             aria-describedby={paywalled ? 'paywall-note' : undefined}
             className="max-h-60 min-h-10 flex-1 resize-none bg-transparent py-2 text-base leading-6 outline-none placeholder:text-soi-subtle aria-disabled:opacity-60"
           />
+          {!busy && <DictationButton value={input} onChange={setInput} disabled={!canSend && !input} onUsed={() => { dictated.current = true; }} />}
           {busy ? (
             <button type="button" onClick={stop} aria-label="Detener" className="press flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-soi-tray text-soi-ink">
               <Square className="h-4 w-4 fill-current" aria-hidden="true" />
