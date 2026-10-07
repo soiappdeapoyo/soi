@@ -165,6 +165,7 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
           wants: z.string().min(3).max(200).describe('Qué quiere sentir o lograr al terminar'),
           minutes: z.number().int().min(1).max(120).optional().describe('Tiempo que tiene ahora, si lo dijo'),
         }).describe('Lo que entendiste de esta persona antes de diseñar'),
+        libraryCheck: z.string().min(8).max(240).describe('Qué revisaste de SU BIBLIOTECA: cuál ajustas (y pones en basedOn) o por qué ninguno de sus Moments encaja con lo que contó'),
         title: z.string().min(3).max(80).describe('Nombre evocador, p. ej. "Reconectar"'),
         objective: z.string().min(3).max(300).describe('El cambio emocional, mental o conductual que busca'),
         kind: MomentKindSchema.describe('recovery para ansiedad, tristeza o falta de enfoque; growth para metas; learning si parte de un libro o video; daily si se repetirá; challenge para retos de varios días (usa day en cada bloque)'),

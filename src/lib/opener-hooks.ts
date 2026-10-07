@@ -5,7 +5,7 @@ import type { OpenerReply } from '@/lib/opener';
  * últimos, y la IA lo escribe con su voz. Cada gancho tiene además una plantilla propia (respaldo sin IA: aun así varía).
  */
 export type HookKind =
-  | 'thread' | 'declined' | 'return' | 'plan' | 'reflection' | 'enemy' | 'insight'
+  | 'thread' | 'declined' | 'return' | 'plan' | 'written' | 'reflection' | 'enemy' | 'insight'
   | 'helped' | 'identity' | 'goal' | 'momentum' | 'checkin';
 
 export type Hook = {
@@ -45,6 +45,7 @@ export function templateFor(h: Hook): string {
     case 'declined': return `${cap(f.when)} preferiste dejar «${f.title}» para otro momento, y está bien. ¿Qué te pide el cuerpo hoy?`;
     case 'return': return 'Qué bueno verte de nuevo. Sin prisa: ¿cómo has estado estos días?';
     case 'plan': return `En tu día sigue «${f.title}». ¿Cómo llegas a ese momento?`;
+    case 'written': return `${cap(f.when)}, en «${f.title}», ${f.verb ?? 'escribiste'}: «${f.quote}». ¿Cómo te fue con eso?`;
     case 'reflection': return `${cap(f.when)} escribiste: «${f.quote}». ¿Sigue siendo así?`;
     case 'enemy': return `Sé que ${f.part} a veces aparece ${f.enemy}. ¿Cómo viene hoy?`;
     case 'insight': return `Me quedé pensando en algo que me dijiste: «${f.quote}». ¿Cómo lo ves hoy?`;
@@ -63,7 +64,7 @@ export function repliesFor(h: Hook): OpenerReply[] {
     case 'thread': return [r('Mejor', 'Mejor, gracias por preguntar.'), r('Sigue igual', 'Sigue igual.'), r('Hoy es otra cosa', 'Hoy es otra cosa.')];
     case 'goal': case 'identity': return [r('Avancé', 'Avancé un poco.'), r('Me trabé', 'Me trabé, la verdad.'), r('Hoy otra cosa', 'Hoy traigo otra cosa.')];
     case 'enemy': return [r('Hoy no', 'Hoy no apareció.'), r('Sí, un poco', 'Sí, un poco.'), r('Bastante', 'Bastante, la verdad.')];
-    case 'reflection': case 'insight': return [r('Sigue siendo así', 'Sigue siendo así.'), r('Ya cambió', 'Ya cambió un poco.'), r('Hoy otra cosa', 'Hoy traigo otra cosa.')];
+    case 'written': case 'reflection': case 'insight': return [r('Sigue siendo así', 'Sigue siendo así.'), r('Ya cambió', 'Ya cambió un poco.'), r('Hoy otra cosa', 'Hoy traigo otra cosa.')];
     case 'return': return [r('Bien', 'He estado bien.'), r('Complicado', 'Han sido días complicados.'), r('Con ganas de volver', 'Con ganas de retomar.')];
     default: return [r('Con energía', 'Hoy llego con energía.'), r('Neutral', 'Hoy llego neutral.'), r('Con algo de carga', 'Hoy llego con algo de carga.')];
   }

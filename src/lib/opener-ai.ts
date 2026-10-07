@@ -32,8 +32,8 @@ export async function collectHooks(admin: SupabaseClient, userId: string, timeZo
     loadThread(admin, userId, timeZone).catch(() => null),
     admin.from('moment_runs').select('moment_id, moment_slug, completed_at, learning, helped').eq('user_id', userId)
       .not('completed_at', 'is', null).gte('completed_at', since30).order('completed_at', { ascending: false }).limit(60),
-    admin.from('agent_knowledge').select('title, content, created_at, tags').eq('user_id', userId).eq('category', 'pensamiento')
-      .overlaps('tags', ['insight', 'contexto_moment']).gte('created_at', new Date(now.getTime() - 14 * DAY).toISOString())
+    admin.from('agent_knowledge').select('title, content, created_at, tags, metadata').eq('user_id', userId).in('category', ['pensamiento', 'emocion'])
+      .overlaps('tags', ['insight', 'contexto_moment', 'moment_output']).gte('created_at', new Date(now.getTime() - 14 * DAY).toISOString())
       .order('created_at', { ascending: false }).limit(5),
     admin.from('identities').select('id, name').eq('user_id', userId).eq('status', 'active').order('position').limit(1),
     admin.from('enemy_events').select('enemy, occurred_at').eq('user_id', userId).gte('occurred_at', since30).limit(200),
@@ -66,7 +66,17 @@ export async function collectHooks(admin: SupabaseClient, userId: string, timeZo
   const enemy = topEnemy && topEnemy[1] >= 2 ? ENEMIES.find((x) => x.id === topEnemy[0]) : null;
   if (enemy) hooks.push({ kind: 'enemy', key: `enemy:${enemy.id}:${part}`, weight: 66, timeBound: true, facts: { enemy: enemy.name, whisper: enemy.whisper, part: PART_PHRASE[part] } });
 
-  const note = (notes ?? []).find((n) => safe(String(n.content)));
+  // Lo que escribió dentro de un Moment (sus palabras, con el Moment donde lo escribió).
+  const out = (notes ?? []).find((n) => ((n.tags as string[]) ?? []).includes('moment_output') && safe((n.metadata as { said?: string } | null)?.said));
+  if (out) {
+    const md = out.metadata as { said: string; moment_title?: string };
+    const grat = ((out.tags as string[]) ?? []).includes('gratitude');
+    hooks.push({ kind: 'written', key: `written:${out.created_at}`, weight: 74, timeBound: false, facts: {
+      quote: clean(md.said, 100), title: md.moment_title ?? 'tu Moment', verb: grat ? 'agradeciste' : 'escribiste',
+      when: whenPhrase(dayLabelFor(out.created_at as string, timeZone, now) ?? 'hace unos días'),
+    } });
+  }
+  const note = (notes ?? []).find((n) => !((n.tags as string[]) ?? []).includes('moment_output') && safe(String(n.content)));
   if (note) {
     const said = String(note.content).split('\n')[0]!.replace(/^Situación:\s*/i, '');
     hooks.push({ kind: 'insight', key: `insight:${note.created_at}`, weight: 60, timeBound: false, facts: { quote: clean(said, 110) } });

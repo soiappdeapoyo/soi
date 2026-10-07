@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { convertToModelMessages, createUIMessageStreamResponse, toUIMessageStream, type UIMessage } from 'ai';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess, consumeChatQuery, refundChatQuery, getProfile, type ConsumeResult } from '@/lib/billing/check-access';
@@ -8,8 +9,9 @@ import { buildSystemPrompt } from '@/lib/ai/prompts';
 import { buildTools } from '@/lib/ai/tools';
 import { isCreatorAccount } from '@/lib/creators/profile';
 import { PROPOSAL_RULE, proposalMode } from '@/lib/ai/proposal-gate';
+import { shouldSummarize, summarizeConversation } from '@/lib/ai/understanding';
 import { continuityPrompt, loadContinuity } from '@/lib/ai/continuity';
-import { findReusable, reusePrompt } from '@/lib/moments/reuse';
+import { libraryPrompt, loadLibrary } from '@/lib/moments/reuse';
 
 /** Cuenta de creador: su contenido es 100% suyo. SOI acompaña, no genera. */
 const CREATOR_CHAT_RULE = 'CUENTA DE CREADOR: esta persona crea su propio contenido. No diseñes Moments ni escribas meditaciones, afirmaciones o manifestaciones para ella (no tienes esas herramientas). Acompáñala conversando, con preguntas; si quiere crear algo, invítala a hacerlo con su propio material en el constructor de Moments.';
@@ -91,7 +93,8 @@ export async function POST(req: Request) {
       .eq('user_id', user.id).order('updated_at', { ascending: false }).limit(25),
     // Continuidad y reutilizar antes de crear (reglas + embeddings; sin tokens extra del modelo).
     isCrisis ? Promise.resolve([]) : loadContinuity(supabase, user.id, text, body.conversationId).catch(() => []),
-    isCrisis ? Promise.resolve([]) : findReusable(supabase, user.id, text).catch(() => []),
+    // Su biblioteca completa, ordenada por lo que encaja con TODA la conversación (no solo el último mensaje).
+    isCrisis ? Promise.resolve([]) : loadLibrary(supabase, user.id, messages.filter((m) => m.role === 'user').map(textOf).join(' ')).catch(() => []),
   ]);
 
   // 2) Conversación (crea si no existe). El saludo con el que SOI abrió la conversación se guarda primero.
@@ -155,7 +158,7 @@ export async function POST(req: Request) {
     agent === 'crisis' || ritmo === 'listen' || ritmo === 'invite' ? '' : VIDEO_RULE[video],
     isCreator && agent !== 'crisis' ? CREATOR_CHAT_RULE : '',
     agent === 'crisis' ? '' : continuityPrompt(pastTalks, profile?.timezone ?? 'America/Mexico_City'),
-    agent === 'crisis' ? '' : reusePrompt(reusable, !isCreator),
+    agent === 'crisis' ? '' : libraryPrompt(reusable, !isCreator),
     agent === 'crisis' ? '' : methods,
     openerText && `TU PRIMER MENSAJE EN ESTA CONVERSACIÓN FUE: "${openerText.replace(/["\n]/g, ' ').slice(0, 900)}". Continúa desde ahí sin repetir el saludo.`,
     // Lo que cambia cada minuto va al final: así la parte fija del prompt se reutiliza desde la caché del proveedor.
@@ -190,6 +193,12 @@ export async function POST(req: Request) {
         await supabase.from('conversations')
           .update({ last_message_at: new Date().toISOString(), agent_category: agent, message_count: count ?? 0 })
           .eq('id', conversationId);
+        // Cada 3 mensajes suyos, lo que SOI entendió se guarda como memoria (después de responder).
+        if (shouldSummarize(userTurns, isCrisis)) {
+          const texts = messages.filter((m) => m.role === 'user').map(textOf);
+          const cid = conversationId;
+          try { after(() => summarizeConversation(user.id, cid, texts)); } catch { void summarizeConversation(user.id, cid, texts); }
+        }
         if (out && out.length > 120) {
           await remember(supabase, {
             user_id: user.id, category: 'conversacion', title: text.slice(0, 80), content: `${text}\n---\n${out}`.slice(0, 3000),

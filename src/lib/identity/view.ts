@@ -6,6 +6,7 @@ import { resolveRefs } from '@/lib/day-plan';
 import { loadHillMemory } from '@/lib/ai/hill-memory';
 import { dateInTz } from '@/lib/utils';
 import { classifyLinks, loadLinks, type IdentityRow, type Link, type LinkItem } from './classify';
+import { bestWritten, type RunOutput } from '@/lib/moments/outputs';
 
 export type EvidenceKind = 'moment' | 'reflexion' | 'logro' | 'regreso';
 export type Evidence = { id: string; kind: EvidenceKind; title: string; note: string | null; at: string; identityIds: string[]; capacities: Capacity[]; weight: number };
@@ -13,7 +14,10 @@ export type IdentityStat = IdentityRow & { xp: number; evidenceCount: number; le
 export type CapacityStat = { name: Capacity; xp: number; level: ReturnType<typeof levelFor> };
 export type StoryEvent = { at: string; text: string };
 
-type Run = { moment_id: string | null; moment_slug: string | null; started_at: string; completed_at: string | null; learning: string | null };
+type Run = { moment_id: string | null; moment_slug: string | null; started_at: string; completed_at: string | null; learning: string | null; outputs?: Record<string, RunOutput> | null };
+
+/** Lo que escribió: "¿qué funcionó?" o, si no, lo que escribió dentro del Moment (reflexión, escritura, gratitud). */
+const writtenIn = (r: Run) => (r.learning && r.learning.trim().length >= 6 ? r.learning : bestWritten(r.outputs));
 
 const DAY = 86_400_000;
 const refOf = (r: Pick<Run, 'moment_id' | 'moment_slug'>) => (r.moment_id ? `m:${r.moment_id}` : `s:${r.moment_slug}`);
@@ -60,7 +64,7 @@ export const loadIdentityView = cache(async (supabase: SupabaseClient, userId: s
   const [{ data: idRows }, { data: rawRuns }, { data: muro }, hill, links] = await Promise.all([
     supabase.from('identities').select('id, name, description, capacities, status, position, created_at').eq('user_id', userId)
       .neq('status', 'archived').order('position').order('created_at'),
-    supabase.from('moment_runs').select('moment_id, moment_slug, started_at, completed_at, learning').eq('user_id', userId)
+    supabase.from('moment_runs').select('moment_id, moment_slug, started_at, completed_at, learning, outputs').eq('user_id', userId)
       .order('started_at', { ascending: false }).limit(1000),
     supabase.from('agent_knowledge').select('id, title, content, created_at').eq('user_id', userId).eq('category', 'evidencia')
       .order('created_at', { ascending: false }).limit(300),
@@ -91,9 +95,10 @@ export const loadIdentityView = cache(async (supabase: SupabaseClient, userId: s
   for (const r of done) {
     const link: Link | undefined = links.get(refOf(r));
     const title = titles.get(refOf(r))?.title ?? 'Moment';
-    const reflected = Boolean(r.learning && r.learning.trim().length >= 6);
+    const written = writtenIn(r);
+    const reflected = Boolean(written);
     evidence.push({
-      id: `${refOf(r)}@${r.completed_at}`, kind: reflected ? 'reflexion' : 'moment', title, note: reflected ? r.learning : null,
+      id: `${refOf(r)}@${r.completed_at}`, kind: reflected ? 'reflexion' : 'moment', title, note: written,
       at: r.completed_at!, identityIds: link?.identity_ids ?? [], capacities: link?.capacities ?? [], weight: reflected ? 2 : 1,
     });
   }

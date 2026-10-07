@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { stems, overlap, rankBySimilarity } from '@/lib/ai/similarity';
 import { mergeTalks, whenText, continuityPrompt } from '@/lib/ai/continuity';
-import { isNearDuplicate, reusePrompt } from '@/lib/moments/reuse';
+import { isNearDuplicate, libraryPrompt, rankLibrary } from '@/lib/moments/reuse';
 import { officialMoment } from '@/config/official-moments';
 
 describe('similitud por reglas', () => {
@@ -42,11 +42,22 @@ describe('reutilizar antes de crear', () => {
     expect(isNearDuplicate({ title: sats.title, objective: sats.objective, blocks: sats.blocks }, sats)).toBe(true);
     expect(isNearDuplicate({ title: sats.title, objective: sats.objective, blocks: sats.blocks.slice(1) }, sats)).toBe(false);
   });
-  it('el bloque del prompt ofrece reutilizar, ajustar como versión o crear solo si nada sirve', () => {
-    const p = reusePrompt([{ ref: 'm1', title: 'Calma nocturna', kind: 'recovery', minutes: 8, runs: 3, helped: 2, score: 0.7 }]);
+  it('la biblioteca completa: vividos, si le ayudó, lo que escribió; y cómo reutilizar antes de crear', () => {
+    const e = { ref: 'm1', title: 'Calma nocturna', kind: 'recovery', minutes: 8, official: false, runs: 3, helped: 2, lastAt: new Date().toISOString(), lastWritten: 'Me ayudó soltar el día', score: 0.7 };
+    const p = libraryPrompt([e, { ...e, ref: 'neville_sats', title: 'SATS', official: true, runs: 0, helped: 0, lastAt: null, lastWritten: null }]);
+    expect(p).toContain('«Calma nocturna» (8 min, recovery) · vivido 3 veces, le ayudó 2, hoy · escribió: «Me ayudó soltar el día»');
+    expect(p).toContain('«SATS» (oficial) (8 min, recovery) · sin vivir');
     expect(p).toContain('offerMoment');
     expect(p).toContain('basedOn');
-    expect(p).toContain('lo vivió 3 veces, le ayudó 2');
-    expect(reusePrompt([{ ref: 'm1', title: 'X', kind: 'daily', minutes: 5, runs: 0, helped: 0, score: 1 }], false)).not.toContain('basedOn');
+    expect(p).toContain('por qué ninguno de los suyos encaja');
+    expect(libraryPrompt([e], false)).not.toContain('basedOn');
+  });
+  it('ordena por parecido con TODA la conversación, lo que ayudó y lo reciente', () => {
+    const items = [
+      { id: 'a', text: 'Enfoque profundo en el trabajo', runs: 0, helped: 0, lastAt: null },
+      { id: 'b', text: 'Calma antes de dormir respiración', runs: 2, helped: 2, lastAt: new Date().toISOString() },
+    ];
+    expect(rankLibrary('no puedo dormir, la cabeza no para', items)[0]!.id).toBe('b');
+    expect(rankLibrary('quiero enfocarme en el trabajo de hoy', items)[0]!.id).toBe('a');
   });
 });

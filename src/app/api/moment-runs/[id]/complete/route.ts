@@ -21,6 +21,8 @@ const remember = (_sb: unknown, row: Parameters<typeof rememberNow>[1]) => {
 import { rpcError } from '@/lib/social/guard';
 import { todayISO } from '@/lib/utils';
 import { challengeLength } from '@/lib/moments/challenge';
+import { outputMemories, type RunOutput } from '@/lib/moments/outputs';
+import { resolveRefs } from '@/lib/day-plan';
 
 const Body = z.object({
   moodAfter: z.number().int().min(1).max(5).optional(),
@@ -44,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return new Response('Datos inválidos', { status: 400 });
 
-  const { data: run } = await supabase.from('moment_runs').select('outputs, moment_id, moment_slug, challenge_day, completed_at').eq('id', id).eq('user_id', user.id).maybeSingle();
+  const { data: run } = await supabase.from('moment_runs').select('outputs, moment_id, moment_slug, challenge_day, completed_at, mood_before').eq('id', id).eq('user_id', user.id).maybeSingle();
   if (!run) return Response.json({ ok: false, message: 'No encontrado.' }, { status: 404 });
 
   const { error } = await supabase.rpc('complete_moment_run', {
@@ -55,6 +57,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const outputs = (run.outputs ?? {}) as Outputs;
   const ref = { run_id: id, moment_id: run.moment_id, moment_slug: run.moment_slug };
   const profile = await getProfile(user.id);
+
+  // Lo que escribió dentro del Moment (reflexión, escritura, gratitud, emociones) → memoria con su contexto.
+  {
+    const momentRef = run.moment_id ? `m:${run.moment_id}` : `s:${run.moment_slug}`;
+    const m = (await resolveRefs(supabase, [momentRef])).get(momentRef);
+    if (m) {
+      const mems = outputMemories(outputs as Record<string, RunOutput>, {
+        momentTitle: m.title, blockTitles: Object.fromEntries(m.blocks.map((b) => [b.id, b.title])),
+        moodBefore: run.mood_before as number | null, moodAfter: parsed.data.moodAfter ?? null,
+      });
+      for (const mem of mems) {
+        await remember(supabase, {
+          user_id: user.id, category: mem.category, title: mem.title, content: mem.content, tags: ['moment_output', mem.blockType],
+          metadata: { ...ref, moment_title: m.title, said: mem.said.slice(0, 300), helped: parsed.data.helped ?? null },
+        });
+      }
+    }
+  }
 
   // Metas escritas en bloques "Objetivo" → perfil (máx. 10).
   const goals = Object.values(outputs).filter((o) => o?.type === 'goal' && o.text?.trim()).map((o) => o!.text!.trim().slice(0, 120));
