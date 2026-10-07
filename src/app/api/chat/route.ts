@@ -1,3 +1,5 @@
+import { getSettings } from '@/lib/settings';
+import { startOfTodayISO } from '@/lib/utils';
 import { after } from 'next/server';
 import { convertToModelMessages, createUIMessageStreamResponse, toUIMessageStream, type UIMessage } from 'ai';
 import { getSessionUser } from '@/lib/supabase/server';
@@ -44,7 +46,7 @@ export async function POST(req: Request) {
   const text = last?.role === 'user' ? textOf(last).slice(0, 4000) : '';
   if (!text) return new Response('Mensaje vacío', { status: 400 });
 
-  const profile = await getProfile(user.id);
+  const [profile, settings] = await Promise.all([getProfile(user.id), getSettings()]);
   const history = messages.slice(-5, -1).map(textOf);
 
   // 1) Crisis: SIEMPRE antes del paywall. Nunca consume consultas.
@@ -69,6 +71,18 @@ export async function POST(req: Request) {
     consumed = await consumeChatQuery();
     if (consumed === 'exhausted') {
       return Response.json({ error: PAYWALL_MESSAGE, reason: 'queries_exhausted' }, { status: 402 });
+    }
+    // Límite diario de uso (tokens) configurado en el panel. La crisis nunca se bloquea (no llega aquí).
+    const plus = profile?.plan === 'soi_plus' || (profile?.plan === 'trial' && Date.parse(profile.trial_ends_at) > Date.now());
+    const dailyLimit = plus ? settings.dailyTokenLimitPlus : settings.dailyTokenLimitFree;
+    if (dailyLimit > 0) {
+      const { data: today } = await supabase.from('messages').select('tokens_used').eq('user_id', user.id).eq('role', 'assistant')
+        .gte('created_at', startOfTodayISO(profile?.timezone ?? 'America/Mexico_City')).limit(2000);
+      const used = (today ?? []).reduce((a, m) => a + ((m.tokens_used as number | null) ?? 0), 0);
+      if (used >= dailyLimit) {
+        if (consumed === 'consumed') await refundChatQuery();
+        return Response.json({ error: 'Por hoy llegamos al límite de conversación. Mañana seguimos; si lo necesitas ahora, tus Moments siguen disponibles.', reason: 'daily_limit' }, { status: 429 });
+      }
     }
   }
 
@@ -206,6 +220,7 @@ export async function POST(req: Request) {
           });
         }
       },
+      settings.chatMaxOutputTokens || undefined,
     );
   } catch (error) {
     console.error('[chat]', error instanceof AllProvidersFailedError ? error.message : error);

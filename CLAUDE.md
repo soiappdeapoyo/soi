@@ -131,6 +131,7 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 | `0005_streaks_community_push.sql` | Escudo de racha, `register_ritual_day`, `toggle_reaction`, país, avatar, push, autor/demo en posts, **permisos por columna en `user_profiles` (anti-bypass del paywall)**, endurecimiento de `decrement_free_query`/`expire_trials` |
 | `0006_atomic_free_queries.sql` | `consume_chat_query` (comprueba y descuenta atómicamente), `refund_chat_query` (si fallan todos los proveedores), `purge_crisis_logs` (retención 90 días) |
 | `0008_momentum_signals.sql` | Amplía `momentum_events.kind` con `video_watched` y `checkin` |
+| `0024_admin_panel.sql` | `app_settings` (tarifas, días de prueba, consultas gratis, minutos de voz, tokens por respuesta y por día; sin acceso para clientes) y `admin_audit`; `setting_int`; `trial_ends_at` por defecto y `consume_chat_query`/`refund_chat_query`/`expire_trials`/`start_free_plan_if_trial_expired` leen la configuración |
 | `0023_soi_openers.sql` | `soi_openers`: el próximo saludo del chat preparado de antemano (texto, respuestas, gancho, parte del día, fecha, `source_at`) y los últimos ganchos/textos usados; solo lectura propia, escribe el servidor |
 | `0022_creator_profile_v2.sql` | `creator_profiles.category` (≤40) y `highlights` (JSONB, máx. 8 destacados `{id, title, moment_ids[]}`), escribibles por el dueño |
 | `0021_auto_covers.sql` | `cover_path` admite `auto/<proveedor>-<id>.webp` (portadas automáticas compartidas en `moment-assets/auto/`, escritas solo por el servidor) |
@@ -328,6 +329,13 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 - **Ventas:** solo a través del precio del Moment dentro de SOI. Los textos siguen sin links ni autopromoción.
 - **Stripe:** `/api/blueprints/[id]/checkout` (mode `payment`, `metadata.kind = 'blueprint'`). El webhook separa compras de Moments de suscripciones.
 - **Pendiente:** pagos a creadores (Stripe Connect), programas con sesiones grupales, office hours y mentoría 1:1, verificación de creadores (`is_verified` solo con service role).
+
+## 🛠️ Panel de administración (`/panel`)
+- Sin enlaces desde la app ni la landing, `noindex` y fuera de robots.txt. **Acceso:** sesión + correo en `ADMIN_EMAILS` (variable de entorno, separados por coma; `src/lib/admin/auth.ts`). Para cualquier otra persona, páginas y API responden 404.
+- **Resumen** (sin cuentas demo): cuentas por plan, nuevas, activas, mensajes y tokens, Moments completados, señales de crisis.
+- **Ajustes** (`src/lib/settings.ts`, tabla `app_settings`, caché de 60 s, rangos validados): precio mostrado e **ID de precio de Stripe** de cada plan (vacío = variable de entorno), días de prueba (nuevos registros), consultas gratis, minutos de voz por día, tokens máximos por respuesta y tokens por día (Free y SOI+/prueba; al llegar, el chat responde 429 y devuelve la consulta; la crisis nunca se bloquea).
+- **Usuarios** (búsqueda por correo o nombre) e **inspección de cuenta**: plan y uso (tokens, proveedores), perfil e identidades, conversaciones (lectura completa), Moments vividos con lo que escribió, Moments creados, memoria de SOI, batallas y señales de crisis (plegadas). Acciones: extender prueba, reponer consultas, SOI+ de cortesía (sin Stripe), pasar a Free.
+- **Auditoría** (`admin_audit`): abrir una cuenta, leer una conversación, cambiar ajustes o un plan queda registrado con quién y cuándo (y el antes/después).
 
 ## ⚡ Rendimiento
 - **Nada de IA en el camino de una pantalla:** la clasificación de identidad tiene presupuesto (`classifyLinks(..., { budgetMs: 2500 })`, proveedor rápido); si no alcanza, la pantalla sale con reglas y la IA termina en segundo plano (`after`) y guarda para la próxima visita.

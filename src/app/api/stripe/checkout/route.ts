@@ -3,6 +3,7 @@ import { getProfile } from '@/lib/billing/check-access';
 import { getStripe } from '@/lib/billing/stripe';
 import { PLANS, type PlanKey } from '@/config/plans';
 import { appUrl } from '@/lib/utils';
+import { getSettings } from '@/lib/settings';
 
 export async function POST(req: Request) {
   const { user } = await getSessionUser();
@@ -11,7 +12,8 @@ export async function POST(req: Request) {
   const { plan } = (await req.json()) as { plan: PlanKey };
   const cfg = PLANS[plan];
   if (!cfg) return new Response('Plan inválido', { status: 400 });
-  const price = process.env[cfg.priceEnv];
+  const settings = await getSettings();
+  const price = settings.plans[plan === 'soi_plus_yearly' ? 'yearly' : 'monthly'].stripePriceId ?? process.env[cfg.priceEnv];
   if (!price) return new Response('Precio no configurado', { status: 500 });
 
   const profile = await getProfile(user.id);

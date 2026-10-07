@@ -1,3 +1,4 @@
+import { getSettings } from '@/lib/settings';
 import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess, getProfile } from '@/lib/billing/check-access';
@@ -17,7 +18,6 @@ const Body = z.object({
 });
 
 /** Tope de audio NUEVO por persona y día (lo servido desde caché no cuenta). 20 min ≈ $0.27 en 2026. */
-const DAILY_SECONDS = 20 * 60;
 
 /**
  * Voz guía neuronal (Gemini TTS). Caché por texto + voz + estilo: lo que ya se generó (para cualquier
@@ -42,6 +42,8 @@ export async function POST(req: Request) {
   if (hit) return parsed.data.prefetch ? new Response(null, { status: 204 }) : audioResponse(hit);
 
   const { data: today } = await supabase.from('tts_usage').select('seconds').eq('user_id', user.id).eq('day', new Date().toISOString().slice(0, 10)).maybeSingle();
+  // Tope diario de audio nuevo (panel).
+  const DAILY_SECONDS = (await getSettings()).ttsDailyMinutes * 60;
   if ((today?.seconds ?? 0) >= DAILY_SECONDS) return new Response(null, { status: 204, headers: { 'x-soi-tts': 'limit' } });
 
   try {

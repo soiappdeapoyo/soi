@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { ArrowRight, Check, Mic, MoonStar } from 'lucide-react';
 import { buttonClass } from '@/components/ui/button';
 import { Cta } from '@/components/landing/cta';
-import { PLANS, TRIAL_DAYS } from '@/config/plans';
+import { getSettings } from '@/lib/settings';
 import { officialCover } from '@/lib/moments/types';
 
 export const metadata: Metadata = {
@@ -58,7 +58,11 @@ const SOURCES = [
  * (elegir un tema lleva directo a practicarlo), autoridad con fuentes y prueba sin riesgo. Sin cifras ni testimonios
  * inventados, sin imágenes de los autores.
  */
-export default function LandingPage() {
+/** Tarifas y días de prueba del panel; la página se regenera cada 5 minutos. */
+export const revalidate = 300;
+
+export default async function LandingPage() {
+  const { trialDays: TRIAL_DAYS, plans } = await getSettings();
   return (
     <main id="main" className="bg-soi-canvas">
       {/* ---------- Héroe: el mundo de los videos ---------- */}
@@ -215,7 +219,7 @@ export default function LandingPage() {
       <section className="mx-auto max-w-3xl px-5 py-16 text-center sm:py-20" aria-labelledby="precio">
         <h2 id="precio" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Pruébalo {TRIAL_DAYS} días, todo incluido</h2>
         <p className="mx-auto mt-3 max-w-xl text-pretty text-lg text-soi-muted">
-          Sin tarjeta. Si te sirve, SOI+ cuesta ${PLANS.soi_plus_monthly.price} USD al mes o ${PLANS.soi_plus_yearly.price} USD al año.
+          Sin tarjeta. Si te sirve, SOI+ cuesta ${plans.monthly.price} USD al mes o ${plans.yearly.price} USD al año.
           Si no, sigues con el plan gratuito y no pagas nada.
         </p>
         <Cta href={signup()} where="precio" className={buttonClass('gold', 'lg', 'mt-8 w-full sm:w-auto')}>Pruébalo {TRIAL_DAYS} días gratis</Cta>

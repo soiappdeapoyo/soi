@@ -122,6 +122,8 @@ export async function streamWithFallback(
   messages: ModelMessage[],
   tools?: ToolSet,
   onEnd?: (args: StreamEnd) => Promise<void> | void,
+  /** Tope de tokens por respuesta (panel; 0 o ausente = el del proveedor). */
+  maxOutputTokens?: number,
 ) {
   const attempts: { provider: ProviderName; error: string }[] = [];
   for (const provider of await orderedProviders(CHAT_ORDER)) {
@@ -133,6 +135,7 @@ export async function streamWithFallback(
         tools: tools ? relaxTools(tools) : undefined,
         providerOptions: PROVIDER_OPTIONS,
         stopWhen: isStepCount(5),
+        ...(maxOutputTokens ? { maxOutputTokens } : {}),
         onError: ({ error }) => {
           logFailure(provider.name, error);
           forget(provider.name);

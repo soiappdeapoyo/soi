@@ -9,7 +9,7 @@ import { creatorsById } from '@/lib/social/queries';
 import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import { ACTIONS, MOMENT_KINDS } from '@/config/actions';
 import { formatPrice } from '@/config/creators';
-import { TRIAL_DAYS } from '@/config/plans';
+import { getSettings } from '@/lib/settings';
 
 async function load(id: string) {
   const { supabase, user } = await getSessionUser();
@@ -58,7 +58,7 @@ export default async function MomentPublicPage({ params }: { params: Promise<{ i
         <div className="rounded-lg bg-white p-4 shadow-ring">
           <p className="text-[15px]">SOI te guía paso a paso, aprende de cómo te fue y te propone una mejor versión para tu vida.</p>
           <Link href={`/login?next=/m/${m.id}`} className={buttonClass('primary', 'md', 'mt-3 w-full')}>Vivir este Moment en SOI</Link>
-          <p className="mt-2 text-center text-xs text-soi-muted">{TRIAL_DAYS} días de prueba sin tarjeta.</p>
+          <p className="mt-2 text-center text-xs text-soi-muted">{(await getSettings()).trialDays} días de prueba sin tarjeta.</p>
         </div>
       </div>
     </PublicShell>

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import { UpgradeButtons } from '@/components/paywall/upgrade-buttons';
+import { getSettings } from '@/lib/settings';
 import { SOI_PLUS_BENEFITS } from '@/config/plans';
 
 export const metadata: Metadata = { title: 'SOI+' };
@@ -20,6 +21,7 @@ const FREE = [
 ];
 
 export default async function PlanesPage() {
+  const settings = await getSettings();
   const { user } = await getSessionUser();
   if (!user) redirect('/login');
   const { plan } = await getAccessMap(user.id);
@@ -32,7 +34,7 @@ export default async function PlanesPage() {
       {plan === 'soi_plus' ? (
         <p className="mt-6 rounded-[20px] bg-soi-gold/15 p-5 font-medium">Ya eres SOI+ ✨ Gracias por ser parte.</p>
       ) : (
-        <div className="mt-6"><UpgradeButtons /></div>
+        <div className="mt-6"><UpgradeButtons prices={{ soi_plus_monthly: settings.plans.monthly.price, soi_plus_yearly: settings.plans.yearly.price }} /></div>
       )}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
