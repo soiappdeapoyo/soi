@@ -1,3 +1,4 @@
+import { whenPhrase } from '@/lib/opener-hooks';
 import type { AgentId, Eslabon } from '@/config/agents';
 import type { MomentumState } from '@/lib/momentum';
 import type { Progress } from '@/lib/rewards';
@@ -44,7 +45,7 @@ export type OpenerInput = {
 export type OpenerPractice = { kind: 'ritual'; href: string; label: string; detail: string; reason: string; locked: false };
 export type OpenerReply = { label: string; text?: string; href?: string };
 /** Para medir qué saludo funciona mejor (PostHog). */
-export type OpenerKind = 'first' | 'thread' | 'checkin' | 'proposal' | 'agent' | 'run';
+export type OpenerKind = 'first' | 'thread' | 'checkin' | 'proposal' | 'agent' | 'run' | 'ai';
 /**
  * replies: hasta 3 chips (lo principal, un toque). links: lo secundario, como enlaces discretos ("Proponme algo", el ritual).
  */
@@ -142,7 +143,7 @@ export function buildOpener(i: OpenerInput): Opener {
   // Si la propuesta ya trae el recuerdo de ese mismo Moment, no lo repetimos como evidencia.
   const sameMemory = Boolean(i.proposal?.memory && i.lastRun && i.proposal.memory.title === i.lastRun.title && i.proposal.memory.dayLabel === i.lastRun.dayLabel);
   // Lo que aprendió del último "Ahora no" va antes que la evidencia: es lo más reciente que dijo la persona.
-  const when = i.declined ? (i.declined.dayLabel === 'hoy' ? 'Hace un rato' : cap(i.declined.dayLabel)) : '';
+  const when = i.declined ? (i.declined.dayLabel === 'hoy' ? 'Hace un rato' : cap(whenPhrase(i.declined.dayLabel))) : '';
   const declinedLine = i.declined
     ? (i.proposal
       ? `${when} preferiste dejar «${i.declined.title}» para otro momento; lo tomé en cuenta.`
@@ -184,8 +185,8 @@ export function buildOpener(i: OpenerInput): Opener {
   // Lo pendiente manda: retomar lo que contó vale más que preguntar cómo llega (nunca las dos preguntas).
   const thread = i.thread
     ? (i.thread.quote
-      ? `${cap(i.thread.dayLabel)} me contaste: «${i.thread.quote}». ¿Cómo siguió?`
-      : `${cap(i.thread.dayLabel)} hablamos de algo importante para ti. ¿Cómo sigues hoy?`)
+      ? `${cap(whenPhrase(i.thread.dayLabel))} me contaste: «${i.thread.quote}». ¿Cómo siguió?`
+      : `${cap(whenPhrase(i.thread.dayLabel))} hablamos de algo importante para ti. ¿Cómo sigues hoy?`)
     : null;
   const text = thread
     ? [hello, declinedLine, suggest, thread].filter(Boolean).join(' ')

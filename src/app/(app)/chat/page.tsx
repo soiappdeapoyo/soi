@@ -4,7 +4,9 @@ import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import { ChatView } from '@/components/chat/chat-view';
 import { isAgentId, type Eslabon } from '@/config/agents';
-import { buildOpener, momentRunOpener } from '@/lib/opener';
+import { buildOpener, greetingForHour, momentRunOpener, type Opener } from '@/lib/opener';
+import { prepareOpener, takeOpener } from '@/lib/opener-ai';
+import { after } from 'next/server';
 import { resolveRefs } from '@/lib/day-plan';
 import { openerContext } from '@/lib/opener-context';
 import { loadThread } from '@/lib/opener-thread';
@@ -58,15 +60,29 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
   // "Primera vez" solo con certeza: perfil reciente, sin descubrimiento hecho y sin conversaciones ni Moments
   // (si alguna consulta falla, no se asume: mejor un saludo normal que presentarse a quien ya conoce SOI).
   const newProfile = Boolean(profile?.created_at && Date.now() - Date.parse(profile.created_at) < 2 * 86_400_000) && !profile?.onboarding_completed;
-  const [known, thread, runs] = await Promise.all([
+  const [known, thread, runs, prepared] = await Promise.all([
     plain ? openerContext(supabase, user.id, profile, { hour: base.hour, today: base.today }, access.routine_execution) : Promise.resolve({}),
     plain ? loadThread(supabase, user.id, tz).catch(() => null) : Promise.resolve(null),
     plain && newProfile && !last && !lastError ? supabase.from('moment_runs').select('id', { count: 'exact', head: true }).eq('user_id', user.id) : Promise.resolve(null),
+    // El saludo que SOI preparó para hoy (escrito por la IA alrededor de lo que vale la pena recordar).
+    plain ? takeOpener(supabase, user.id, tz).catch(() => null) : Promise.resolve(null),
   ]);
   const firstTime = Boolean(runs && !runs.error && runs.count === 0);
-  const opener = ranMoment && run
+  const ruled = ranMoment && run
     ? momentRunOpener({ title: ranMoment.title, helped: run.helped as boolean | null, moodBefore: run.mood_before as number | null, moodAfter: run.mood_after as number | null, name: base.name })
     : buildOpener({ ...base, ...known, agent, thread, firstTime });
+  // Saludo preparado: su texto y respuestas; la tarjeta (reto o plan que toca) y los enlaces siguen viniendo de las reglas.
+  const first = base.name.trim().split(/\s+/)[0] ?? '';
+  const opener: Opener = prepared && !firstTime
+    ? { ...ruled, text: `${greetingForHour(base.hour)}${first ? `, ${first}` : ''}. ${prepared.text}`, replies: prepared.replies.length ? prepared.replies : ruled.replies, kind: 'ai' }
+    : ruled;
+  // El siguiente saludo se prepara ya (después de responder): la próxima vez será otro.
+  if (plain && !firstTime) {
+    const uid = user.id;
+    // Si salió por reglas, lo mostrado cuenta como reciente (para que el siguiente sea otro).
+    const shown = prepared ? null : { key: thread ? `thread:${thread.conversationId}` : 'checkin', text: opener.text };
+    try { after(() => prepareOpener(uid, { minAgeMs: 0, shown }).then(() => undefined)); } catch { /* fuera de una petición */ }
+  }
 
   return (
     <ChatView
