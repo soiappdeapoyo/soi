@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@/lib/moments/auto-cover', () => ({ scheduleAutoCover: () => {} }));
-import { proposalMode, PROPOSAL_TOOLS } from '@/lib/ai/proposal-gate';
+import { proposalMode, PROPOSAL_TOOLS, understood } from '@/lib/ai/proposal-gate';
 import { buildTools } from '@/lib/ai/tools';
 import { buildOpener } from '@/lib/opener';
 
@@ -10,12 +10,27 @@ describe('escuchar primero, proponer después', () => {
     expect(proposalMode({ text: 'Hoy me siento rara, no sé', userTurns: 1, anxiety: false })).toBe('listen');
     expect(proposalMode({ text: 'Creo que es por el trabajo', userTurns: 2, anxiety: false })).toBe('invite');
   });
-  it('si lo pide o acepta la invitación, propone', () => {
-    expect(proposalMode({ text: 'Proponme algo para ahora.', userTurns: 1, anxiety: false })).toBe('propose');
-    expect(proposalMode({ text: '¿Qué hago con esto?', userTurns: 1, anxiety: false })).toBe('propose');
-    expect(proposalMode({ text: 'Sí, dale', userTurns: 3, previousAssistant: 'Te entiendo. ¿Te propongo algo de 3 minutos para esto?', anxiety: false })).toBe('propose');
-    expect(proposalMode({ text: 'Sí, así es', userTurns: 3, previousAssistant: '¿Desde cuándo te pasa?', anxiety: false })).toBe('invite');
+  it('si lo pide sin que SOI lo conozca aún: primero entender (explore), no algo genérico', () => {
+    expect(proposalMode({ text: 'Proponme algo para ahora.', userTurns: 1, anxiety: false })).toBe('explore');
+    expect(proposalMode({ text: '¿Qué hago con esto?', userTurns: 1, anxiety: false })).toBe('explore');
+  });
+  it('con entendimiento (o si insiste en algo rápido), propone', () => {
+    const userTexts = [
+      'El trabajo me tiene sin dormir desde el lunes, mi jefe me cambió todo el proyecto',
+      'Siento el pecho apretado y la cabeza no para de dar vueltas antes de dormir',
+      'Sí, dale',
+    ];
+    expect(proposalMode({ text: 'Sí, dale', userTurns: 3, previousAssistant: 'Por lo que me cuentas… ¿Te preparo algo pensado para eso?', anxiety: false, userTexts })).toBe('propose');
+    expect(proposalMode({ text: 'Proponme algo rápido, sin preguntas', userTurns: 1, anxiety: false })).toBe('propose');
     expect(proposalMode({ text: 'Mi reflexión de «Charla»: quiero empezar', userTurns: 1, anxiety: false })).toBe('propose');
+  });
+  it('si ya hablaron del tema antes, basta con menos para entender', () => {
+    expect(understood(['Sigue igual, otra vez no pude dormir por el trabajo'], true)).toBe(true);
+    expect(understood(['Sigue igual, otra vez no pude dormir por el trabajo'], false)).toBe(false);
+    expect(understood(['Hoy llego con algo de carga.', 'Proponme algo para ahora.'], true)).toBe(false);
+  });
+  it('un sí que no responde a una invitación no cuenta como pedido', () => {
+    expect(proposalMode({ text: 'Sí, así es', userTurns: 3, previousAssistant: '¿Desde cuándo te pasa?', anxiety: false })).toBe('invite');
   });
   it('con ansiedad, una oferta mínima de inmediato', () => {
     expect(proposalMode({ text: 'Estoy con mucha ansiedad', userTurns: 1, anxiety: true })).toBe('soothe');

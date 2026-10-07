@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { tool } from 'ai';
 import { z } from 'zod/v3';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -14,6 +15,7 @@ import { HillPatchSchema, loadHillMemory, saveHillMemory } from './hill-memory';
 import { ENEMY_IDS } from '@/config/enemies';
 import { recordEnemy } from '@/lib/battles';
 import { scheduleAutoCover } from '@/lib/moments/auto-cover';
+import { createAdminClient } from '@/lib/supabase/server';
 import { PROPOSAL_TOOLS } from './proposal-gate';
 import { forkOfficial, getMoment } from '@/lib/moments/server';
 import { isNearDuplicate } from '@/lib/moments/reuse';
@@ -155,8 +157,14 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
     }),
 
     createMoment: tool({
-      description: 'Diseña un SOI Moment: un flujo corto de acciones (3 a 6) con intención, objetivo y resultado esperado, listo para comenzar. Úsalo en lugar de tareas sueltas.',
+      description: 'Diseña un SOI Moment ÚNICO para esta persona: un flujo corto de acciones (3 a 6) con intención, objetivo y resultado esperado, listo para comenzar. Primero llena `understanding` con lo que te contó (sus palabras) y úsalo en el título y en cada paso. Nada genérico.',
       inputSchema: z.object({
+        understanding: z.object({
+          situation: z.string().min(10).max(300).describe('Qué le pasa, con sus palabras y un detalle concreto'),
+          feeling: z.string().min(3).max(160).describe('Cómo lo siente (cuerpo, mente, emoción)'),
+          wants: z.string().min(3).max(200).describe('Qué quiere sentir o lograr al terminar'),
+          minutes: z.number().int().min(1).max(120).optional().describe('Tiempo que tiene ahora, si lo dijo'),
+        }).describe('Lo que entendiste de esta persona antes de diseñar'),
         title: z.string().min(3).max(80).describe('Nombre evocador, p. ej. "Reconectar"'),
         objective: z.string().min(3).max(300).describe('El cambio emocional, mental o conductual que busca'),
         kind: MomentKindSchema.describe('recovery para ansiedad, tristeza o falta de enfoque; growth para metas; learning si parte de un libro o video; daily si se repetirá; challenge para retos de varios días (usa day en cada bloque)'),
@@ -214,6 +222,17 @@ function allTools({ supabase, userId, authorName, access, video = 'quick' }: Ctx
           blocks, steps: [], status: 'private', ...(m.kind === 'challenge' && m.durationDays && m.durationDays >= 2 ? { duration_days: Math.min(30, m.durationDays) } : {}),
         }).select('id, required_minutes').single();
         if (error) return { ok: false as const, errors: ['No se pudo guardar el Moment.'] };
+        // Lo que entendió se vuelve memoria (para personalizar los siguientes), después de responder.
+        if (m.understanding) {
+          const u = m.understanding;
+          const write = () => remember(createAdminClient(), {
+            user_id: userId, category: 'pensamiento', tags: ['contexto_moment'],
+            title: `Para «${m.title}»`.slice(0, 120),
+            content: `Situación: ${u.situation}\nSiente: ${u.feeling}\nQuiere: ${u.wants}${u.minutes ? `\nTiempo: ${u.minutes} min` : ''}`.slice(0, 1000),
+            metadata: { moment_id: data.id },
+          }).then(() => undefined);
+          try { after(write); } catch { void write(); }
+        }
         // Portada aesthetic automática (después de responder: el chat no espera).
         scheduleAutoCover(data.id as string, { title: m.title, objective: m.objective, kind: m.kind, blocks });
         return {

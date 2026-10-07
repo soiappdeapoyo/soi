@@ -135,7 +135,11 @@ export async function POST(req: Request) {
   // Escuchar primero, proponer después (reglas): sin herramientas de propuesta hasta que lo pida o acepte.
   const userTurns = messages.filter((m) => m.role === 'user').length;
   const prev = messages.at(-2);
-  const ritmo = proposalMode({ text, userTurns, previousAssistant: prev?.role === 'assistant' ? textOf(prev) : null, anxiety: state === 'anxiety' });
+  const ritmo = proposalMode({
+    text, userTurns, previousAssistant: prev?.role === 'assistant' ? textOf(prev) : null, anxiety: state === 'anxiety',
+    // Lo que contó en esta conversación y si ya hablaron del tema antes: decide si ya entiende lo suficiente.
+    userTexts: messages.filter((m) => m.role === 'user').map(textOf), hasHistory: pastTalks.length > 0,
+  });
   // Video rápido o dentro del Moment (nunca los dos), según cómo llega.
   const video = videoPolicy(state ? STATE_INTERVENTION[state] : null, text);
   const time = timeContextPrompt(profile?.timezone ?? 'America/Mexico_City');
