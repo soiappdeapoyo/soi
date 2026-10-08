@@ -20,6 +20,16 @@ import { relaxTools } from './relax-schema';
  */
 const PROVIDER_OPTIONS = { groq: { strictJsonSchema: false } };
 
+/**
+ * Tareas cortas (con tope de tokens: router, saludo, portada, entendimiento): poco o nada de razonamiento.
+ * gpt-oss (Groq) y DeepSeek razonan por defecto y el razonamiento cuenta dentro del tope: con 400 tokens
+ * se lo gastaban pensando y devolvían una respuesta vacía ("Failed to validate JSON" / "No output generated").
+ */
+const SHORT_TASK_OPTIONS = {
+  groq: { strictJsonSchema: false, reasoningEffort: 'low' },
+  deepseek: { thinking: { type: 'disabled' } },
+};
+
 export type ProviderName = 'gemini' | 'groq' | 'deepseek';
 type Provider = { name: ProviderName; model: () => LanguageModel };
 
@@ -190,7 +200,7 @@ export async function objectWithFallback<T extends z.ZodTypeAny>(opts: {
         output: Output.object({ schema: opts.schema }),
         instructions: opts.instructions,
         prompt: opts.prompt,
-        providerOptions: PROVIDER_OPTIONS,
+        providerOptions: opts.maxOutputTokens ? SHORT_TASK_OPTIONS : PROVIDER_OPTIONS,
         ...(opts.maxOutputTokens ? { maxOutputTokens: opts.maxOutputTokens } : {}),
         // Con tiempo límite, sin reintentos: si un proveedor no responde, pasamos al siguiente.
         ...(opts.timeoutMs ? { maxRetries: 0, abortSignal: AbortSignal.timeout(opts.timeoutMs) } : {}),

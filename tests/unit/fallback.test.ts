@@ -154,6 +154,23 @@ describe('streamWithFallback', () => {
     expect(provider).toBe('groq');
     expect(object).toEqual({ ok: true });
   });
+
+  it('objectWithFallback con tope de tokens pide poco razonamiento (si no, la respuesta llega vacía)', async () => {
+    const calls: unknown[] = [];
+    models.gemini = retiredModel;
+    models.groq = () => new MockLanguageModelV4({
+      doGenerate: async (opts) => {
+        calls.push(opts.providerOptions);
+        return { content: [{ type: 'text', text: '{"ok":true}' }], finishReason: { unified: 'stop', raw: undefined }, usage, warnings: [] };
+      },
+    });
+    const { objectWithFallback } = await import('@/lib/ai/fallback');
+    const { z } = await import('zod/v3');
+    await objectWithFallback({ schema: z.object({ ok: z.boolean() }), instructions: 'x', prompt: 'y', maxOutputTokens: 400 });
+    await objectWithFallback({ schema: z.object({ ok: z.boolean() }), instructions: 'x', prompt: 'y' });
+    expect(calls[0]).toMatchObject({ groq: { reasoningEffort: 'low' }, deepseek: { thinking: { type: 'disabled' } } });
+    expect(calls[1]).toEqual({ groq: { strictJsonSchema: false } });
+  });
 });
 
 describe('orden de proveedores', () => {
