@@ -2,7 +2,7 @@ import type { Capacity } from '@/config/capacities';
 
 /**
  * "Tu historia" como retrato, no como bitácora: en vez de narrar eventos por fecha (frío, sintético), muestra en
- * quién se está convirtiendo la persona, en presente y con sus palabras, para que pueda visualizarse.
+ * quién se está convirtiendo la persona, en presente, para que pueda visualizarse.
  * Puro (sin IA ni base de datos): solo traduce la evidencia real a rasgos de identidad.
  */
 
@@ -38,8 +38,6 @@ export type Portrait = {
   becoming: string[];
   /** "Eres alguien que…": rasgos demostrados con evidencia. */
   traits: string[];
-  /** Sus propias palabras (lo que escribió en sus Moments), sin fecha. */
-  words: string[];
   /** Hacia dónde va: su propósito o sus metas, con sus palabras. */
   future: string | null;
 };
@@ -66,13 +64,6 @@ export function buildPortrait(input: PortraitInput): Portrait {
   if (count('logro') >= 1) add('convierte sus intenciones en resultados que puede nombrar');
   if (!traits.length && input.evidence.length) add('decidió empezar, y eso ya cuenta');
 
-  const seen = new Set<string>();
-  const words = input.evidence
-    .filter((e) => (e.kind === 'reflexion' || e.kind === 'logro') && e.note && e.note.trim().length >= 12)
-    .map((e) => clip(e.note!, 160))
-    .filter((w) => { const k = w.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
-    .slice(0, 3);
-
   // Su propósito o sus metas, con sus palabras (no se reescriben: se citan).
   const aim = input.vision.aim?.trim();
   const goals = input.vision.goals.map((g) => g.trim()).filter(Boolean).slice(0, 2);
@@ -80,5 +71,5 @@ export function buildPortrait(input: PortraitInput): Portrait {
     ? `${clip(aim, 180)}${input.vision.target ? ` · ${clip(input.vision.target, 60)}` : ''}`
     : goals.length ? goals.map((g) => clip(g, 90)).join(' · ') : null;
 
-  return { becoming, traits, words, future };
+  return { becoming, traits, future };
 }

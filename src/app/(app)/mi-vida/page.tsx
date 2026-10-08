@@ -460,7 +460,7 @@ async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }
           <h2 id="ny-story" className="mb-2 text-sm font-medium text-soi-muted">Tu historia</h2>
           <div className="flex flex-col gap-4">
             <WeeklyStory />
-            {portrait.traits.length || portrait.words.length ? (
+            {portrait.traits.length || portrait.future ? (
               <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 shadow-ring">
                 {portrait.becoming.length > 0 && (
                   <p className="text-[17px] font-semibold leading-snug">
@@ -475,14 +475,6 @@ async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }
                     <ul className="mt-2 flex flex-col gap-2">
                       {portrait.traits.map((t) => <li key={t} className="flex gap-2 text-[15px] leading-relaxed"><Check className="mt-1 h-4 w-4 shrink-0 text-soi-accent" aria-hidden="true" />{t}.</li>)}
                     </ul>
-                  </div>
-                )}
-                {portrait.words.length > 0 && (
-                  <div>
-                    <p className="text-sm text-soi-muted">En tus palabras</p>
-                    <div className="mt-2 flex flex-col gap-2">
-                      {portrait.words.map((w) => <blockquote key={w} className="border-l-2 border-soi-accent-fill pl-3 text-[15px] italic leading-relaxed">«{w}»</blockquote>)}
-                    </div>
                   </div>
                 )}
                 {portrait.future && (
