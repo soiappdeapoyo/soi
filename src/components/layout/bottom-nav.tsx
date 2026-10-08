@@ -5,19 +5,22 @@ import { usePathname } from 'next/navigation';
 import { PRIMARY_TABS, hidesBottomNav, isTabActive } from '@/config/navigation';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
+import { isPlainClick, setPendingNav, splitHref, usePendingNav } from './pending-nav';
 
 /**
  * Barra de navegación inferior (móvil < 768 px), estilo Instagram / Substack: un rectángulo flotante con esquinas
  * redondeadas, separado de los bordes, translúcido y solo con íconos (la etiqueta queda para lectores de pantalla).
  *
  * Decisiones de movimiento (DESIGN.md + Emil Kowalski):
- * - Se toca decenas de veces al día → cambiar de pestaña es INSTANTÁNEO: sin transición de color ni indicador animado.
+ * - Se toca decenas de veces al día → cambiar de pestaña es INSTANTÁNEO: sin transición de color ni indicador animado,
+ *   y la pestaña tocada se marca activa en el acto (navegación optimista, `pending-nav.ts`).
  * - Única respuesta física: el ítem se hunde al presionar (scale 0.97, 120 ms, ease-out fuerte).
  * - Activo = ícono en tinta con trazo más grueso + cápsula de fondo (no solo color).
  * - Respeta el área segura del iPhone.
  */
 export function BottomNav({ avatarUrl, name }: { avatarUrl: string | null; name: string }) {
   const pathname = usePathname();
+  const pending = usePendingNav();
   if (hidesBottomNav(pathname)) return null;
 
   return (
@@ -27,12 +30,14 @@ export function BottomNav({ avatarUrl, name }: { avatarUrl: string | null; name:
     >
       <ul className="grid h-14 grid-cols-5 px-1.5">
         {PRIMARY_TABS.map((tab) => {
-          const active = isTabActive(pathname, tab);
+          // Al tocar, la pestaña se marca activa en el acto (no cuando el servidor termina de responder).
+          const active = isTabActive(pending ? splitHref(pending).path : pathname, tab);
           return (
             <li key={tab.id} className="flex items-center justify-center">
               <Link
                 href={tab.href}
                 aria-current={active ? 'page' : undefined}
+                onClick={(e) => { if (isPlainClick(e)) setPendingNav(tab.href); }}
                 className={cn(
                   'flex h-11 w-full max-w-16 select-none items-center justify-center rounded-2xl [-webkit-tap-highlight-color:transparent] [touch-action:manipulation]',
                   'transition-transform duration-(--dur-press) ease-out-strong active:scale-[0.97]',

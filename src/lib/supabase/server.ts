@@ -34,12 +34,33 @@ export function createAdminClient() {
   );
 }
 
+/** Lo que la app usa de la persona con sesión (sale del token verificado). */
+export type SessionUser = {
+  id: string;
+  email: string | undefined;
+  user_metadata: Record<string, unknown>;
+  app_metadata: Record<string, unknown>;
+};
+
 /**
  * Usuario autenticado o null. Cacheado por petición (React `cache`): el layout y la página comparten la misma
- * validación con Supabase Auth en lugar de hacer un viaje de red cada uno.
+ * validación.
+ *
+ * `getClaims()` verifica la firma del token (ES256) con la llave pública del proyecto, que se descarga una vez y
+ * queda en memoria: no hace un viaje a Supabase Auth en cada pantalla ni en cada llamada a la API, como
+ * `getUser()`. Un token vencido se renueva igual que antes; uno inválido o con la firma mal → sin sesión.
  */
 export const getSessionUser = cache(async () => {
   const supabase = await createServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getClaims();
+  const c = !error ? data?.claims : null;
+  const user: SessionUser | null = c?.sub
+    ? {
+        id: c.sub,
+        email: typeof c.email === 'string' && c.email ? c.email : undefined,
+        user_metadata: (c.user_metadata as Record<string, unknown> | undefined) ?? {},
+        app_metadata: (c.app_metadata as Record<string, unknown> | undefined) ?? {},
+      }
+    : null;
   return { supabase, user };
 });

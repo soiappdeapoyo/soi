@@ -353,7 +353,9 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 
 ## ⚡ Rendimiento
 - **Nada de IA en el camino de una pantalla:** la clasificación de identidad tiene presupuesto (`classifyLinks(..., { budgetMs: 2500 })`, proveedor rápido); si no alcanza, la pantalla sale con reglas y la IA termina en segundo plano (`after`) y guarda para la próxima visita.
-- **Una vez por petición** (React `cache`): `getSessionUser` (una sola validación con Supabase Auth entre layout y página), `getProfile`, `loadIdentityView` (identidades y batallas al terminar un Moment la comparten).
+- **Sesión sin viaje de red:** `getSessionUser` usa `auth.getClaims()` (verifica el token ES256 con la llave pública, en memoria) en vez de `getUser()`, que llamaba a Supabase Auth en cada pantalla y cada API. Devuelve `SessionUser` (`id`, `email`, `user_metadata`, `app_metadata`).
+- **Navegación optimista** (`src/components/layout/pending-nav.ts`): la barra inferior, el sidebar y las pestañas `?tab=` (`ProfileTabs`) se marcan activas al tocar, sin esperar al servidor; `NavProgress` muestra una barra fina arriba si tarda más de 150 ms (cambiar `?tab=` no muestra esqueleto). Esqueletos con la forma de cada pestaña: `hoy`, `chat`, `mi-vida`, `yo`, `impulso` (`loading.tsx`).
+- **Una vez por petición** (React `cache`): `getSessionUser` (una sola validación entre layout y página), `getProfile`, `loadIdentityView` (identidades y batallas al terminar un Moment la comparten).
 - **Al terminar un Moment** los guardados en memoria (con embedding) se escriben después de responder (`after`); la celebración no los espera.
 - **Chat:** el contexto (memoria, Momentum, continuidad, Moments parecidos) arranca en paralelo con el router; el mensaje del usuario y el eslabón se guardan sin bloquear el inicio de la respuesta; `embedText` reutiliza el mismo texto durante 60 s.
 - Medir en local: `next build && next start` con un proxy que añade latencia a Supabase y cuenta consultas por pantalla.

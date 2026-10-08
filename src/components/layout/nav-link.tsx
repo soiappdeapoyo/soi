@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { isTabActive } from '@/config/navigation';
+import { isPlainClick, setPendingNav, splitHref, usePendingNav } from './pending-nav';
 
 /**
  * Ítem del sidebar. Cambio de sección = instantáneo (alta frecuencia, DESIGN.md §1.2):
@@ -14,8 +15,13 @@ export function NavLink({ href, className, activeClassName, children, title, ari
   /** Prefijos que cuentan como activos (pestañas principales). */
   match?: readonly string[];
 }) {
-  const pathname = usePathname();
-  const params = useSearchParams();
+  const realPathname = usePathname();
+  const realParams = useSearchParams();
+  // Navegación optimista: mientras se abre otra pantalla, se marca como si ya estuviéramos ahí.
+  const pending = usePendingNav();
+  const target = pending ? splitHref(pending) : null;
+  const pathname = target?.path ?? realPathname;
+  const params = target?.params ?? realParams;
   const [path, query] = href.split('?');
   const q = query ? new URLSearchParams(query) : null;
   const agent = q?.get('agent') ?? null;
@@ -34,6 +40,7 @@ export function NavLink({ href, className, activeClassName, children, title, ari
       title={title}
       aria-label={ariaLabel}
       aria-current={active ? 'page' : undefined}
+      onClick={(e) => { if (isPlainClick(e)) setPendingNav(href); }}
       className={cn(className, active && activeClassName)}
     >
       {children}

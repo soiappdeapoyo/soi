@@ -1,6 +1,7 @@
 import { SidebarContent, type SidebarData } from './sidebar-content';
 import { MobileNav } from './mobile-nav';
 import { BottomNav } from './bottom-nav';
+import { NavProgress } from './nav-progress';
 
 /**
  * Desktop ≥1024: sidebar 280px · Tablet 768-1023: sidebar colapsado (72px, solo iconos) ·
@@ -12,6 +13,7 @@ export function AppShell({ data, children }: { data: SidebarData; children: Reac
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:shadow-raised">
         Saltar al contenido
       </a>
+      <NavProgress />
       <MobileNav data={data} />
       <aside className="sticky top-0 hidden h-dvh shrink-0 bg-soi-sidebar shadow-[1px_0_0_rgb(0_0_0/0.05)] md:block md:w-[72px] lg:w-[280px]" aria-label="Barra lateral">
         <div className="h-full lg:hidden"><SidebarContent data={data} compact /></div>
