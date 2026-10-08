@@ -17,6 +17,7 @@ import { detectCrisis } from '@/lib/ai/crisis';
 import type { Opener } from '@/lib/opener';
 import { unlockAudio } from '@/lib/voice/player';
 import { DictationButton } from './dictation';
+import { DICTATION_ENABLED } from '@/config/features';
 
 type Props = {
   conversationId?: string;
@@ -282,7 +283,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
             aria-describedby={paywalled ? 'paywall-note' : undefined}
             className="max-h-60 min-h-10 flex-1 resize-none bg-transparent py-2 text-base leading-6 outline-none placeholder:text-soi-subtle aria-disabled:opacity-60"
           />
-          {!busy && <DictationButton value={input} onChange={setInput} disabled={!canSend && !input} onUsed={() => { dictated.current = true; }} />}
+          {!busy && DICTATION_ENABLED && <DictationButton value={input} onChange={setInput} disabled={!canSend && !input} onUsed={() => { dictated.current = true; }} />}
           {busy ? (
             <button type="button" onClick={stop} aria-label="Detener" className="press flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-soi-tray text-soi-ink">
               <Square className="h-4 w-4 fill-current" aria-hidden="true" />
