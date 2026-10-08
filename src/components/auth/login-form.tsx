@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
+import { authFailureMessage } from '@/lib/auth-errors';
 
 function GoogleLogo() {
   return (
@@ -23,12 +24,15 @@ export function LoginForm() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState<'google' | 'email' | null>(null);
-  const [error, setError] = useState<string | null>(params.get('error') ? 'No pudimos iniciar sesión. Intenta de nuevo.' : null);
+  const [error, setError] = useState<string | null>(authFailureMessage(params.get('error')));
 
   const redirectTo = () => `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`;
 
   async function google() {
+    // Un solo inicio a la vez: un segundo toque reemplazaría la verificación del primero y fallaría.
+    if (loading) return;
     setLoading('google');
+    setError(null);
     const { error: e } = await createClient().auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: redirectTo(), queryParams: { prompt: 'select_account' } },
