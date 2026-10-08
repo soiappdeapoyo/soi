@@ -5,17 +5,21 @@ import { effectivePlan, trialDaysLeft } from '@/lib/billing/access-rules';
 import { AppShell } from '@/components/layout/app-shell';
 import { AnalyticsProvider } from '@/components/providers/analytics';
 import { TimezoneSync } from '@/components/layout/timezone-sync';
+import { getConsentState } from '@/lib/consent';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
 
-  const [profile, { data: conversations }] = await Promise.all([
+  const [profile, { data: conversations }, consent] = await Promise.all([
     getProfile(user.id),
     supabase.from('conversations').select('id, title')
       .eq('user_id', user.id).eq('is_archived', false)
       .order('is_pinned', { ascending: false }).order('last_message_at', { ascending: false }).limit(8),
+    getConsentState(user.id),
   ]);
+  // Sin consentimiento legal vigente (términos, aviso de privacidad y mayoría de edad), primero eso.
+  if (consent.state !== 'ok') redirect('/consentimiento');
 
   const plan = profile ? effectivePlan(profile) : 'free';
 

@@ -12,7 +12,7 @@ export default function LoginPage() {
       <p className="mb-8 mt-2 text-center text-soi-muted">Diseña tu identidad. Vive tu propósito.</p>
       <Suspense><LoginForm /></Suspense>
       <p className="mt-8 text-center text-xs text-soi-muted">
-        Al continuar aceptas los <Link href="/terminos" className="underline">Términos</Link> y la <Link href="/privacidad" className="underline">Política de privacidad</Link>.
+        Al entrar te pediremos aceptar los <Link href="/terminos" className="underline">Términos</Link> y el <Link href="/privacidad" className="underline">Aviso de privacidad</Link>, y confirmar que eres mayor de 18 años.
       </p>
     </main>
   );

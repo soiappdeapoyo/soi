@@ -83,3 +83,45 @@ export function wordHtmlToMarkdown(html: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
+
+export type AcceptanceRow = {
+  id: string; user_id: string | null; email: string | null; display_name: string | null;
+  terms_version: string | null; privacy_version: string | null; privacy_short_version: string | null;
+  accepted_terms: boolean; confirmed_adult: boolean; statements: string[];
+  ip: string | null; user_agent: string | null; accepted_at: string;
+};
+
+/** Registro de aceptaciones para el panel (búsqueda por correo, nombre o id de cuenta). */
+export async function listAcceptances({ q = '', userId, limit = 50 }: { q?: string; userId?: string; limit?: number } = {}) {
+  let query = createAdminClient().from('legal_acceptances').select('*').order('accepted_at', { ascending: false }).limit(limit);
+  if (userId) query = query.eq('user_id', userId);
+  const term = q.trim().replace(/[%,()]/g, '');
+  if (term) {
+    query = /^[0-9a-f-]{36}$/i.test(term)
+      ? query.eq('user_id', term)
+      : query.or(`email.ilike.%${term}%,display_name.ilike.%${term}%`);
+  }
+  const { data, error } = await query;
+  return { rows: (data ?? []) as AcceptanceRow[], error: error?.message ?? null };
+}
+
+/** Una aceptación con el texto de las versiones aceptadas (para la constancia imprimible). */
+export async function acceptanceDetail(id: string) {
+  const a = createAdminClient();
+  const { data } = await a.from('legal_acceptances').select('*').eq('id', id).maybeSingle();
+  if (!data) return null;
+  const row = data as AcceptanceRow;
+  const ids = [row.terms_version, row.privacy_version, row.privacy_short_version].filter((v): v is string => Boolean(v));
+  const { data: docs } = ids.length
+    ? await a.from('legal_documents').select('id, kind, content, file_name, created_at').in('id', ids)
+    : { data: [] };
+  const byId = new Map((docs ?? []).map((d) => [d.id as string, d as { id: string; kind: LegalKind; content: string; file_name: string | null; created_at: string }]));
+  return {
+    row,
+    docs: {
+      terminos: row.terms_version ? byId.get(row.terms_version) ?? null : null,
+      privacidad: row.privacy_version ? byId.get(row.privacy_version) ?? null : null,
+      privacidad_corto: row.privacy_short_version ? byId.get(row.privacy_short_version) ?? null : null,
+    },
+  };
+}

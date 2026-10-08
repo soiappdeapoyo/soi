@@ -4,6 +4,8 @@ import { requireAdmin, audit } from '@/lib/admin/auth';
 import { userDetail } from '@/lib/admin/data';
 import { UserActions } from '@/components/admin/user-actions';
 import { outputText, type RunOutput } from '@/lib/moments/outputs';
+import { listAcceptances } from '@/lib/legal';
+import { AcceptancesList } from '@/components/admin/acceptances-list';
 
 const d = (iso: string | null | undefined) => (iso ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)) : '—');
 const n = (v: number) => new Intl.NumberFormat('es').format(v);
@@ -22,7 +24,7 @@ function Section({ title, children, count }: { title: string; children: React.Re
 export default async function PanelUser({ params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
   const { id } = await params;
-  const u = await userDetail(id);
+  const [u, acceptances] = await Promise.all([userDetail(id), listAcceptances({ userId: id, limit: 20 })]);
   if (!u) notFound();
   await audit(admin.id, 'ver_cuenta', id);
   const p = u.profile ?? {};
@@ -35,6 +37,12 @@ export default async function PanelUser({ params }: { params: Promise<{ id: stri
         <h1 className="mt-1 text-2xl font-semibold">{String(p.display_name ?? 'Sin nombre')}</h1>
         <p className="text-sm text-soi-muted">{u.auth.email} · entra con {u.auth.provider ?? '—'} · registro {d(u.auth.createdAt)} · último acceso {d(u.auth.lastSignIn)}</p>
       </div>
+
+      <Section title="Consentimiento legal" count={acceptances.rows.length}>
+        {acceptances.rows.length
+          ? <AcceptancesList rows={acceptances.rows} />
+          : <p className="text-sm text-soi-muted">Aún no acepta los términos ni declara ser mayor de 18 años (se le pedirá al entrar).</p>}
+      </Section>
 
       <Section title="Plan y uso">
         <dl className="nums grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
