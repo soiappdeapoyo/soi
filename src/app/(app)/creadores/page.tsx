@@ -12,6 +12,8 @@ import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import { parseHighlights } from '@/lib/creators/profile';
 import { CREATOR_REVENUE_SHARE, formatPrice, transformationScore, type CreatorStats } from '@/config/creators';
 import type { CreatorProfile } from '@/types/database';
+import { CREATOR_ACCOUNTS_ENABLED } from '@/config/features';
+import { isAdminEmail } from '@/lib/admin/auth';
 
 export const metadata: Metadata = { title: 'Panel profesional' };
 
@@ -29,6 +31,8 @@ const PROMISES = [
 export default async function CreadoresPage() {
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
+  // Oculto en el lanzamiento: solo administradores (para seguir desarrollándolo).
+  if (!CREATOR_ACCOUNTS_ENABLED && !isAdminEmail(user.email)) redirect('/yo');
   const [{ data: creator }, profile] = await Promise.all([
     supabase.from('creator_profiles').select('*').eq('user_id', user.id).maybeSingle(),
     getProfile(user.id),

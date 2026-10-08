@@ -1,3 +1,4 @@
+import { CREATOR_ACCOUNTS_ENABLED } from '@/config/features';
 /**
  * Las 5 pestañas principales (barra inferior en móvil, primer grupo del sidebar en escritorio).
  * `match`: prefijos de ruta que cuentan como "dentro" de la pestaña.
@@ -28,11 +29,12 @@ export const MY_LIFE = [
   { href: '/mi-vida?tab=biblioteca', label: 'Biblioteca', icon: 'BookMarked' },
 ] as const;
 
-/** Crear: diseñar Moments y (con perfil de creador) publicarlos. */
-export const CREATE_LINKS = [
+/** Crear: diseñar Moments y (con perfil de creador) publicarlos. La cuenta de creador, oculta en el lanzamiento. */
+const ALL_CREATE_LINKS = [
   { href: '/m/nuevo', label: 'Crear un Moment', icon: 'Layers' },
   { href: '/creadores', label: 'Cuenta de creador', icon: 'PenLine' },
 ] as const;
+export const CREATE_LINKS = ALL_CREATE_LINKS.filter((l) => CREATOR_ACCOUNTS_ENABLED || l.href !== '/creadores');
 
 export const PROTECTED_PREFIXES = [
   '/hoy', '/impulso', '/mi-vida', '/yo',

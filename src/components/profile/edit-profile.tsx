@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Avatar } from '@/components/feed/avatar';
 import { compressImage, uploadMedia } from '@/lib/media/upload';
+import { CREATOR_ACCOUNTS_ENABLED } from '@/config/features';
 import { MAX_PROFILE_LINKS, type ProfileLink } from '@/lib/social/profile-links';
 
 type Props = { name: string; bio: string | null; avatarUrl: string | null; links: ProfileLink[]; isCreator: boolean };
@@ -79,7 +80,7 @@ export function EditProfileButton(props: Props) {
             <Textarea id="ep-bio" value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} rows={3} placeholder="Qué estás construyendo en tu vida ahora" />
             <p className="nums mt-1 text-right text-xs text-soi-subtle">{bio.length}/200</p>
           </div>
-          <fieldset>
+          {(props.isCreator || CREATOR_ACCOUNTS_ENABLED) && <fieldset>
             <legend className="text-sm font-medium">Enlaces</legend>
             {props.isCreator ? (
               <>
@@ -107,7 +108,7 @@ export function EditProfileButton(props: Props) {
                 Los enlaces son para creadores. <Link href="/creadores" className="text-soi-accent underline underline-offset-4">Activa tu cuenta de creador</Link>.
               </p>
             )}
-          </fieldset>
+          </fieldset>}
           <div className="sticky bottom-0 flex justify-end gap-2 bg-white pt-2">
             <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
             <Button size="sm" type="submit" disabled={busy !== 'idle'}>{busy === 'saving' ? 'Guardando…' : 'Guardar'}</Button>

@@ -21,6 +21,7 @@ import { FeedList } from '@/components/feed/feed-list';
 import { MomentFlowCard } from '@/components/moments/moment-flow-card';
 import { ESLABON_LABEL } from '@/config/agents';
 import { RITUAL_PHASES, type RitualPhase } from '@/config/navigation';
+import { CREATOR_ACCOUNTS_ENABLED } from '@/config/features';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Yo' };
@@ -44,7 +45,7 @@ const ACCOUNT_LINKS = [
   { href: '/creadores', label: 'Cuenta de creador' },
   { href: '/planes', label: 'Planes SOI+' },
   { href: '/ajustes', label: 'Ajustes' },
-];
+].filter((l) => CREATOR_ACCOUNTS_ENABLED || l.href !== '/creadores');
 
 /**
  * Yo, estilo Substack: la vista principal es tu perfil tal como lo ven los demás (foto, bio, enlaces, seguidores)
@@ -79,7 +80,7 @@ export default async function YoPage({ searchParams }: { searchParams: Promise<{
         actions={(
           <>
             <EditProfileButton name={card.display_name} bio={profile?.bio ?? card.bio} avatarUrl={card.avatar_url} links={card.links} isCreator={Boolean(creator)} />
-            {layer && <Link href="/creadores" className="press inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium shadow-ring hover:shadow-soft">Panel profesional</Link>}
+            {layer && CREATOR_ACCOUNTS_ENABLED && <Link href="/creadores" className="press inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium shadow-ring hover:shadow-soft">Panel profesional</Link>}
             <Link href={`/u/${user.id}?vista=publica`} className="press inline-flex h-9 items-center rounded-lg px-3 text-sm text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink">Ver como los demás</Link>
           </>
         )}
