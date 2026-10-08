@@ -6,6 +6,8 @@ import { AppShell } from '@/components/layout/app-shell';
 import { AnalyticsProvider } from '@/components/providers/analytics';
 import { TimezoneSync } from '@/components/layout/timezone-sync';
 import { getConsentState } from '@/lib/consent';
+import { NavTracker } from '@/components/analytics/nav-tracker';
+import { Suspense } from 'react';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, user } = await getSessionUser();
@@ -34,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       conversations: (conversations ?? []) as { id: string; title: string }[],
     }}>
       <AnalyticsProvider userId={user.id} />
+      <Suspense fallback={null}><NavTracker /></Suspense>
       <TimezoneSync stored={profile?.timezone ?? null} auto={profile?.timezone_auto ?? true} />
       {children}
     </AppShell>

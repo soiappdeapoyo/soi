@@ -9,6 +9,9 @@ export async function GET(req: Request) {
   // Retención de crisis_log (dato sensible): 90 días.
   const { error: purgeError } = await admin.rpc('purge_crisis_logs');
   if (purgeError) console.error('[cron] purge_crisis_logs', purgeError.message);
+  // Navegación de /panel/analytics: se conserva 180 días.
+  const { error: navError } = await admin.rpc('purge_nav_events');
+  if (navError) console.error('[cron] purge_nav_events', navError.message);
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   return Response.json({ ok: true });
 }

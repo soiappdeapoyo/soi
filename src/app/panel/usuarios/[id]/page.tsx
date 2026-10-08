@@ -6,6 +6,8 @@ import { UserActions } from '@/components/admin/user-actions';
 import { outputText, type RunOutput } from '@/lib/moments/outputs';
 import { listAcceptances } from '@/lib/legal';
 import { AcceptancesList } from '@/components/admin/acceptances-list';
+import { userSessions } from '@/lib/admin/analytics';
+import { SessionPath, dur } from '@/components/admin/nav-viz';
 
 const d = (iso: string | null | undefined) => (iso ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)) : '—');
 const n = (v: number) => new Intl.NumberFormat('es').format(v);
@@ -24,7 +26,7 @@ function Section({ title, children, count }: { title: string; children: React.Re
 export default async function PanelUser({ params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
   const { id } = await params;
-  const [u, acceptances] = await Promise.all([userDetail(id), listAcceptances({ userId: id, limit: 20 })]);
+  const [u, acceptances, nav] = await Promise.all([userDetail(id), listAcceptances({ userId: id, limit: 20 }), userSessions(id)]);
   if (!u) notFound();
   await audit(admin.id, 'ver_cuenta', id);
   const p = u.profile ?? {};
@@ -36,6 +38,21 @@ export default async function PanelUser({ params }: { params: Promise<{ id: stri
         <Link href="/panel/usuarios" className="text-sm text-soi-muted hover:underline">← Usuarios</Link>
         <h1 className="mt-1 text-2xl font-semibold">{String(p.display_name ?? 'Sin nombre')}</h1>
         <p className="text-sm text-soi-muted">{u.auth.email} · entra con {u.auth.provider ?? '—'} · registro {d(u.auth.createdAt)} · último acceso {d(u.auth.lastSignIn)}</p>
+      </div>
+
+      <div id="navegacion">
+        <Section title="Navegación" count={nav.sessions.length}>
+          {nav.sessions.length ? (
+            <ul className="flex flex-col gap-4">
+              {nav.sessions.map((s) => (
+                <li key={s.id} className="border-t border-black/[0.06] pt-3 first:border-0 first:pt-0">
+                  <p className="mb-1.5 text-xs text-soi-muted">{d(s.start)} · {dur(Date.parse(s.end) - Date.parse(s.start))} · {s.views.length} {s.views.length === 1 ? 'pantalla' : 'pantallas'}</p>
+                  <SessionPath session={s} />
+                </li>
+              ))}
+            </ul>
+          ) : <p className="text-sm text-soi-muted">{nav.error ? `No se pudo leer (${nav.error}).` : 'Sin navegación registrada en los últimos 30 días.'}</p>}
+        </Section>
       </div>
 
       <Section title="Consentimiento legal" count={acceptances.rows.length}>
