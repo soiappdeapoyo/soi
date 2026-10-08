@@ -2,8 +2,7 @@ import { getSettings } from '@/lib/settings';
 import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess, getProfile } from '@/lib/billing/check-access';
-import { hasKey } from '@/lib/ai/models';
-import { cachedVoice, normalizeSpeech, synthesize, voiceKey } from '@/lib/voice/server';
+import { cachedVoice, hasTtsProvider, normalizeSpeech, synthesize, voiceKey } from '@/lib/voice/server';
 import { guideVoice, VOICE_STYLES, type VoiceStyle } from '@/config/voices';
 
 export const maxDuration = 60;
@@ -20,7 +19,7 @@ const Body = z.object({
 /** Tope de audio NUEVO por persona y día (lo servido desde caché no cuenta). 20 min ≈ $0.27 en 2026. */
 
 /**
- * Voz guía neuronal (Gemini TTS). Caché por texto + voz + estilo: lo que ya se generó (para cualquier
+ * Voz guía neuronal (Gemini TTS por OpenRouter; respaldo: Google directo). Caché por texto + voz + estilo: lo que ya se generó (para cualquier
  * persona) se sirve sin costo. Sin acceso (Free), sin clave o sobre el tope: 204 y el cliente usa la voz del navegador.
  */
 export async function POST(req: Request) {
@@ -28,7 +27,7 @@ export async function POST(req: Request) {
   if (!user) return new Response('No autorizado', { status: 401 });
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return new Response('Datos inválidos', { status: 400 });
-  if (!hasKey('gemini')) return new Response(null, { status: 204 });
+  if (!hasTtsProvider()) return new Response(null, { status: 204 });
   if (!(await canAccess(user.id, 'tts')).allowed) return new Response(null, { status: 204 });
 
   const text = normalizeSpeech(parsed.data.text);

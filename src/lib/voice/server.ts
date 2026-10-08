@@ -7,6 +7,14 @@ import { VOICE_STYLES, VOICE_STYLE_VERSION, guideVoice, type VoiceStyle } from '
 
 /** Modelo de voz configurable (los proveedores cambian de modelo: una variable, sin deploy de código). */
 export const TTS_MODEL = process.env.AI_MODEL_TTS || 'gemini-3.8-flash-tts';
+/** El mismo modelo por OpenRouter (principal): mismas voces y estilos, por eso comparte la caché. */
+export const OPENROUTER_TTS_MODEL = process.env.AI_MODEL_TTS_OPENROUTER || `google/${TTS_MODEL}`;
+const OPENROUTER_SPEECH_URL = 'https://openrouter.ai/api/v1/audio/speech';
+
+/** Hay con qué generar voz: OpenRouter (principal) o Google directo (respaldo). */
+export function hasTtsProvider(env: Record<string, string | undefined> = process.env) {
+  return Boolean(env.OPENROUTER_API_KEY?.trim() || env.GOOGLE_GENERATIVE_AI_API_KEY?.trim());
+}
 const SAMPLE_RATE = 24_000;
 const BUCKET = 'voice-cache';
 
@@ -54,9 +62,23 @@ export async function cachedVoice(key: string): Promise<Uint8Array | null> {
   return data ? new Uint8Array(await data.arrayBuffer()) : null;
 }
 
-/** Genera la locución con la voz y el estilo de la guía y la guarda en caché. Devuelve MP3 y segundos. */
-export async function synthesize(text: string, voiceId: string | null | undefined, style: VoiceStyle) {
-  const voice = guideVoice(voiceId);
+/** Gemini TTS por OpenRouter: PCM crudo de 16 bits, 24 kHz mono. */
+export async function speechViaOpenRouter(text: string, voice: string, style: VoiceStyle, fetchImpl: typeof fetch = fetch): Promise<Int16Array> {
+  const res = await fetchImpl(OPENROUTER_SPEECH_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'X-Title': 'SOI',
+    },
+    body: JSON.stringify({ model: OPENROUTER_TTS_MODEL, input: text, voice, instructions: VOICE_STYLES[style], response_format: 'pcm' }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
+  return pcmFromWav(new Uint8Array(await res.arrayBuffer()));
+}
+
+async function speechViaGoogle(text: string, voice: string, style: VoiceStyle): Promise<Int16Array> {
   const { audio } = await generateSpeech({
     model: google.speech(TTS_MODEL),
     text,
@@ -66,8 +88,35 @@ export async function synthesize(text: string, voiceId: string | null | undefine
     abortSignal: AbortSignal.timeout(45_000),
     maxRetries: 1,
   });
-  const pcm = pcmFromWav(audio.uint8Array);
-  if (!pcm.length) throw new Error('audio vacío');
+  return pcmFromWav(audio.uint8Array);
+}
+
+/**
+ * Genera la locución con la voz y el estilo de la guía y la guarda en caché. Devuelve MP3 y segundos.
+ * OpenRouter primero (se paga con sus créditos); si falla o no hay clave, Google directo.
+ */
+export async function synthesize(text: string, voiceId: string | null | undefined, style: VoiceStyle) {
+  const voice = guideVoice(voiceId);
+  const providers: [string, () => Promise<Int16Array>][] = [];
+  if (process.env.OPENROUTER_API_KEY?.trim()) providers.push(['openrouter', () => speechViaOpenRouter(text, voice, style)]);
+  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()) providers.push(['google', () => speechViaGoogle(text, voice, style)]);
+
+  let pcm: Int16Array | null = null;
+  const errors: string[] = [];
+  for (const [name, run] of providers) {
+    try {
+      pcm = await run();
+      if (pcm.length) break;
+      errors.push(`${name}: audio vacío`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[tts] ${name} falló: ${message}`);
+      errors.push(`${name}: ${message}`);
+    }
+    pcm = null;
+  }
+  if (!pcm) throw new Error(errors.join(' · ') || 'sin proveedor de voz');
+
   const mp3 = encodeMp3(pcm);
   const key = voiceKey(text, voice, style);
   await createAdminClient().storage.from(BUCKET).upload(`${key}.mp3`, mp3, { contentType: 'audio/mpeg', upsert: true });

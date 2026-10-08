@@ -50,3 +50,36 @@ describe('voz guía (cliente)', () => {
     expect(guideVoice('Achernar')).toBe('Achernar');
   });
 });
+
+describe('voz guía por OpenRouter', () => {
+  it('pide Gemini TTS con la voz, el estilo y PCM, y lee el audio crudo', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'sk-or-test');
+    const { speechViaOpenRouter, OPENROUTER_TTS_MODEL } = await import('@/lib/voice/server');
+    const { VOICE_STYLES } = await import('@/config/voices');
+    const samples = Int16Array.from({ length: 480 }, (_, i) => i);
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array(samples.buffer), { headers: { 'Content-Type': 'audio/pcm' } }));
+    const pcm = await speechViaOpenRouter('Respira', 'Sulafat', 'calm', fetchMock as unknown as typeof fetch);
+    expect(pcm).toEqual(samples);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://openrouter.ai/api/v1/audio/speech');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer sk-or-test');
+    expect(JSON.parse(init.body as string)).toEqual({
+      model: OPENROUTER_TTS_MODEL, input: 'Respira', voice: 'Sulafat', instructions: VOICE_STYLES.calm, response_format: 'pcm',
+    });
+    expect(OPENROUTER_TTS_MODEL).toBe('google/gemini-3.8-flash-tts');
+    vi.unstubAllEnvs();
+  });
+
+  it('un error de OpenRouter se lanza con su estado (para pasar al respaldo)', async () => {
+    const { speechViaOpenRouter } = await import('@/lib/voice/server');
+    const fetchMock = vi.fn(async () => new Response('{"error":"insufficient credits"}', { status: 402 }));
+    await expect(speechViaOpenRouter('Hola', 'Sulafat', 'guide', fetchMock as unknown as typeof fetch)).rejects.toThrow(/OpenRouter 402/);
+  });
+
+  it('hay voz con cualquiera de las dos claves', async () => {
+    const { hasTtsProvider } = await import('@/lib/voice/server');
+    expect(hasTtsProvider({ OPENROUTER_API_KEY: 'x' })).toBe(true);
+    expect(hasTtsProvider({ GOOGLE_GENERATIVE_AI_API_KEY: 'y' })).toBe(true);
+    expect(hasTtsProvider({ OPENROUTER_API_KEY: ' ' })).toBe(false);
+  });
+});
