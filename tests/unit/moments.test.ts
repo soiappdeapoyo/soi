@@ -36,11 +36,13 @@ describe('catálogo de acciones', () => {
 });
 
 describe('Moments oficiales', () => {
-  it('son las 5 rutinas, cada bloque cita su fuente y todos los bloques son válidos', () => {
-    expect(OFFICIAL_MOMENTS).toHaveLength(5);
+  it('son las 5 rutinas + el Cierre del día, cada bloque cita su fuente y todos los bloques son válidos', () => {
+    expect(OFFICIAL_MOMENTS).toHaveLength(6);
     for (const m of OFFICIAL_MOMENTS) {
       expect(m.author).toBeTruthy();
-      expect(m.blocks.every((x) => x.source?.includes(m.author!))).toBe(true);
+      // Cada paso cita al autor de la rutina; el Cierre del día combina autores y cada paso cita el suyo.
+      if (m.slug === 'cierre_del_dia') expect(m.blocks.every((x) => (x.source?.length ?? 0) > 10)).toBe(true);
+      else expect(m.blocks.every((x) => x.source?.includes(m.author!))).toBe(true);
       expect(parseBlocks(m.blocks).errors, m.slug!).toEqual([]);
     }
   });

@@ -38,7 +38,7 @@ export const refOf = (m: Pick<MomentFlow, 'id' | 'official' | 'slug'>) => (m.off
 export const PART_SUGGEST: Record<DayPart, { kinds: MomentKind[]; slugs: string[]; why: string }> = {
   manana: { kinds: ['daily', 'growth'], slugs: ['brian_tracy_5min', 'miracle_morning', 'five_am_club', 'dispenza_protocol'], why: 'Empieza el día con intención' },
   tarde: { kinds: ['growth', 'learning', 'recovery'], slugs: ['dispenza_protocol'], why: 'Un respiro para reconectar y seguir' },
-  noche: { kinds: ['recovery', 'daily'], slugs: ['neville_sats'], why: 'Baja el ritmo y prepara tu descanso' },
+  noche: { kinds: ['recovery', 'daily'], slugs: ['cierre_del_dia', 'neville_sats'], why: 'Cierra tu día y prepara tu descanso' },
 };
 
 /**

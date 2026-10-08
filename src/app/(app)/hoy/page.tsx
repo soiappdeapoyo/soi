@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { Check, ListPlus, Play } from 'lucide-react';
+import { Check, Compass, ListPlus, Play } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import { loadToday } from '@/lib/today';
 import { greetingForHour } from '@/lib/opener';
-import { loadDayPlan, playHref } from '@/lib/day-plan';
+import { loadDayPlan, partOfDay, playHref } from '@/lib/day-plan';
+import { loadNorth } from '@/lib/north';
+import { officialMoment } from '@/config/official-moments';
 import { CheckinChips } from '@/components/today/checkin-chips';
 import { BreathingCard } from '@/components/today/breathing-card';
 import { PlayLink } from '@/components/today/play-link';
@@ -17,7 +19,7 @@ import { ACTIONS } from '@/config/actions';
 import { recommendMoment } from '@/lib/moments/server';
 import { MODE_KINDS } from '@/lib/moments/recommend';
 import type { MomentFlow } from '@/lib/moments/types';
-import { cn } from '@/lib/utils';
+import { cn, startOfTodayISO } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Hoy' };
 
@@ -41,17 +43,28 @@ export default async function HoyPage() {
   if (!user) redirect('/login');
   const { profile, access } = await getAccessMap(user.id);
   const tz = profile?.timezone ?? 'America/Mexico_City';
-  const [today, plan] = await Promise.all([
+  const [today, plan, north] = await Promise.all([
     loadToday(supabase, user.id, profile, access.daily_ritual),
     loadDayPlan(supabase, user.id, tz),
+    loadNorth(supabase, user.id, profile),
   ]);
+  // Hacia dónde va: su propósito o meta; si no, la identidad que eligió.
+  const aim = north.aim ?? north.identity?.name ?? null;
   const { decision } = today;
   const items = plan.items;
   const pending = items.filter((i) => !i.done);
   const next = items.find((i) => i.id === plan.next && !i.done) ?? pending[0] ?? null;
   const left = pending.reduce((a, i) => a + (i.moment?.required_minutes ?? 0), 0);
   // Sin plan (o ya vivido), una sola propuesta según el estado.
-  const suggestion = !next && decision.mode !== 'REFLECT' ? await recommendMoment(supabase, user.id, MODE_KINDS[decision.mode]) : null;
+  // De noche, lo primero que se propone es cerrar el día (si aún no lo hizo hoy).
+  const night = partOfDay(plan.hour) === 'noche' && decision.mode !== 'REGULATE';
+  const closedToday = night && !next
+    ? Boolean((await supabase.from('moment_runs').select('id').eq('user_id', user.id).eq('moment_slug', 'cierre_del_dia')
+      .not('completed_at', 'is', null).gte('completed_at', startOfTodayISO(tz)).limit(1)).data?.length)
+    : true;
+  const suggestion = next ? null
+    : night && !closedToday ? officialMoment('cierre_del_dia')
+    : decision.mode !== 'REFLECT' ? await recommendMoment(supabase, user.id, MODE_KINDS[decision.mode]) : null;
   const first = (profile?.display_name ?? '').trim().split(/\s+/)[0];
 
   const headline = next
@@ -68,6 +81,18 @@ export default async function HoyPage() {
         <h1 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight">{headline}</h1>
         <p className="mt-1 text-[15px] text-soi-muted">{detail}</p>
       </header>
+
+      {/* Su norte, en una línea: lo que hace hoy tiene una dirección. */}
+      {aim ? (
+        <p className="-mt-1 flex items-start gap-2 text-[15px] leading-snug">
+          <Compass className="mt-0.5 h-4 w-4 shrink-0 text-soi-accent" aria-hidden="true" />
+          <span className="line-clamp-2"><span className="text-soi-muted">Hoy avanzas hacia:</span> <span className="font-medium">{aim}</span></span>
+        </p>
+      ) : (
+        <Link href="/chat?nueva=1&agent=napoleon_hill" className="press -mt-1 flex items-center gap-2 self-start text-sm text-soi-accent">
+          <Compass className="h-4 w-4" aria-hidden="true" /> ¿Hacia dónde vas? Defínelo con SOI
+        </Link>
+      )}
 
       {decision.mode === 'REGULATE' && (
         <section aria-label="Antes de empezar" className="rounded-[20px] bg-soi-sidebar p-3">
@@ -104,7 +129,7 @@ export default async function HoyPage() {
               <span aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-black/85 via-black/45 to-black/15" />
             </>
           )}
-          <p id="sug" className={cn('text-xs font-medium text-white/60', suggestion.cover && 'pt-16 text-white/80')}>SOI te propone</p>
+          <p id="sug" className={cn('text-xs font-medium text-white/60', suggestion.cover && 'pt-16 text-white/80')}>{suggestion.slug === 'cierre_del_dia' ? 'Para cerrar tu día' : 'SOI te propone'}</p>
           <p className="mt-1 text-balance text-[22px] font-semibold leading-snug">{suggestion.title}</p>
           <p className="nums mt-1 text-sm text-white/70">{suggestion.required_minutes} min</p>
           <PlayLink href={`/m/${suggestion.official ? suggestion.slug : suggestion.id}/play`} prefetch label={`Empezar ${suggestion.title}`}

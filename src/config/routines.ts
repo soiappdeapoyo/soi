@@ -1,4 +1,5 @@
-type Step = { id: string; label: string; seconds?: number; minutes?: number; quote?: string };
+/** `source` en un paso: cuando la rutina combina autores, cada paso cita el suyo (Regla #8). */
+type Step = { id: string; label: string; seconds?: number; minutes?: number; quote?: string; source?: string };
 
 export const ROUTINES = {
   brian_tracy_5min: {
@@ -49,6 +50,18 @@ export const ROUTINES = {
       { id: 'relax', label: 'Relájate profundamente en la cama.', minutes: 3 },
       { id: 'scene', label: 'Visualiza una escena corta del deseo cumplido.', minutes: 10 },
       { id: 'sleep', label: 'Repite la escena hasta dormirte.', minutes: 2 },
+    ],
+  },
+  cierre_del_dia: {
+    id: 'cierre_del_dia', label: 'Cierre del día', author: 'SOI',
+    totalMinutes: 12, source: 'Joe Dispenza, Brian Tracy y Neville Goddard', eslabon: 'resultado',
+    steps: [
+      { id: 'breathe', label: 'Suelta el día: respira lento, alargando la exhalación.', minutes: 1, source: 'Respiración con exhalación prolongada' },
+      { id: 'victory', label: 'Tu victoria de hoy: ¿qué hiciste bien hoy, aunque sea pequeño?', minutes: 2, source: 'Joe Dispenza — Breaking the Habit of Being Yourself (revisión de la noche)' },
+      { id: 'learning', label: 'Lo que te enseñó el día: ¿qué aprendiste o qué harías distinto?', minutes: 2, source: 'Joe Dispenza — Breaking the Habit of Being Yourself (revisión de la noche)' },
+      { id: 'gratitude', label: 'Gratitud: tres cosas de hoy por las que das gracias.', minutes: 2, source: 'Joe Dispenza — Breaking the Habit of Being Yourself (gratitud de la noche)' },
+      { id: 'tomorrow', label: 'Prepara mañana: ¿cuál es la tarea más importante? Decídela hoy.', minutes: 2, source: 'Brian Tracy — Eat That Frog! (planear el día la noche anterior)' },
+      { id: 'sats', label: 'Antes de dormir: imagina una escena corta de mañana saliendo bien, como si ya hubiera pasado. Siéntela.', minutes: 3, source: 'Neville Goddard — Feeling is the Secret (SATS)' },
     ],
   },
 } as const satisfies Record<string, {

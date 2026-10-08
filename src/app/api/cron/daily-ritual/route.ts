@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { generateRitual } from '@/lib/ritual';
+import { generateRitual, ritualContent } from '@/lib/ritual';
+import { loadNorth } from '@/lib/north';
 import { sendPush } from '@/lib/push/send';
 import { todayISO } from '@/lib/utils';
 import type { UserProfile } from '@/types/database';
@@ -22,15 +23,15 @@ export async function GET(req: Request) {
       .eq('user_id', p.user_id).eq('category', 'ritual_diario').eq('metadata->>date', date).maybeSingle();
     if (exists) continue;
     try {
-      const ritual = await generateRitual(p, date);
+      const ritual = await generateRitual(p, date, await loadNorth(db, p.user_id, p).catch(() => null));
       await db.from('agent_knowledge').insert({
         user_id: p.user_id, category: 'ritual_diario', title: `Ritual ${date}`,
-        content: `${ritual.affirmation}\n${ritual.visualization}\n${ritual.action}\n${ritual.signal}`,
+        content: ritualContent(ritual),
         metadata: ritual, tags: ['ritual', ritual.phase],
       });
       generated++;
       if (p.push_subscription) {
-        await sendPush(p.push_subscription, { title: 'Tu ritual de hoy está listo ✨', body: ritual.affirmation, url: '/ritual' });
+        await sendPush(p.push_subscription, { title: 'Tu ritual de hoy está listo ✨', body: ritual.intention || ritual.affirmation, url: '/ritual' });
       }
     } catch (e) {
       console.error('[daily-ritual]', p.user_id, e);

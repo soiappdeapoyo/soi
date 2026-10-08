@@ -14,7 +14,7 @@ export const RouterSchema = z.object({
     .describe('Eslabón SOI que parece estar roto en este momento'),
   suggestedRoutine: z.enum([
     'brian_tracy_5min', 'miracle_morning', 'five_am_club',
-    'dispenza_protocol', 'neville_sats', 'none',
+    'dispenza_protocol', 'neville_sats', 'cierre_del_dia', 'none',
   ]).default('none'),
 });
 

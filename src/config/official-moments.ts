@@ -36,6 +36,14 @@ const MAPS: Record<RoutineId, StepMap> = {
     afternoon: (l) => ({ type: 'walk', config: { instruction: l } }),
     evening: () => ({ type: 'gratitude', config: { count: 3 } }),
   },
+  cierre_del_dia: {
+    breathe: () => ({ type: 'breathing', config: { pattern: 'calma' } }),
+    victory: (l) => ({ type: 'reflection', config: { question: l } }),
+    learning: (l) => ({ type: 'reflection', config: { question: l } }),
+    gratitude: () => ({ type: 'gratitude', config: { count: 3 } }),
+    tomorrow: (l) => ({ type: 'writing', config: { prompt: l } }),
+    sats: (l) => ({ type: 'visualization', config: { scene: l } }),
+  },
   neville_sats: {
     relax: (l) => ({ type: 'meditation', config: { guide: l } }),
     scene: (l) => ({ type: 'visualization', config: { scene: l } }),
@@ -45,6 +53,7 @@ const MAPS: Record<RoutineId, StepMap> = {
 
 const KIND: Record<RoutineId, MomentKind> = {
   brian_tracy_5min: 'daily', miracle_morning: 'daily', five_am_club: 'daily', dispenza_protocol: 'daily', neville_sats: 'recovery',
+  cierre_del_dia: 'daily',
 };
 
 const OBJECTIVE: Record<RoutineId, string> = {
@@ -53,6 +62,7 @@ const OBJECTIVE: Record<RoutineId, string> = {
   five_am_club: 'Moverte, reflexionar y crecer antes de que empiece el ruido.',
   dispenza_protocol: 'Soltar el pasado y reconectar contigo a lo largo del día.',
   neville_sats: 'Dormirte sintiendo el deseo ya cumplido.',
+  cierre_del_dia: 'Reconocer tu día, quedarte con lo que te enseñó y dejar listo el mañana antes de dormir.',
 };
 
 function build(id: RoutineId): MomentFlow {
@@ -66,7 +76,7 @@ function build(id: RoutineId): MomentFlow {
       title: s.label.split(':')[0]!.slice(0, 120),
       minutes: 'minutes' in s && s.minutes ? s.minutes : Math.max(1, Math.round((seconds ?? 60) / 60)),
       ...(seconds ? { seconds } : {}),
-      source: `${r.author} — ${r.source}`,
+      source: 'source' in s && s.source ? s.source : `${r.author} — ${r.source}`,
       config: mapped.config as Record<string, unknown>,
     };
   });

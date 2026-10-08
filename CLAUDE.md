@@ -238,9 +238,11 @@ Las Action Cards ya no se crean desde el chat: existen como bloque `next_step` d
 
 ## ⏰ Rutinas y Ritual Diario
 
-- `src/config/routines.ts` (5 rutinas con autor, fuente y eslabón) sigue siendo la fuente de verdad del contenido; `src/config/official-moments.ts` las convierte en **Moments oficiales** (slug = id de la rutina). `routineForMinutes()` para el onboarding.
+- `src/config/routines.ts` (5 rutinas + el Cierre del día, con autor, fuente —por paso cuando combina autores— y eslabón) sigue siendo la fuente de verdad del contenido; `src/config/official-moments.ts` las convierte en **Moments oficiales** (slug = id de la rutina). `routineForMinutes()` para el onboarding.
 - El antiguo `RitualTimer` se generalizó en el reproductor de Moments (`src/components/moments/moment-player.tsx`); `/rutinas` redirige a Impulso (Diarios) y `/rutinas/[id]` a `/m/[id]/play`.
-- **Ritual diario** (`/ritual`, `src/lib/ritual.ts`): 4 partes (afirmación → visualización → acción → señal), generado por fase.
+- **Ritual diario** (`/ritual`, `src/lib/ritual.ts`): arriba la **Brújula del día** (hacia dónde avanza, la intención del día, cómo actúa hoy su identidad y el si-entonces para su enemigo reciente) y luego 4 partes (afirmación **puente**, creíble hoy → visualización → acción → señal), generado por fase con su norte (`loadNorth`, `src/lib/north.ts`: propósito de Hill o primera meta, identidad principal, enemigo más frecuente de 14 días, obstáculo). `RITUAL_VERSION` = 2: un ritual anterior del día se rehace una vez.
+- **Cierre del día** (Moment oficial `cierre_del_dia`, 12 min, eslabón resultado): respiración → victoria → aprendizaje → gratitud → la tarea más importante de mañana → escena SATS; cada paso cita su fuente (Dispenza, Brian Tracy, Neville). Lo escrito alimenta la memoria y Mi Nuevo Yo. De noche, Hoy lo propone primero si aún no se hizo, y Mi día lo sugiere.
+- **Hoy avanzas hacia…**: una línea arriba de Hoy con su propósito o meta (o su identidad); sin ninguno, "¿Hacia dónde vas? Defínelo con SOI" abre el chat con Hill.
 - **Racha sin castigo** (`register_ritual_day`): 1 día sin practicar no rompe; 2 días consumen un escudo; hitos 7/21/40/90 regalan un escudo; la fase avanza con la racha (chispa → vacío → alineación → manifestación). Mensaje: "Ayer no te vimos, pero aquí seguimos. ¿Retomamos?"
 - **Cron:** `/api/cron/daily-ritual` (`0 6 * * *`, solo SOI+, push) y `/api/cron/expire-trials`.
 

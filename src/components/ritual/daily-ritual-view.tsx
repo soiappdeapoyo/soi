@@ -8,7 +8,12 @@ import { Button, buttonClass } from '@/components/ui/button';
 import { RITUAL_PHASES, type RitualPhase } from '@/config/navigation';
 import { cn } from '@/lib/utils';
 
-type Ritual = { affirmation: string; visualization: string; action: string; signal: string; source: string; phase: RitualPhase };
+type Ritual = {
+  affirmation: string; visualization: string; action: string; signal: string; source: string; phase: RitualPhase;
+  /** Brújula del día (rituales desde la v2). */
+  intention?: string; embody?: string; ifThen?: string;
+  compass?: { aim: string | null; identity: string | null; enemy: string | null };
+};
 type Key = 'affirmation' | 'visualization' | 'action' | 'signal';
 
 const PARTS: { key: Key; label: string; eslabon: string }[] = [
@@ -50,6 +55,28 @@ export function DailyRitualView({ ritual, alreadyDone, ttsAllowed }: { ritual: R
         <h1 className="text-3xl font-semibold">Tu ritual de hoy</h1>
         <p className="text-sm text-soi-muted">Inspirado en: <em>{ritual.source}</em></p>
       </header>
+
+      {ritual.intention && (
+        <section aria-labelledby="compass" className="rounded-[20px] bg-soi-ink p-5 text-white">
+          <h2 id="compass" className="text-xs font-medium text-white/60">Brújula del día</h2>
+          {ritual.compass?.aim && <p className="mt-2 text-sm text-white/70">Hoy avanzas hacia: <span className="text-white">{ritual.compass.aim}</span></p>}
+          <p className="mt-2 text-balance text-[20px] font-semibold leading-snug">{ritual.intention}</p>
+          <dl className="mt-4 flex flex-col gap-3 border-t border-white/15 pt-4 text-[15px] leading-relaxed">
+            {ritual.embody && (
+              <div>
+                <dt className="text-xs text-white/60">{ritual.compass?.identity ? `Hoy eres ${ritual.compass.identity}` : 'Hoy eres tu mejor versión'}</dt>
+                <dd className="mt-0.5">{ritual.embody}</dd>
+              </div>
+            )}
+            {ritual.ifThen && (
+              <div>
+                <dt className="text-xs text-white/60">{ritual.compass?.enemy ? `Si aparece ${ritual.compass.enemy}` : 'Si algo te frena'}</dt>
+                <dd className="mt-0.5">{ritual.ifThen}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
 
       <ol className="flex flex-col gap-2 rounded-[28px] bg-soi-tray p-2">
         {PARTS.map((p, i) => (
