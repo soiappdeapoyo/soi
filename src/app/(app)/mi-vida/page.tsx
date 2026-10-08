@@ -12,6 +12,7 @@ import { MomentFlowCard } from '@/components/moments/moment-flow-card';
 import { MyMomentsGrid } from '@/components/moments/my-moments-grid';
 import { IdentitySetup } from '@/components/identity/identity-setup';
 import { WeeklyStory } from '@/components/identity/weekly-story';
+import { buildPortrait } from '@/lib/identity/portrait';
 import { loadIdentityView } from '@/lib/identity/view';
 import { intensityLabel, loadBattles } from '@/lib/battles';
 import { ENEMIES } from '@/config/enemies';
@@ -367,11 +368,14 @@ async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }
   const profile = await getProfile(userId);
   const tz = profile?.timezone ?? 'America/Mexico_City';
   const v = await loadIdentityView(supabase, userId, profile, tz);
-  const fmt = (iso: string) => new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric', timeZone: tz }).format(new Date(iso));
   const name = profile?.display_name?.split(/\s+/)[0];
   const main = v.active[0];
   const week = v.evidence.filter((e) => Date.now() - Date.parse(e.at) < 7 * 86_400_000);
   const last = v.evidence[0];
+  const portrait = buildPortrait({
+    identities: v.active.map((i) => ({ name: i.name, evidenceCount: i.evidenceCount })),
+    capacities: v.capacities, evidence: v.evidence, vision: v.vision,
+  });
 
   if (!main) {
     return (
@@ -456,16 +460,38 @@ async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }
           <h2 id="ny-story" className="mb-2 text-sm font-medium text-soi-muted">Tu historia</h2>
           <div className="flex flex-col gap-4">
             <WeeklyStory />
-            {v.story.length ? (
-              <ol className="relative flex flex-col gap-4 border-l border-black/10 pl-4">
-                {v.story.map((e, i) => (
-                  <li key={i} className="relative">
-                    <span aria-hidden="true" className="absolute -left-[1.3rem] top-1.5 h-2.5 w-2.5 rounded-full bg-soi-accent-fill" />
-                    <p className="text-xs text-soi-muted">{fmt(e.at)}</p>
-                    <p className="text-[15px] leading-relaxed">{e.text}</p>
-                  </li>
-                ))}
-              </ol>
+            {portrait.traits.length || portrait.words.length ? (
+              <div className="flex flex-col gap-5 rounded-[20px] bg-white p-5 shadow-ring">
+                {portrait.becoming.length > 0 && (
+                  <p className="text-[17px] font-semibold leading-snug">
+                    Te estás convirtiendo en {portrait.becoming.map((b, i) => (
+                      <span key={b}>{i > 0 && (i === portrait.becoming.length - 1 ? ' y ' : ', ')}<span className="text-soi-accent">{b}</span></span>
+                    ))}.
+                  </p>
+                )}
+                {portrait.traits.length > 0 && (
+                  <div>
+                    <p className="text-sm text-soi-muted">Ya eres alguien que…</p>
+                    <ul className="mt-2 flex flex-col gap-2">
+                      {portrait.traits.map((t) => <li key={t} className="flex gap-2 text-[15px] leading-relaxed"><Check className="mt-1 h-4 w-4 shrink-0 text-soi-accent" aria-hidden="true" />{t}.</li>)}
+                    </ul>
+                  </div>
+                )}
+                {portrait.words.length > 0 && (
+                  <div>
+                    <p className="text-sm text-soi-muted">En tus palabras</p>
+                    <div className="mt-2 flex flex-col gap-2">
+                      {portrait.words.map((w) => <blockquote key={w} className="border-l-2 border-soi-accent-fill pl-3 text-[15px] italic leading-relaxed">«{w}»</blockquote>)}
+                    </div>
+                  </div>
+                )}
+                {portrait.future && (
+                  <div className="rounded-[14px] bg-soi-sidebar p-3">
+                    <p className="text-sm text-soi-muted">Hacia dónde vas</p>
+                    <p className="mt-1 text-[15px] leading-relaxed">{portrait.future}</p>
+                  </div>
+                )}
+              </div>
             ) : <p className="text-sm text-soi-muted">Tu historia empieza con tu primer Moment.</p>}
           </div>
         </section>
