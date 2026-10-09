@@ -12,6 +12,9 @@ export async function GET(req: Request) {
   // Navegación de /panel/analytics: se conserva 180 días.
   const { error: navError } = await admin.rpc('purge_nav_events');
   if (navError) console.error('[cron] purge_nav_events', navError.message);
+  // Embudo de la landing: se conserva 365 días.
+  const { error: funnelError } = await admin.rpc('purge_funnel_events');
+  if (funnelError) console.error('[cron] purge_funnel_events', funnelError.message);
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   return Response.json({ ok: true });
 }

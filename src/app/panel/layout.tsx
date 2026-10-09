@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { Bell } from 'lucide-react';
 import { requireAdmin } from '@/lib/admin/auth';
+import { unseenSignups } from '@/lib/admin/signups';
 
 export const metadata: Metadata = { title: 'Panel', robots: { index: false, follow: false } };
 export const dynamic = 'force-dynamic';
@@ -17,6 +19,7 @@ const NAV = [
 /** Panel de administración: sin enlaces desde la app ni la landing; para quien no es administrador, no existe (404). */
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const admin = await requireAdmin();
+  const unseen = await unseenSignups(admin.id).catch(() => 0);
   return (
     <div className="min-h-dvh bg-soi-sidebar print:bg-white">
       <header className="sticky top-0 z-10 bg-white/90 shadow-ring backdrop-blur print:hidden">
@@ -25,7 +28,12 @@ export default async function PanelLayout({ children }: { children: React.ReactN
           <nav aria-label="Panel" className="flex flex-wrap gap-1">
             {NAV.map((n) => <Link key={n.href} href={n.href} className="press rounded-lg px-2.5 py-1.5 text-sm text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink">{n.label}</Link>)}
           </nav>
-          <span className="ml-auto truncate text-xs text-soi-subtle">{admin.email}</span>
+          <Link href="/panel/notificaciones" aria-label={unseen ? `Notificaciones: ${unseen} registros nuevos` : 'Notificaciones'}
+            className="press relative ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04] hover:text-soi-ink">
+            <Bell className="h-5 w-5" aria-hidden="true" />
+            {unseen > 0 && <span className="nums absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-soi-accent-fill px-1 text-[11px] font-semibold text-white">{unseen > 99 ? '99+' : unseen}</span>}
+          </Link>
+          <span className="truncate text-xs text-soi-subtle">{admin.email}</span>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 print:max-w-none print:p-0">{children}</main>

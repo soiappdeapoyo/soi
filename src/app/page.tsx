@@ -5,6 +5,7 @@ import { buttonClass } from '@/components/ui/button';
 import { Cta } from '@/components/landing/cta';
 import { HowItWorksFilm } from '@/components/emotions/how-it-works-film';
 import type { FilmScript } from '@/config/emotions';
+import { FunnelBeacon } from '@/components/landing/funnel-beacon';
 import { getSettings } from '@/lib/settings';
 import { officialCover } from '@/lib/moments/types';
 
@@ -87,6 +88,7 @@ export default async function LandingPage() {
   const { trialDays: TRIAL_DAYS, plans } = await getSettings();
   return (
     <main id="main" className="bg-soi-canvas">
+      <FunnelBeacon event="landing_view" />
       {/* ---------- Héroe: el mundo de los videos ---------- */}
       <section className="relative isolate overflow-hidden bg-soi-ink text-white">
         <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
@@ -162,7 +164,7 @@ export default async function LandingPage() {
         <h2 id="como" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Del video a tu vida, en tres pasos</h2>
         {/* En el teléfono la animación va antes de los pasos; en escritorio, a la derecha. */}
         <div className="mt-8 grid items-center gap-10 lg:grid-cols-[1fr_auto] lg:gap-12">
-          <HowItWorksFilm script={FILM} className="lg:order-last" />
+          <HowItWorksFilm script={FILM} className="lg:order-last" trackAs="landing" />
           <div>
             <ol className="flex flex-col gap-3">
               {STEPS.map((s) => (

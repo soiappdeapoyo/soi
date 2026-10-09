@@ -131,6 +131,8 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 | `0005_streaks_community_push.sql` | Escudo de racha, `register_ritual_day`, `toggle_reaction`, país, avatar, push, autor/demo en posts, **permisos por columna en `user_profiles` (anti-bypass del paywall)**, endurecimiento de `decrement_free_query`/`expire_trials` |
 | `0006_atomic_free_queries.sql` | `consume_chat_query` (comprueba y descuenta atómicamente), `refund_chat_query` (si fallan todos los proveedores), `purge_crisis_logs` (retención 90 días) |
 | `0008_momentum_signals.sql` | Amplía `momentum_events.kind` con `video_watched` y `checkin` |
+| `0030_funnel_film_events.sql` | `funnel_events.event` admite `film_progress` (escena 1–5 alcanzada) y `film_interact` (pausa, reproducir, toque de escena) de la animación «cómo funciona SOI» (`detail` = `<lugar>:<escena o acción>`; lugares `landing`, `emociones`, `emociones:<slug>`); se ve en `/panel/analytics` |
+| `0029_funnel_events.sql` | `funnel_events`: embudo landing → `/login` → registro (visitante anónimo `soi_vid`, país y ciudad de Vercel sin IP, dominio de referencia); sin acceso para clientes; `purge_funnel_events` (365 días) |
 | `0028_nav_events.sql` | `nav_events`: navegación por sesión (`view`/`leave`, ruta normalizada) para `/panel/analytics`; sin acceso para clientes; `purge_nav_events` (180 días, en el cron de expire-trials) |
 | `0027_legal_acceptances.sql` | `legal_acceptances`: constancias del consentimiento legal (versiones aceptadas, texto exacto de las declaraciones, IP, navegador, correo y nombre copiados); solo escribe el servidor, cada quien lee las suyas |
 | `0026_legal_privacy_short.sql` | `legal_documents.kind` admite `privacidad_corto` (aviso de privacidad simplificado, `/privacidad/simplificado`) |
@@ -340,6 +342,9 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 - **Ventas:** solo a través del precio del Moment dentro de SOI. Los textos siguen sin links ni autopromoción.
 - **Stripe:** `/api/blueprints/[id]/checkout` (mode `payment`, `metadata.kind = 'blueprint'`). El webhook separa compras de Moments de suscripciones.
 - **Pendiente:** pagos a creadores (Stripe Connect), programas con sesiones grupales, office hours y mentoría 1:1, verificación de creadores (`is_verified` solo con service role).
+
+## 🔎 Hub SEO `/emociones`
+Páginas públicas (`src/app/emociones`, contenido en `src/config/emotions.ts`): ansiedad, estrés, desmotivación, falta de enfoque, baja autoestima, sentirse estancado y procrastinación. Cada una: señales, el ciclo pensamiento → emoción → acción → resultado, su enemigo interior, una práctica con fuente, hábitos con fuente, preguntas frecuentes y relacionadas; JSON-LD (Article, HowTo, FAQPage, BreadcrumbList), sitemap y robots. La animación **«cómo funciona SOI»** (`HowItWorksFilm`, `src/components/emotions/how-it-works-film.tsx`: cuéntale → te escucha → diseña tu Moment → lo vives con voz → evidencia, con la UI real, guion `FilmScript` por emoción) también va en la landing (guion SATS). Se mide con `trackAs` (embudo `film_progress`/`film_interact` + PostHog) y se ve en `/panel/analytics` → «La animación». Agregar una emoción = una entrada en `EMOTIONS`.
 
 ## 🛠️ Panel de administración (`/panel`)
 - Sin enlaces desde la app ni la landing, `noindex` y fuera de robots.txt. **Acceso:** sesión + correo en `ADMIN_EMAILS` (variable de entorno, separados por coma; `src/lib/admin/auth.ts`). Para cualquier otra persona, páginas y API responden 404.

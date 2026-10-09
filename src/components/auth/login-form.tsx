@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { authFailureMessage } from '@/lib/auth-errors';
+import { trackFunnel } from '@/lib/analytics/funnel-client';
 
 function GoogleLogo() {
   return (
@@ -26,6 +27,9 @@ export function LoginForm() {
   const [loading, setLoading] = useState<'google' | 'email' | null>(null);
   const [error, setError] = useState<string | null>(authFailureMessage(params.get('error')));
 
+  // Embudo: llegó a la pantalla de entrar (desde la landing o directo).
+  useEffect(() => { trackFunnel('login_view', params.get('error') ? 'tras_error' : undefined); }, [params]);
+
   const redirectTo = () => `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`;
 
   async function google() {
@@ -33,6 +37,7 @@ export function LoginForm() {
     if (loading) return;
     setLoading('google');
     setError(null);
+    trackFunnel('auth_start', 'google');
     const { error: e } = await createClient().auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: redirectTo(), queryParams: { prompt: 'select_account' } },
@@ -43,6 +48,7 @@ export function LoginForm() {
   async function magic(e: React.FormEvent) {
     e.preventDefault();
     setLoading('email');
+    trackFunnel('auth_start', 'correo');
     const { error: err } = await createClient().auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo() } });
     setLoading(null);
     if (err) setError(err.message); else setSent(true);

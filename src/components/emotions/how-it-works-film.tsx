@@ -7,6 +7,9 @@ import {
 } from 'lucide-react';
 import type { FilmIcon, FilmScript } from '@/config/emotions';
 import { cn } from '@/lib/utils';
+import { track } from '@/components/providers/analytics';
+import { trackFunnel } from '@/lib/analytics/funnel-client';
+import { filmDetail, type FilmInteraction } from '@/lib/analytics/funnel';
 
 const ICONS: Record<FilmIcon, LucideIcon> = {
   wind: Wind, brain: Brain, eye: Eye, pencil: Pencil, sparkles: Sparkles, arrow: ArrowRight, timer: Timer,
@@ -34,7 +37,11 @@ const BREATH_MS = 5200;
  * (WCAG 2.2.2) y, con movimiento reducido, no arranca solo y muestra cada escena completa. La parte visual es
  * decorativa: el guion completo va en texto para lectores de pantalla.
  */
-export function HowItWorksFilm({ script, tone = 'light', className }: { script: FilmScript; tone?: 'light' | 'dark'; className?: string }) {
+export function HowItWorksFilm({ script, tone = 'light', className, trackAs }: {
+  script: FilmScript; tone?: 'light' | 'dark'; className?: string;
+  /** Lugar para el embudo de /panel/analytics (`landing`, `emociones`, `emociones:<slug>`); sin él no se mide. */
+  trackAs?: string;
+}) {
   const typeEnd = TYPE_START + script.message.length * TYPE_MS;
   const durations = useMemo(() => [Math.max(5000, typeEnd + 1700), 4800, 5800, 6400, 5800], [typeEnd]);
 
@@ -77,7 +84,23 @@ export function HowItWorksFilm({ script, tone = 'light', className }: { script: 
     setLoop((l) => l + 1);
   }, [elapsed, scene, durations]);
 
-  const goTo = (i: number) => { setScene(i); setElapsed(0); setLoop((l) => l + 1); };
+  // Medición: cada escena alcanzada una vez por carga (mientras corre o al tocarla) y las interacciones.
+  const sentScenes = useRef(new Set<number>());
+  const reach = (i: number) => {
+    if (!trackAs || sentScenes.current.has(i)) return;
+    sentScenes.current.add(i);
+    trackFunnel('film_progress', filmDetail(trackAs, i + 1));
+    track('film_progress', { where: trackAs, scene: i + 1 });
+  };
+  const interact = (what: FilmInteraction) => {
+    if (!trackAs) return;
+    trackFunnel('film_interact', filmDetail(trackAs, what));
+    track('film_interact', { where: trackAs, what });
+  };
+  useEffect(() => { if (running) reach(scene); });
+
+  const goTo = (i: number) => { setScene(i); setElapsed(0); setLoop((l) => l + 1); interact('scene'); reach(i); };
+  const toggle = () => { interact(playing ? 'pause' : 'play'); setPlaying((p) => !p); };
 
   // Con movimiento reducido cada escena se ve completa (sin coreografía interna).
   const t = reduced ? Number.POSITIVE_INFINITY : elapsed;
@@ -257,7 +280,7 @@ export function HowItWorksFilm({ script, tone = 'light', className }: { script: 
       {/* ---------- Leyenda y controles ---------- */}
       <div className="w-full max-w-[340px]">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pausar la animación' : 'Reproducir la animación'}
+          <button type="button" onClick={toggle} aria-label={playing ? 'Pausar la animación' : 'Reproducir la animación'}
             className={cn('press grid h-11 w-11 shrink-0 place-items-center rounded-full', dark ? 'text-white ring-1 ring-white/20 hover:bg-white/10' : 'text-soi-ink shadow-ring hover:bg-soi-tray')}>
             {playing ? <Pause className="h-4 w-4" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
           </button>

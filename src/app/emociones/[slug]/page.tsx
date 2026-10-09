@@ -152,7 +152,7 @@ export default async function EmotionPage({ params }: Props) {
               <Cta href={signup} where={`emociones:${e.slug}`} className={buttonClass('primary', 'lg', 'mt-7 w-full sm:w-auto')}>Crear mi Moment para {e.name.toLowerCase()}</Cta>
               <p className="mt-3 text-sm text-soi-muted">{trialDays} días con todo incluido. Sin tarjeta.</p>
             </div>
-            <HowItWorksFilm script={e.film} />
+            <HowItWorksFilm script={e.film} trackAs={`emociones:${e.slug}`} />
           </div>
         </section>
 

@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin/auth';
 import { emailsById, loadNavEvents } from '@/lib/admin/analytics';
+import { loadFunnel } from '@/lib/admin/signups';
+import { analyzeFilm, analyzeFunnel } from '@/lib/analytics/funnel';
+import { FunnelView } from '@/components/admin/funnel-view';
+import { FilmView } from '@/components/admin/film-view';
 import { analyzeFlows, buildSessions, neighbors, pageLabel, type Friction } from '@/lib/analytics/nav';
 import { Bars, SessionPath, dur, pct, routeLabel } from '@/components/admin/nav-viz';
 import { cn } from '@/lib/utils';
@@ -40,7 +44,9 @@ export default async function PanelAnalytics({ searchParams }: { searchParams: P
   await requireAdmin();
   const sp = await searchParams;
   const days = RANGES.find((r) => String(r) === sp.dias) ?? 7;
-  const { events, truncated, error } = await loadNavEvents({ days });
+  const [{ events, truncated, error }, funnelData] = await Promise.all([loadNavEvents({ days }), loadFunnel(days)]);
+  const funnel = analyzeFunnel(funnelData.rows);
+  const film = analyzeFilm(funnelData.rows);
   const sessions = buildSessions(events);
   const f = analyzeFlows(sessions);
   const focus = sp.pantalla && f.pages.some((p) => p.path === sp.pantalla) ? sp.pantalla : f.entries[0]?.path ?? null;
@@ -69,6 +75,19 @@ export default async function PanelAnalytics({ searchParams }: { searchParams: P
       {error && <p className="rounded-[14px] bg-white p-4 text-sm shadow-ring">No se pudo leer la navegación ({error}). ¿Ya se aplicó la migración 0028?</p>}
       {truncated && <p className="text-sm text-soi-muted">Se analizaron los primeros 50 000 eventos del periodo; elige un periodo más corto para ver todo.</p>}
 
+      <Card title="De la landing a la app" hint="Visitantes únicos (mismo navegador) en el periodo. País y ciudad aproximados por la conexión; no se guarda la IP.">
+        {funnelData.error
+          ? <p className="text-sm text-soi-muted">No se pudo leer el embudo ({funnelData.error}). ¿Ya se aplicó la migración 0029?</p>
+          : <FunnelView f={funnel} />}
+      </Card>
+
+      <Card title="La animación «cómo funciona SOI»" hint="Visitantes únicos que llegaron a cada escena (cada quien cuenta hasta la más lejana), en la landing y en /emociones.">
+        {funnelData.error
+          ? <p className="text-sm text-soi-muted">No se pudo leer el embudo ({funnelData.error}). ¿Ya se aplicaron las migraciones 0029 y 0030?</p>
+          : <FilmView film={film} />}
+      </Card>
+
+      <h2 className="-mb-2 mt-2 text-lg font-semibold">Dentro de la app</h2>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Stat label="Sesiones" value={String(f.summary.sessions)} />
         <Stat label="Personas" value={String(f.summary.users)} />

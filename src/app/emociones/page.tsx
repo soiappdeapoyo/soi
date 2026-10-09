@@ -74,7 +74,7 @@ export default async function EmotionsHub() {
           </div>
           <section aria-labelledby="como-funciona">
             <h2 id="como-funciona" className="sr-only">Cómo funciona SOI</h2>
-            <HowItWorksFilm script={HUB_FILM} tone="dark" />
+            <HowItWorksFilm script={HUB_FILM} tone="dark" trackAs="emociones" />
           </section>
         </div>
       </section>
