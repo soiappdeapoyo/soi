@@ -181,6 +181,18 @@ img:not([data-bare]) { outline: 1px solid rgb(0 0 0 / 0.08); outline-offset: -1p
 @keyframes frame-flip { 0%, 38% { opacity: 0; } 50%, 88% { opacity: 1; } 100% { opacity: 0; } }
 .exercise-flip { animation: frame-flip 2.2s var(--ease-in-out-strong) infinite; }
 
+/* ---------- Animación "cómo funciona SOI" (/emociones): corre sola, se pausa con data-paused ---------- */
+@keyframes film-in { from { opacity: 0; transform: translateY(10px); } }
+@keyframes film-breathe {
+  0%, 100% { transform: scale(0.82); opacity: 0.55; }
+  50%      { transform: scale(1.08); opacity: 1; }
+}
+@keyframes film-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes film-voice { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+@keyframes film-grow { from { transform: scaleX(var(--from, 0)); } }
+.film-in { animation: film-in 450ms var(--ease-out-strong) backwards; }
+.film[data-paused] *, .film[data-paused] *::before, .film[data-paused] *::after { animation-play-state: paused !important; }
+
 /* ---------- Drawer (Vaul) ---------- */
 [data-vaul-drawer] {
   transition-duration: var(--dur-slow) !important;
@@ -203,4 +215,5 @@ img:not([data-bare]) { outline: 1px solid rgb(0 0 0 / 0.08); outline-offset: -1p
   .press:active, .press-deep:active { transform: none !important; }
   [data-breath-halo] { animation: none !important; transform: none !important; opacity: 0.45 !important; }
   .exercise-flip { animation: none !important; opacity: 0 !important; }
+  .film-voice-bar { animation: none !important; }
 }
