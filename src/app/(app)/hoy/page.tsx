@@ -20,6 +20,9 @@ import { recommendMoment } from '@/lib/moments/server';
 import { MODE_KINDS } from '@/lib/moments/recommend';
 import type { MomentFlow } from '@/lib/moments/types';
 import { cn, startOfTodayISO } from '@/lib/utils';
+import { loadJourney } from '@/lib/journey-server';
+import { firstStepsProgress, nextStep } from '@/lib/journey';
+import { NextStepCard } from '@/components/today/next-step-card';
 
 export const metadata: Metadata = { title: 'Hoy' };
 
@@ -43,10 +46,11 @@ export default async function HoyPage() {
   if (!user) redirect('/login');
   const { profile, access } = await getAccessMap(user.id);
   const tz = profile?.timezone ?? 'America/Mexico_City';
-  const [today, plan, north] = await Promise.all([
+  const [today, plan, north, journey] = await Promise.all([
     loadToday(supabase, user.id, profile, access.daily_ritual),
     loadDayPlan(supabase, user.id, tz),
     loadNorth(supabase, user.id, profile),
+    loadJourney(supabase, user.id, access.routine_execution),
   ]);
   // Hacia dónde va: su propósito o meta; si no, la identidad que eligió.
   const aim = north.aim ?? north.identity?.name ?? null;
@@ -55,6 +59,11 @@ export default async function HoyPage() {
   const pending = items.filter((i) => !i.done);
   const next = items.find((i) => i.id === plan.next && !i.done) ?? pending[0] ?? null;
   const left = pending.reduce((a, i) => a + (i.moment?.required_minutes ?? 0), 0);
+  // El loop principal: mientras haya un paso claro (primeros pasos, seguimiento o algo a medias), Hoy muestra solo ese.
+  // Si lo que quedó a medias ya es lo siguiente de su día, la tarjeta de su día ya lo retoma.
+  const step = nextStep(journey);
+  const welcome = firstStepsProgress(journey);
+  const guided = step.kind !== 'routine' && !(step.kind === 'resume' && next?.partial != null);
   // Sin plan (o ya vivido), una sola propuesta según el estado.
   // De noche, lo primero que se propone es cerrar el día (si aún no lo hizo hoy).
   const night = partOfDay(plan.hour) === 'noche' && decision.mode !== 'REGULATE';
@@ -62,15 +71,17 @@ export default async function HoyPage() {
     ? Boolean((await supabase.from('moment_runs').select('id').eq('user_id', user.id).eq('moment_slug', 'cierre_del_dia')
       .not('completed_at', 'is', null).gte('completed_at', startOfTodayISO(tz)).limit(1)).data?.length)
     : true;
-  const suggestion = next ? null
+  const suggestion = next || guided ? null
     : night && !closedToday ? officialMoment('cierre_del_dia')
     : decision.mode !== 'REFLECT' ? await recommendMoment(supabase, user.id, MODE_KINDS[decision.mode]) : null;
   const first = (profile?.display_name ?? '').trim().split(/\s+/)[0];
 
-  const headline = next
+  const headline = welcome ? (step.kind === 'follow_up' ? 'Viviste tu primer Moment' : 'Tus primeros pasos en SOI')
+    : next
     ? pending.length === items.length ? 'Tu día está listo' : `Te ${pending.length === 1 ? 'queda 1 Moment' : `quedan ${pending.length} Moments`}`
     : items.length ? 'Viviste tu día' : decision.headline;
-  const detail = next
+  const detail = welcome ? 'Tres pasos y SOI empieza a conocerte de verdad.'
+    : next
     ? `${left} min en total. Dale play y SOI te guía de uno en uno.`
     : items.length ? 'Todo lo que planeaste, lo hiciste. Descansa: eso también cuenta.' : decision.detail;
 
@@ -94,7 +105,7 @@ export default async function HoyPage() {
         </Link>
       )}
 
-      {decision.mode === 'REGULATE' && (
+      {!welcome && decision.mode === 'REGULATE' && (
         <section aria-label="Antes de empezar" className="rounded-[20px] bg-soi-sidebar p-3">
           <p className="px-1 pb-2 text-xs font-medium text-soi-muted">Antes de empezar, un minuto para ti</p>
           <div className="rounded-lg bg-white p-4 shadow-ring"><BreathingCard /></div>
@@ -102,7 +113,9 @@ export default async function HoyPage() {
       )}
 
       {/* Lo que sigue: un solo botón grande. */}
-      {next?.moment ? (
+      {guided ? (
+        <NextStepCard step={step} steps={welcome} />
+      ) : next?.moment ? (
         <section aria-labelledby="next" className="relative isolate overflow-hidden rounded-[20px] bg-soi-ink p-5 text-white">
           {/* La portada es la protagonista de Hoy: de fondo, con degradado para que el texto se lea. */}
           {next.moment.cover && (
@@ -185,7 +198,7 @@ export default async function HoyPage() {
             ))}
           </ol>
         </section>
-      ) : (
+      ) : welcome ? null : (
         <Link href="/mi-vida?tab=dia" className="press flex items-center gap-3 rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-soi-accent-soft text-soi-accent"><ListPlus className="h-5 w-5" aria-hidden="true" /></span>
           <span className="min-w-0 flex-1">
@@ -195,12 +208,15 @@ export default async function HoyPage() {
         </Link>
       )}
 
-      <section aria-label="¿Cómo llegas hoy?">
-        <p className="mb-2 px-1 text-xs font-medium text-soi-muted">¿Cómo llegas hoy?</p>
-        <CheckinChips current={today.checkin} />
-      </section>
+      {/* En los primeros pasos, nada compite con el siguiente paso. */}
+      {!welcome && (
+        <section aria-label="¿Cómo llegas hoy?">
+          <p className="mb-2 px-1 text-xs font-medium text-soi-muted">¿Cómo llegas hoy?</p>
+          <CheckinChips current={today.checkin} />
+        </section>
+      )}
 
-      {today.pending.length > 0 && (
+      {!welcome && today.pending.length > 0 && (
         <details className="group rounded-[20px] bg-soi-sidebar p-3">
           <summary className="press cursor-pointer list-none px-1 text-sm text-soi-muted">
             <span className="nums">{today.pending.length}</span> {today.pending.length === 1 ? 'paso por retomar' : 'pasos por retomar'}
@@ -213,7 +229,7 @@ export default async function HoyPage() {
         </details>
       )}
 
-      <Link href="/chat" className={buttonClass('ghost', 'md', 'self-center text-soi-muted')}>¿Algo en mente? Cuéntaselo a SOI</Link>
+      {!welcome && <Link href="/chat" className={buttonClass('ghost', 'md', 'self-center text-soi-muted')}>¿Algo en mente? Cuéntaselo a SOI</Link>}
     </div>
   );
 }

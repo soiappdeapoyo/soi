@@ -109,6 +109,9 @@ export async function POST(req: Request) {
     isCrisis ? Promise.resolve([]) : loadContinuity(supabase, user.id, text, body.conversationId).catch(() => []),
     // Su biblioteca completa, ordenada por lo que encaja con TODA la conversación (no solo el último mensaje).
     isCrisis ? Promise.resolve([]) : loadLibrary(supabase, user.id, messages.filter((m) => m.role === 'user').map(textOf).join(' ')).catch(() => []),
+    // Primera sesión (ningún Moment vivido): vía rápida al primer Moment. Ante un error, el ritmo normal.
+    isCrisis ? Promise.resolve(false) : supabase.from('moment_runs').select('id', { count: 'exact', head: true }).eq('user_id', user.id).not('completed_at', 'is', null)
+      .then((r) => !r.error && (r.count ?? 0) === 0, () => false),
   ]);
 
   // 2) Conversación (crea si no existe). El saludo con el que SOI abrió la conversación se guarda primero.
@@ -135,7 +138,7 @@ export async function POST(req: Request) {
     // No bloquea la respuesta.
     void supabase.from('user_profiles').update({ weakest_link: route.weakestLink }).eq('user_id', user.id).then(() => undefined, () => undefined);
   }
-  const [isCreator, memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }, pastTalks, reusable] = await contextPromise;
+  const [isCreator, memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }, pastTalks, reusable, firstSession] = await contextPromise;
 
   const toolAccess = { youtube: yt.allowed, evidence: ev.allowed, routines: rt.allowed, ritual: ri.allowed };
   // Si SOI abrió la conversación, el saludo va como contexto (algunos proveedores exigen que el historial empiece por el usuario).
@@ -158,6 +161,8 @@ export async function POST(req: Request) {
     userTexts: messages.filter((m) => m.role === 'user').map(textOf), hasHistory: pastTalks.length > 0,
     // Si ya propuso un Moment en esta conversación, no insiste.
     alreadyProposed: messages.some((m) => m.role === 'assistant' && m.parts.some((p) => p.type === 'tool-createMoment' || p.type === 'tool-offerMoment')),
+    // Solo si puede vivirlo (prueba o SOI+): en Free el primer paso es conversar.
+    firstSession: firstSession && rt.allowed,
   });
   const canPropose = ritmo === 'propose' || ritmo === 'prepare' || ritmo === 'soothe';
   // Video rápido o dentro del Moment (nunca los dos), según cómo llega.

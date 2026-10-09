@@ -8,7 +8,7 @@ import type { VoiceStyle } from '@/config/voices';
 import { unlockAudio } from '@/lib/voice/player';
 import type { IdentityGain } from '@/lib/identity/gains';
 import { toast } from 'sonner';
-import { Check, Flame, MessageCircle, Pause, PenLine, Play, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
+import { Check, Flame, MessageCircle, Pause, PenLine, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Label, Textarea } from '@/components/ui/input';
 import { Icon } from '@/components/ui/icon';
@@ -83,6 +83,8 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   const [challengeDone, setChallengeDone] = useState<{ day: number; completed: number; finished: boolean } | null>(null);
   const [gain, setGain] = useState<IdentityGain | null>(null);
   const [victories, setVictories] = useState<string[]>([]);
+  /** Fue su primer Moment: el siguiente paso es contarle a SOI cómo le fue. */
+  const [firstMoment, setFirstMoment] = useState(false);
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [improving, setImproving] = useState(false);
@@ -317,6 +319,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     setChallengeDone(json.challenge ?? null);
     setGain(json.identity ?? null);
     setVictories(json.victories ?? []);
+    setFirstMoment(Boolean(json.first));
     setPhase('done');
   }
 
@@ -554,13 +557,25 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
 
         {playlist && <UpNext playlist={playlist} />}
 
-        {/* En la lista de Hoy lo que sigue es el siguiente Moment: sin más opciones que distraigan. */}
+        {/* En la lista de Hoy lo que sigue es el siguiente Moment: sin más opciones que distraigan.
+            Si no, UN siguiente paso claro (el loop: Moment → contarle a SOI → Hoy) y lo demás como enlaces discretos. */}
         {playlist ? null : !proposal ? (
-          <div className="mt-2 grid w-full gap-2 sm:grid-cols-2">
-            {aiContent && <Button onClick={improve} disabled={improving}><Sparkles className="h-4 w-4" aria-hidden="true" /> {improving ? 'Preparando tu versión…' : 'Mejorar mi Moment'}</Button>}
-            <Link href="/evidencias/nueva" className={buttonClass('outline')}><Star className="h-4 w-4" aria-hidden="true" /> Llevar al Muro</Link>
-            <Link href={`/impulso?compartir=${moment.id}`} className={buttonClass('outline', 'md', 'sm:col-span-2')}>Compartir cómo te fue en Impulso</Link>
-            <Link href="/hoy" className={buttonClass('ghost', 'md', 'sm:col-span-2')}>Volver a Hoy</Link>
+          <div className="mt-2 flex w-full flex-col items-center gap-3">
+            {firstMoment ? (
+              <>
+                <p className="text-[15px] text-soi-muted">Tu siguiente paso: cuéntale a SOI cómo te fue. Con eso aprende qué te ayuda.</p>
+                <Link href={`/chat?nueva=1&run=${runId}`} className={buttonClass('primary', 'lg', 'w-full')}><MessageCircle className="h-5 w-5" aria-hidden="true" /> Contarle cómo me fue</Link>
+              </>
+            ) : (
+              <Link href="/hoy" className={buttonClass('primary', 'lg', 'w-full')}>Volver a Hoy</Link>
+            )}
+            <nav aria-label="Más opciones" className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+              {firstMoment ? <Link href="/hoy" className="press py-2 text-soi-muted underline-offset-4 hover:underline">Ir a Hoy</Link>
+                : <Link href={`/chat?nueva=1&run=${runId}`} className="press py-2 text-soi-muted underline-offset-4 hover:underline">Hablar con SOI</Link>}
+              {aiContent && <button type="button" onClick={improve} disabled={improving} className="press py-2 text-soi-muted underline-offset-4 hover:underline">{improving ? 'Preparando tu versión…' : 'Mejorar mi Moment'}</button>}
+              <Link href="/evidencias/nueva" className="press py-2 text-soi-muted underline-offset-4 hover:underline">Llevar al Muro</Link>
+              <Link href={`/impulso?compartir=${moment.id}`} className="press py-2 text-soi-muted underline-offset-4 hover:underline">Compartir</Link>
+            </nav>
           </div>
         ) : (
           <section aria-labelledby="v2" className="mt-2 w-full animate-enter rounded-[20px] bg-soi-sidebar p-3 text-left">

@@ -2,6 +2,7 @@ import { NextResponse, after } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@/lib/supabase/server';
 import { getConsentState } from '@/lib/consent';
+import { isBrandNew } from '@/lib/journey';
 import { authFailureReason } from '@/lib/auth-errors';
 import { createAdminClient } from '@/lib/supabase/server';
 import { countryName, geoFromHeaders, VISITOR_COOKIE, visitorFrom } from '@/lib/analytics/funnel';
@@ -61,8 +62,19 @@ export async function GET(request: Request) {
 
   // Sin formulario previo: SOI conoce a la persona conversando desde el primer mensaje.
   // Solo el consentimiento legal (términos, aviso y mayoría de edad) va antes, y luego a donde iba.
-  const dest = safeNext ?? '/hoy';
+  // Primera vez de verdad (sin mensajes ni Moments): su primer paso es contarle a SOI cómo llega, no un Hoy vacío.
+  const dest = safeNext ?? ((await isBrandNewUser(supabase, data.user.id)) ? '/chat?nueva=1' : '/hoy');
   const { state } = await getConsentState(data.user.id);
   if (state !== 'ok') return NextResponse.redirect(`${origin}/consentimiento?next=${encodeURIComponent(dest)}`);
   return NextResponse.redirect(`${origin}${dest}`);
+}
+
+/** Sin mensajes escritos ni Moments terminados. Ante un error se asume que ya conoce SOI (va a Hoy, como siempre). */
+async function isBrandNewUser(supabase: Awaited<ReturnType<typeof createServerClient>>, userId: string) {
+  const [m, r] = await Promise.all([
+    supabase.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('role', 'user'),
+    supabase.from('moment_runs').select('id', { count: 'exact', head: true }).eq('user_id', userId).not('completed_at', 'is', null),
+  ]);
+  if (m.error || r.error) return false;
+  return isBrandNew({ userMessages: m.count ?? 0, completedRuns: r.count ?? 0 });
 }

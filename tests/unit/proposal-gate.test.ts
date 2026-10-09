@@ -74,3 +74,20 @@ describe('saludo sin imponer', () => {
     expect(o.links.map((r) => r.label)).toEqual(['Proponme algo', 'Solo quiero conversar', 'Mi ritual de hoy']);
   });
 });
+
+describe('primera sesión: vía rápida al primer Moment', () => {
+  const said = 'Tengo una presentación mañana y no puedo dejar de pensar en eso';
+  it('con un mensaje concreto ofrece algo de 3 minutos (sin herramientas todavía)', () => {
+    expect(proposalMode({ text: said, userTurns: 1, anxiety: false, userTexts: [said], firstSession: true })).toBe('first_offer');
+    expect(proposalMode({ text: said, userTurns: 1, anxiety: false, userTexts: [said] })).toBe('listen');
+  });
+  it('al aceptar, diseña de inmediato', () => {
+    expect(proposalMode({ text: 'Sí, dale', userTurns: 2, anxiety: false, previousAssistant: 'Por lo que me cuentas… ¿Te preparo algo de 3 minutos para esto, ahora?', userTexts: [said, 'Sí, dale'], firstSession: true })).toBe('propose');
+  });
+  it('respeta conversar, la ansiedad, un saludo vacío y no insiste', () => {
+    expect(proposalMode({ text: 'Solo quiero hablar', userTurns: 1, anxiety: false, userTexts: ['Solo quiero hablar'], firstSession: true })).toBe('talk');
+    expect(proposalMode({ text: said, userTurns: 1, anxiety: true, userTexts: [said], firstSession: true })).toBe('soothe');
+    expect(proposalMode({ text: 'Hola', userTurns: 1, anxiety: false, userTexts: ['Hola'], firstSession: true })).toBe('listen');
+    expect(proposalMode({ text: said, userTurns: 3, anxiety: false, userTexts: [said], firstSession: true, alreadyProposed: true })).not.toBe('first_offer');
+  });
+});

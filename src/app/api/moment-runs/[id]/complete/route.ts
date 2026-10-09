@@ -175,5 +175,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const victories = doneRun?.completed_at
     ? await battleWins(supabase, user.id, profile, `${runRef}@${doneRun.completed_at}`).catch(() => [])
     : [];
-  return Response.json({ ok: true, streak, challenge, identity, victories });
+  // ¿Fue su primer Moment? El siguiente paso del loop es contarle a SOI cómo le fue (src/lib/journey.ts).
+  const { count: completedRuns } = await supabase.from('moment_runs').select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id).not('completed_at', 'is', null);
+  return Response.json({ ok: true, streak, challenge, identity, victories, first: completedRuns === 1 });
 }

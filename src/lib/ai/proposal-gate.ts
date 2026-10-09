@@ -6,8 +6,10 @@
  * - invite: ya hay conversación → si ya entiende, refleja lo entendido y PIDE PERMISO; si no, sigue preguntando.
  * - propose: lo pidió o aceptó, y ya hay entendimiento (o insiste en algo rápido) → resume lo entendido y diseña.
  * - soothe: ansiedad o carga fuerte → una oferta mínima de inmediato (1–3 min de respiración), como invitación.
+ * - first_offer: primera sesión (aún no vive ningún Moment) y ya contó algo → refleja y ofrece algo de 3 minutos.
+ *   El primer Moment no espera 4 mensajes: es lo que le muestra a la persona qué es SOI.
  */
-export type ProposalMode = 'listen' | 'talk' | 'explore' | 'invite' | 'offer' | 'prepare' | 'propose' | 'soothe';
+export type ProposalMode = 'listen' | 'talk' | 'explore' | 'invite' | 'offer' | 'prepare' | 'propose' | 'soothe' | 'first_offer';
 
 const ASK = /(prop[oó]n(me|er|es)|qu[eé] (hago|puedo hacer|me recomiendas)|dame (algo|un|una)|ay[uú]dame con (algo|un|una)|\bun moment|una (rutina|meditaci[oó]n|pr[aá]ctica|respiraci[oó]n|afirmaci[oó]n|manifestaci[oó]n|visualizaci[oó]n)|un (ejercicio|reto|ritual|plan)|hazme (otro|otra|un|una)|algo m[aá]s corto|otra cosa|\bvideos?\b|charla|quiero (empezar|hacer algo|practicar)|mi reflexi[oó]n de)/i;
 // Sin \b tras vocales con tilde (en JS \b no las reconoce): fin de palabra explícito.
@@ -45,15 +47,19 @@ export function proposalMode(i: {
   hasHistory?: boolean;
   /** Ya se propuso un Moment en esta conversación: no insistir. */
   alreadyProposed?: boolean;
+  /** Primera sesión: todavía no vive ningún Moment (vía rápida al primero). */
+  firstSession?: boolean;
 }): ProposalMode {
   const texts = i.userTexts ?? [i.text];
   const asked = ASK.test(i.text) && !TALK.test(i.text);
   const accepted = Boolean(i.previousAssistant && INVITED.test(i.previousAssistant) && YES.test(i.text));
-  const enough = understood(texts, i.hasHistory) || INSIST.test(i.text);
+  // En la primera sesión basta con un mensaje con algo concreto (como si ya hubieran hablado del tema).
+  const enough = understood(texts, i.hasHistory || i.firstSession) || INSIST.test(i.text);
   if (asked || accepted) return enough ? 'propose' : i.anxiety ? 'soothe' : 'explore';
   // Eligió solo conversar: se respeta hasta que pida algo.
   if (wantsToTalk(texts)) return 'talk';
   if (i.anxiety) return 'soothe';
+  if (i.firstSession && enough && !i.alreadyProposed) return 'first_offer';
   // Tema de acción: no dejar que la conversación se alargue sin pasar a hacer.
   if (isActionTopic(texts) && enough && !i.alreadyProposed) {
     if (i.userTurns >= 4) return 'prepare';
@@ -75,5 +81,6 @@ export const PROPOSAL_RULE: Record<ProposalMode, string> = {
   talk: 'RITMO: SOLO QUIERE CONVERSAR. Acompaña, valida y pregunta con curiosidad; no propongas Moments, prácticas ni videos (no tienes esas herramientas). Si en algún momento pide algo, entonces sí.',
   offer: `RITMO: ES UN TEMA DE ACCIÓN Y YA LO ENTIENDES. En esta respuesta refleja en una frase lo que entendiste ("Por lo que me cuentas, …") y TERMINA PIDIENDO PERMISO de forma explícita: "¿Te preparo un Moment de pocos minutos para empezar con esto hoy?". No alargues la conversación con más preguntas. ${ASK_WELL.split('.')[0]}.`,
   prepare: 'RITMO: TEMA DE ACCIÓN Y LA CONVERSACIÓN YA VA LARGA. No hagas más preguntas: resume en una frase lo que entendiste y PREPÁRALE ya un Moment único (createMoment, o el suyo con offerMoment/basedOn si encaja), con la salida "Si no encaja, lo ajustamos".',
+  first_offer: 'RITMO: PRIMERA VEZ CON SOI. Todavía no ha vivido ningún Moment, y vivir el primero es lo que le muestra qué es SOI. En esta respuesta: valida en UNA frase lo que contó, con sus palabras ("Por lo que me cuentas, …"), y TERMINA ofreciendo algo concreto y corto, pidiendo permiso: "¿Te preparo algo de 3 minutos para esto, ahora? Si no encaja, lo ajustamos." Sin más preguntas y sin diseñar todavía (no tienes esas herramientas).',
   soothe: 'RITMO: hay carga. Primero valida en una frase. Luego OFRECE algo mínimo, como invitación y no como tarea: un Moment de 1 a 3 minutos de respiración (offerMoment o createMoment kind recovery). Nada de metas ni planes. Después, si quiere, pregunta qué pasó.',
 };

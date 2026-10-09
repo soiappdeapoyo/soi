@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation';
+import { loadJourney } from '@/lib/journey-server';
+import { nextStep } from '@/lib/journey';
 import type { Metadata } from 'next';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
@@ -30,11 +32,15 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
   const { agent: agentParam, run: runParam } = await searchParams;
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
-  const [{ profile, access }, { data: last, error: lastError }] = await Promise.all([
+  const [{ profile, access }, { data: last, error: lastError }, journey] = await Promise.all([
     getAccessMap(user.id),
     supabase.from('conversations').select('title').eq('user_id', user.id).eq('is_archived', false)
       .order('last_message_at', { ascending: false }).limit(1).maybeSingle(),
+    // El loop principal: si vivió su primer Moment y aún no contó cómo le fue, el chat empieza por ahí.
+    !runParam && !agentParam ? loadJourney(supabase, user.id, true).catch(() => null) : Promise.resolve(null),
   ]);
+  const followUp = journey && nextStep(journey).kind === 'follow_up' ? journey.firstCompleted?.runId ?? null : null;
+  const runId = runParam ?? followUp;
 
   const agent = isAgentId(agentParam) && agentParam !== 'crisis' ? agentParam : undefined;
   const tz = profile?.timezone ?? 'America/Mexico_City';
@@ -49,8 +55,8 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
     lastConversationTitle: (last?.title as string | undefined) ?? null,
   };
   // "Hablar con SOI" al terminar un Moment: el chat empieza sabiendo qué viviste y cómo te fue (solo tus propios runs, RLS).
-  const run = runParam && /^[0-9a-f-]{36}$/.test(runParam)
-    ? (await supabase.from('moment_runs').select('moment_id, moment_slug, mood_before, mood_after, helped').eq('id', runParam).eq('user_id', user.id).maybeSingle()).data
+  const run = runId && /^[0-9a-f-]{36}$/.test(runId)
+    ? (await supabase.from('moment_runs').select('moment_id, moment_slug, mood_before, mood_after, helped').eq('id', runId).eq('user_id', user.id).maybeSingle()).data
     : null;
   const ref = run ? (run.moment_id ? `m:${run.moment_id}` : `s:${run.moment_slug}`) : null;
   const ranMoment = ref ? (await resolveRefs(supabase, [ref])).get(ref) : null;
@@ -86,7 +92,7 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
 
   return (
     <ChatView
-      key={ranMoment ? `run-${runParam}` : agent ?? 'auto'}
+      key={ranMoment ? `run-${runId}` : agent ?? 'auto'}
       agent={agent}
       opener={opener}
       paywalled={!access.chat}

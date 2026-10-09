@@ -58,7 +58,7 @@ export function MirrorCards({ name }: { name: string }) {
           <p className="mt-1 text-lg font-semibold">{result.routine.label} · {result.routine.minutes} min</p>
           <p className="text-sm text-white/75">{result.routine.author} — <em>{result.routine.source}</em></p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link href={`/rutinas/${result.routine.id}`} className={buttonClass('gold', 'sm')}>Probar ahora</Link>
+            <Link href={`/m/${result.routine.id}/play`} className={buttonClass('gold', 'sm')}>Probar ahora</Link>
             <button type="button" onClick={() => router.push('/chat')} className={buttonClass('ghost', 'sm', 'text-white shadow-[0_0_0_1px_rgb(255_255_255/0.3)] hover:bg-white/10')}>Ir al chat</button>
           </div>
         </div>

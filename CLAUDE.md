@@ -131,6 +131,7 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 | `0005_streaks_community_push.sql` | Escudo de racha, `register_ritual_day`, `toggle_reaction`, país, avatar, push, autor/demo en posts, **permisos por columna en `user_profiles` (anti-bypass del paywall)**, endurecimiento de `decrement_free_query`/`expire_trials` |
 | `0006_atomic_free_queries.sql` | `consume_chat_query` (comprueba y descuenta atómicamente), `refund_chat_query` (si fallan todos los proveedores), `purge_crisis_logs` (retención 90 días) |
 | `0008_momentum_signals.sql` | Amplía `momentum_events.kind` con `video_watched` y `checkin` |
+| `0032_messages_user_index.sql` | Índice parcial `messages (user_id, created_at) WHERE role = 'user'` para el loop principal (cuántos mensajes escribió y si escribió después de su primer Moment) |
 | `0031_moment_run_progress.sql` | Retomar un Moment: `moment_runs.step_index`, `step_block_id`, `step_remaining`, `progress` (0–99 por tiempo; 100 al terminar) y `last_active_at`, escribibles por la persona solo en sus ejecuciones sin terminar; índice de lo sin terminar |
 | `0030_funnel_film_events.sql` | `funnel_events.event` admite `film_progress` (escena 1–5 alcanzada) y `film_interact` (pausa, reproducir, toque de escena) de la animación «cómo funciona SOI» (`detail` = `<lugar>:<escena o acción>`; lugares `landing`, `emociones`, `emociones:<slug>`); se ve en `/panel/analytics` |
 | `0029_funnel_events.sql` | `funnel_events`: embudo landing → `/login` → registro (visitante anónimo `soi_vid`, país y ciudad de Vercel sin IP, dominio de referencia); sin acceso para clientes; `purge_funnel_events` (365 días) |
@@ -185,10 +186,19 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 
 ---
 
+## 🔁 Loop principal (siguiente paso)
+**Una sola fuente de verdad** de qué sigue (`src/lib/journey.ts`, puro y testeado; `loadJourney` en `journey-server.ts`, una vez por petición): lo que quedó a medias → **Cuéntale a SOI cómo llegas** (sin mensajes) → **Vive tu primer Moment** (el que SOI le preparó en los últimos 3 días) o seguir conversando → **Cuéntale cómo te fue** (tras su primer Moment, una vez, durante 7 días) → `routine` (Hoy decide como siempre). Lo leen:
+- **Login** (`/auth/callback`): quien es nuevo de verdad (sin mensajes ni Moments terminados) va a `/chat?nueva=1`; los demás, a `/hoy`.
+- **Hoy**: mientras haya un paso del loop, UNA tarjeta con UN botón (`NextStepCard`) y, en los primeros pasos, la lista hecho · ahora · después; se ocultan el check-in, lo pendiente y "Arma tu día" para que nada compita.
+- **Chat**: sin `?run=`, si toca el seguimiento, abre con `momentRunOpener` de su primer Moment.
+- **Final del Moment**: una sola acción principal (primer Moment → "Contarle cómo me fue"; si no → "Volver a Hoy") y lo demás como enlaces discretos (Hablar con SOI, Mejorar, Muro, Compartir). `/complete` devuelve `first`.
+- **Vía rápida al primer Moment** (`proposalMode` con `firstSession`, solo con acceso a ejecutar): con un mensaje concreto, `first_offer` ofrece algo de 3 minutos; al aceptar, `propose`. Respeta conversar, la ansiedad y no insiste.
+- Pendiente (Fase B/C): plantar el Moment de mañana, evidencia automática del seguimiento, embudo de activación en el panel. Cómo traer a la persona el día 2 (push/correo) está por decidir.
+
 ## 🔐 Autenticación (Google)
 
 - `/login`: **Continuar con Google** (`signInWithOAuth`) + enlace mágico.
-- `/auth/callback`: intercambia el código → `next` o `/chat`. **Sin onboarding obligatorio**: el agente descubre el perfil conversando (bloque DESCUBRIMIENTO del prompt) y marca `onboarding_completed` con `updateProfile`. `/onboarding` (8 espejos) queda como opcional.
+- `/auth/callback`: intercambia el código → `next`, o `/chat?nueva=1` si es nuevo de verdad, o `/hoy` (ver Loop principal). **Sin onboarding obligatorio**: el agente descubre el perfil conversando (bloque DESCUBRIMIENTO del prompt) y marca `onboarding_completed` con `updateProfile`. `/onboarding` (8 espejos) queda como opcional.
 - `/auth/signout` (POST).
 - `src/lib/supabase/middleware.ts` protege `PROTECTED_PREFIXES` y redirige a `/login?next=`.
 - El trigger `handle_new_user` toma `full_name`/`name` y `avatar_url` de Google.
