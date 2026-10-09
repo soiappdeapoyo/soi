@@ -181,6 +181,7 @@ function Row({ item, isNext, onTime, onRemove }: { item: DayItemView; isNext: bo
         <p className={cn('truncate text-[15px] font-medium', item.done && 'text-soi-muted line-through decoration-soi-subtle')}>{m.title}</p>
         <p className="nums flex items-center gap-1.5 text-xs text-soi-muted">
           {item.done ? <span className="inline-flex items-center gap-0.5 font-medium text-soi-accent"><Check className="h-3.5 w-3.5" aria-hidden="true" /> Hecho hoy</span>
+            : item.partial != null ? <span className="font-medium text-soi-accent">A medias · {item.partial} %</span>
             : isNext ? <span className="font-medium text-soi-accent">Ahora</span> : null}
           <span>{m.required_minutes} min</span>
         </p>

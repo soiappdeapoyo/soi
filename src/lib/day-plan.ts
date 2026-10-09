@@ -1,4 +1,5 @@
 import { z } from 'zod/v3';
+import { loadUnfinished } from '@/lib/moments/unfinished';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MomentKind } from '@/config/actions';
 import { officialMoment, OFFICIAL_MOMENTS } from '@/config/official-moments';
@@ -15,7 +16,8 @@ export const DayItemSchema = z.object({
 });
 export const DayItemsSchema = z.array(DayItemSchema).max(20);
 export type DayItem = z.infer<typeof DayItemSchema>;
-export type DayItemView = DayItem & { moment: MomentFlow | null; done: boolean };
+/** partial: % si hoy lo dejó a medias (se retoma donde quedó). */
+export type DayItemView = DayItem & { moment: MomentFlow | null; done: boolean; partial?: number };
 
 /** Mañana 5–12 · tarde 12–19 · noche 19–5 (hora local de la persona). */
 export function partOfDay(hour: number): DayPart {
@@ -66,16 +68,17 @@ export async function resolveRefs(supabase: SupabaseClient, refs: string[]): Pro
 
 /** El plan del día con lo que ya se hizo HOY (medianoche local de la persona, no UTC). */
 export async function loadDayPlan(supabase: SupabaseClient, userId: string, timeZone: string) {
-  const [{ data: plan }, { data: runs }] = await Promise.all([
+  const [{ data: plan }, { data: runs }, unfinished] = await Promise.all([
     supabase.from('day_plans').select('items').eq('user_id', userId).maybeSingle(),
     supabase.from('moment_runs').select('moment_id, moment_slug').eq('user_id', userId)
       .not('completed_at', 'is', null).gte('completed_at', startOfTodayISO(timeZone)),
+    loadUnfinished(supabase, userId),
   ]);
   const parsed = DayItemsSchema.safeParse(plan?.items ?? []);
   const items = parsed.success ? parsed.data : [];
   const done = new Set((runs ?? []).map((r) => (r.moment_id ? `m:${r.moment_id}` : `s:${r.moment_slug}`)));
   const byRef = await resolveRefs(supabase, items.map((i) => i.ref));
-  const views: DayItemView[] = items.map((i) => ({ ...i, moment: byRef.get(i.ref) ?? null, done: done.has(i.ref) }))
+  const views: DayItemView[] = items.map((i) => ({ ...i, moment: byRef.get(i.ref) ?? null, done: done.has(i.ref), partial: done.has(i.ref) ? undefined : unfinished.get(i.ref)?.progress }))
     .filter((i) => i.moment);
   const hour = hourInTz(timeZone);
   return { items: views, part: partOfDay(hour), hour, next: nextPending(views, hour, new Date().getMinutes()) };

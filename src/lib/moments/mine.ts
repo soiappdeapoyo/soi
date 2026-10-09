@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { MOMENT_FIELDS, toMomentFlow, type MomentFlow } from './types';
 import { officialMoment } from '@/config/official-moments';
+import { loadUnfinished } from './unfinished';
 
 export type MyMomentsFilter = 'todos' | 'mios' | 'guardados' | 'comprados' | 'retos';
 export const MY_FILTERS: { id: MyMomentsFilter; label: string }[] = [
@@ -8,7 +9,8 @@ export const MY_FILTERS: { id: MyMomentsFilter; label: string }[] = [
   { id: 'comprados', label: 'Comprados' }, { id: 'retos', label: 'Retos' },
 ];
 
-export type ContinueItem = { moment: MomentFlow; lastAt: string; label: string };
+/** progress: % de una ejecución a medias (se retoma directo en el reproductor). */
+export type ContinueItem = { moment: MomentFlow; lastAt: string; label: string; href: string; progress?: number };
 
 /**
  * Todo lo que la persona puede volver a vivir, ordenado por uso reciente:
@@ -16,13 +18,14 @@ export type ContinueItem = { moment: MomentFlow; lastAt: string; label: string }
  * - Colección: míos (creados por mí o por SOI para mí), guardados (mi versión de otro), comprados y retos.
  */
 export async function loadMyMoments(supabase: SupabaseClient, userId: string) {
-  const [{ data: own }, { data: purchases }, { data: runs }, { data: enrollments }] = await Promise.all([
+  const [{ data: own }, { data: purchases }, { data: runs }, { data: enrollments }, unfinished] = await Promise.all([
     supabase.from('soi_blueprints').select(MOMENT_FIELDS).eq('creator_id', userId).neq('status', 'archived')
       .order('updated_at', { ascending: false }).limit(60),
     supabase.from('blueprint_purchases').select('blueprint_id').eq('user_id', userId).limit(60),
     supabase.from('moment_runs').select('moment_id, moment_slug, started_at, completed_at').eq('user_id', userId)
       .order('started_at', { ascending: false }).limit(60),
     supabase.from('challenge_enrollments').select('moment_id, moment_slug, completed, status, started_on').eq('user_id', userId).eq('status', 'active').limit(20),
+    loadUnfinished(supabase, userId),
   ]);
   const ownMoments = (own ?? []).map(toMomentFlow);
   const byId = new Map(ownMoments.map((m) => [m.id, m]));
@@ -46,18 +49,26 @@ export async function loadMyMoments(supabase: SupabaseClient, userId: string) {
 
   const seen = new Set<string>();
   const cont: ContinueItem[] = [];
+  const playOf = (m: MomentFlow) => `/m/${m.official ? m.slug : m.id}/play`;
+  // Primero lo que quedó a medias: se retoma con un toque, justo donde se dejó.
+  for (const [ref, u] of unfinished) {
+    const m = ref.startsWith('m:') ? byId.get(ref.slice(2)) ?? null : officialMoment(ref.slice(2));
+    if (!m || seen.has(m.id)) continue;
+    seen.add(m.id);
+    cont.push({ moment: m, lastAt: u.lastActiveAt, label: `Retomar · ${u.progress} %`, href: playOf(m), progress: u.progress });
+  }
   for (const e of enrollments ?? []) {
     const m = resolve(e.moment_id as string | null, e.moment_slug as string | null);
     if (!m || seen.has(m.id)) continue;
     seen.add(m.id);
     const done = Object.keys((e.completed as Record<string, string>) ?? {}).length;
-    cont.push({ moment: m, lastAt: (e.started_on as string) ?? '', label: `Reto · día ${done + 1}` });
+    cont.push({ moment: m, lastAt: (e.started_on as string) ?? '', label: `Reto · día ${done + 1}`, href: `/m/${m.id}` });
   }
   for (const r of runs ?? []) {
     const m = resolve(r.moment_id as string | null, r.moment_slug as string | null);
     if (!m || seen.has(m.id)) continue;
     seen.add(m.id);
-    cont.push({ moment: m, lastAt: r.started_at as string, label: r.completed_at ? 'Volver a vivirlo' : 'Sin terminar' });
+    cont.push({ moment: m, lastAt: r.started_at as string, label: r.completed_at ? 'Volver a vivirlo' : 'Sin terminar', href: `/m/${m.id}` });
     if (cont.length >= 8) break;
   }
 

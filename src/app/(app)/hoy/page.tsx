@@ -114,10 +114,19 @@ export default async function HoyPage() {
           )}
           <p id="next" className={cn('text-xs font-medium text-white/60', next.moment.cover && 'pt-16 text-white/80')}>{next.time ? `A continuación · ${next.time}` : 'A continuación'}</p>
           <p className="mt-1 text-balance text-[22px] font-semibold leading-snug">{next.moment.title}</p>
-          <p className="nums mt-1 text-sm text-white/70">{next.moment.required_minutes} min · {next.moment.blocks.length} {next.moment.blocks.length === 1 ? 'paso' : 'pasos'}</p>
+          {next.partial != null ? (
+            <>
+              <p className="nums mt-1 text-sm text-white/80">Lo dejaste a medias · {next.partial} % hecho</p>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/20" role="progressbar" aria-valuenow={next.partial} aria-valuemin={0} aria-valuemax={100} aria-label="Avance">
+                <div className="h-full origin-left rounded-full bg-white" style={{ transform: `scaleX(${next.partial / 100})` }} />
+              </div>
+            </>
+          ) : (
+            <p className="nums mt-1 text-sm text-white/70">{next.moment.required_minutes} min · {next.moment.blocks.length} {next.moment.blocks.length === 1 ? 'paso' : 'pasos'}</p>
+          )}
           <PlayLink href={playHref(next.moment, true)} prefetch label={`Reproducir ${next.moment.title}`}
             className="press tap-target mt-4 flex w-full items-center justify-center gap-2 rounded-[14px] bg-white py-3.5 text-[17px] font-semibold text-soi-ink">
-            <Play className="h-5 w-5 fill-current" aria-hidden="true" /> {pending.length === items.length ? 'Reproducir mi día' : 'Continuar'}
+            <Play className="h-5 w-5 fill-current" aria-hidden="true" /> {next.partial != null ? 'Retomar donde lo dejé' : pending.length === items.length ? 'Reproducir mi día' : 'Continuar'}
           </PlayLink>
         </section>
       ) : suggestion ? (
@@ -169,7 +178,7 @@ export default async function HoyPage() {
                   )}
                   <span className="min-w-0 flex-1">
                     <span className={cn('block truncate text-[15px]', i.done ? 'text-soi-muted line-through decoration-black/20' : 'font-medium')}>{i.moment.title}</span>
-                    <span className="nums flex items-center gap-2 text-xs text-soi-muted">{i.time ? `${i.time} · ` : ''}{i.moment.required_minutes} min <BlockIcons m={i.moment} /></span>
+                    <span className="nums flex items-center gap-2 text-xs text-soi-muted">{i.time ? `${i.time} · ` : ''}{i.moment.required_minutes} min{i.partial != null ? <span className="font-medium text-soi-accent">· {i.partial} % hecho</span> : null} <BlockIcons m={i.moment} /></span>
                   </span>
                 </PlayLink>
               </li>

@@ -113,10 +113,15 @@ async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; us
         <section aria-labelledby="cont">
           <h2 id="cont" className="mb-2 text-sm font-medium text-soi-muted">Continúa donde quedaste</h2>
           <ul className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-5 sm:px-5 [&::-webkit-scrollbar]:hidden">
-            {data.continue.map(({ moment: m, label }) => (
+            {data.continue.map(({ moment: m, label, href, progress }) => (
               <li key={m.id} className="w-36 shrink-0 snap-start">
-                <MomentFlowCard m={m} variant="tile" href={`/m/${m.id}`} />
-                <p className="mt-0.5 text-xs font-medium text-soi-accent">{label}</p>
+                <MomentFlowCard m={m} variant="tile" href={href} />
+                {progress != null && (
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-soi-tray" aria-hidden="true">
+                    <div className="h-full origin-left rounded-full bg-soi-accent" style={{ transform: `scaleX(${progress / 100})` }} />
+                  </div>
+                )}
+                <p className="nums mt-0.5 text-xs font-medium text-soi-accent">{label}</p>
               </li>
             ))}
           </ul>

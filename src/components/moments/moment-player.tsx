@@ -17,6 +17,7 @@ import { track } from '@/components/providers/analytics';
 import { ACTIONS, blockSeconds, type ActionBlock } from '@/config/actions';
 import { AUTO_ADVANCE, BlockRunner, MOODS, type BlockOutput } from './block-runners';
 import { cn } from '@/lib/utils';
+import { leftAgo, runProgress } from '@/lib/moments/progress';
 
 type Props = {
   /** cover: portada (encabezado al empezar y fondo suave al terminar; nunca durante los pasos). */
@@ -33,6 +34,13 @@ type Props = {
   autoStart?: boolean;
   /** false en cuentas de creador: sin "Mejorar mi Moment" (la IA no genera su contenido). */
   aiContent?: boolean;
+  /** Ejecución que quedó a medias (una interrupción): se ofrece retomar donde la dejó. */
+  resume?: Resume | null;
+};
+
+export type Resume = {
+  runId: string; moodBefore: number | null; outputs: Record<string, unknown>; lastActiveAt: string;
+  index: number; remaining: number; progress: number; restartedStep: boolean;
 };
 
 type Phase = 'before' | 'run' | 'after' | 'done';
@@ -54,7 +62,7 @@ function fmt(s: number) {
 /** De dónde se abrió el Moment (chat, Hoy…), para medir en PostHog qué propuestas se viven. */
 const fromParam = () => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('from') ?? (window.location.search.includes('lista=hoy') ? 'hoy' : null));
 
-export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice, playlist, autoStart, aiContent = true }: Props) {
+export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice, playlist, autoStart, aiContent = true, resume }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('before');
   const [runId, setRunId] = useState<string | null>(null);
@@ -79,6 +87,9 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [improving, setImproving] = useState(false);
   const [sheet, setSheet] = useState(false);
+  const [resumeOffer, setResumeOffer] = useState<Resume | null>(locked ? null : resume ?? null);
+  // Algo de afuera interrumpió (llamada, otra app, bloqueo de pantalla): se pausó solo.
+  const [interrupted, setInterrupted] = useState(false);
   const outputsRef = useRef(outputs);
   outputsRef.current = outputs;
 
@@ -106,6 +117,21 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     fetch(`/api/moment-runs/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outputs: data }) }).catch(() => {});
   }, []);
 
+  // Avance (paso, segundos que quedaban, %): se guarda al cambiar de paso, al pausar, cada 15 s y si algo interrumpe.
+  const live = useRef({ runId, phase, index, remaining, running });
+  live.current = { runId, phase, index, remaining, running };
+  const lastSaved = useRef('');
+  const saveProgress = useCallback(() => {
+    const { runId: id, phase: ph, index: i, remaining: r } = live.current;
+    const b = blocks[i];
+    if (!id || ph !== 'run' || !b) return;
+    const body = JSON.stringify({ progress: { index: i, blockId: b.id.slice(0, 64), remaining: Math.max(0, Math.round(r)), pct: runProgress(blocks, i, r) } });
+    if (body === lastSaved.current) return; // pausar y cambiar de paso a la vez no lo guarda dos veces
+    lastSaved.current = body;
+    fetch(`/api/moment-runs/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+  }, [blocks]);
+  const flush = useCallback(() => { saveOutputs(live.current.runId, outputsRef.current); saveProgress(); }, [saveOutputs, saveProgress]);
+
   const goTo = useCallback((n: number) => {
     saveOutputs(runId, outputsRef.current);
     if (n >= blocks.length) { setRunning(false); setPhase('after'); return; }
@@ -131,6 +157,27 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     const t = setTimeout(() => setRemaining((r) => r - 1), 1000);
     return () => clearTimeout(t);
   }, [phase, running, remaining, block.type, next]);
+
+  useEffect(() => { if (phase === 'run') saveProgress(); }, [index, phase, saveProgress]);
+  useEffect(() => { if (phase === 'run' && !running) saveProgress(); }, [running, phase, saveProgress]);
+  useEffect(() => { if (phase === 'run' && running && remaining > 0 && remaining % 15 === 0) saveProgress(); }, [remaining, running, phase, saveProgress]);
+
+  // Interrupciones: si la app pasa a segundo plano, se pausa sola (y calla la voz) y se guarda todo.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState !== 'hidden' || live.current.phase !== 'run') return;
+      if (live.current.running) setInterrupted(true);
+      setRunning(false);
+      void import('@/lib/voice/tts').then(({ stopSpeaking }) => stopSpeaking()).catch(() => {});
+      flush();
+    };
+    const onPageHide = () => { if (live.current.phase === 'run') flush(); };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', onPageHide);
+    return () => { document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', onPageHide); };
+  }, [flush]);
+  // Salir con la X (navegación dentro de la app): también se guarda.
+  useEffect(() => () => { if (live.current.phase === 'run') flush(); }, [flush]);
 
   // La guía acompaña el tiempo: a mitad de una meditación larga y al cerrar los bloques temporizados.
   useEffect(() => {
@@ -217,12 +264,38 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     track('moment_started', { moment: moment.id, from: fromParam() });
   }
 
+  /** Retoma la ejecución anterior donde quedó (sin crear otra: lo escrito y el ánimo de antes se conservan). */
+  function resumeRun() {
+    const r = resumeOffer;
+    if (!r) return;
+    if (voiceOn && ttsAllowed) unlockAudio();
+    const saved = r.outputs as Record<string, BlockOutput>;
+    outputsRef.current = saved;
+    setOutputs(saved);
+    setMoodBefore(r.moodBefore);
+    setRunId(r.runId);
+    setIndex(r.index);
+    setShown(r.index);
+    setRemaining(r.remaining);
+    setResumeOffer(null);
+    setPhase('run');
+    setRunning(true);
+    if (r.restartedStep) toast('Retomamos desde el inicio de este paso.');
+    track('moment_resumed', { moment: moment.id, from: fromParam(), progress: r.progress, restarted_step: r.restartedStep });
+  }
+
+  function continueAfterInterruption() {
+    setInterrupted(false);
+    setRunning(true);
+    cue('Seguimos.', 'guide');
+  }
+
   // Lista de Hoy: al pasar solo al siguiente, empieza sin pantalla previa (la voz ya quedó habilitada con el primer toque).
   const autoStarted = useRef(false);
   useEffect(() => {
     if (!autoStart || autoStarted.current || phase !== 'before') return;
     autoStarted.current = true;
-    void start();
+    if (resumeOffer) resumeRun(); else void start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
 
@@ -299,6 +372,10 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
               <p className="text-[15px] text-soi-muted">{moment.objective}</p>
             </>
           )}
+          {resumeOffer ? (
+            <ResumeCard r={resumeOffer} step={blocks[resumeOffer.index]?.title ?? ''} total={blocks.length}
+              onResume={resumeRun} onRestart={() => { setResumeOffer(null); track('moment_restarted', { moment: moment.id, progress: resumeOffer.progress }); }} />
+          ) : (
           <fieldset>
             <legend className="text-sm font-medium">¿Cómo llegas?</legend>
             <div className="mt-2 flex gap-1">
@@ -308,19 +385,22 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
               ))}
             </div>
           </fieldset>
+          )}
           <ol className="flex w-full flex-col gap-1.5 rounded-[20px] bg-soi-sidebar p-1.5 text-left">
             {blocks.map((b, i) => (
-              <li key={b.id} className="flex items-center gap-3 rounded-[14px] bg-white px-3 py-2.5 shadow-ring">
-                <span className="nums w-5 text-xs text-soi-muted">{i + 1}</span>
+              <li key={b.id} className={cn('flex items-center gap-3 rounded-[14px] bg-white px-3 py-2.5 shadow-ring', resumeOffer && i < resumeOffer.index && 'bg-white/60 shadow-none')}>
+                <span className="nums flex w-5 justify-center text-xs text-soi-muted">{resumeOffer && i < resumeOffer.index ? <Check className="h-3.5 w-3.5 text-soi-accent" aria-label="Hecho" /> : i + 1}</span>
                 <Icon name={ACTIONS[b.type].icon} className="h-4 w-4 shrink-0 text-soi-accent" />
                 <span className="flex-1 truncate text-[15px]">{b.title}</span>
                 <span className="nums text-xs text-soi-muted">{fmt(blockSeconds(b))}</span>
               </li>
             ))}
           </ol>
-          <Button size="lg" className="w-full" onClick={start} disabled={busy} variant={locked ? 'gold' : 'primary'}>
-            {locked ? 'Comenzar (SOI+)' : busy ? 'Preparando…' : 'Comenzar'}
-          </Button>
+          {!resumeOffer && (
+            <Button size="lg" className="w-full" onClick={start} disabled={busy} variant={locked ? 'gold' : 'primary'}>
+              {locked ? 'Comenzar (SOI+)' : busy ? 'Preparando…' : 'Comenzar'}
+            </Button>
+          )}
         </div>
         <UpgradeSheet open={sheet} onOpenChange={setSheet} title="Ejecutar Moments es parte de SOI+"
           description={`Puedes ver los pasos de «${moment.title}». Para vivirlo con temporizador, respiración y voz, pasa a SOI+.`} />
@@ -333,7 +413,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     const out = outputs[shownBlock.id] ?? {};
     const timeUp = remaining <= 0 && !AUTO_ADVANCE.has(block.type);
     return (
-      <Shell title={moment.title} onExit={playlist ? '/hoy' : `/m/${moment.id}`} progress={{ index, total: blocks.length }}
+      <Shell title={moment.title} onExit={playlist ? '/hoy' : `/m/${moment.id}`} progress={{ index, total: blocks.length, pct: runProgress(blocks, index, remaining) }}
         voice={ttsAllowed ? { on: voiceOn, toggle: () => setVoiceOn((v) => !v) } : undefined}>
         <div className="flex flex-1 flex-col">
           <div className="mt-2 flex items-center gap-3">
@@ -357,8 +437,20 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
               setOutput={(o) => setOutputs((all) => ({ ...all, [shownBlock.id]: o }))} />
           </div>
 
+          {interrupted && !running && (
+            <div role="status" className="mb-3 animate-enter rounded-[20px] bg-soi-sidebar p-1.5">
+              <div className="flex items-center gap-3 rounded-[14px] bg-white p-3 shadow-ring">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-medium">Te esperamos aquí</span>
+                  <span className="nums block text-sm text-soi-muted">Pausamos mientras no estabas. Tu avance está guardado ({runProgress(blocks, index, remaining)} %).</span>
+                </span>
+                <Button onClick={continueAfterInterruption} autoFocus>Continuar</Button>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 pb-2">
-            <button type="button" onClick={() => setRunning((r) => !r)} aria-label={running ? 'Pausar' : 'Reanudar'}
+            <button type="button" onClick={() => { setInterrupted(false); setRunning((r) => !r); }} aria-label={running ? 'Pausar' : 'Reanudar'}
               className="press relative flex h-12 w-12 items-center justify-center rounded-lg bg-white shadow-ring">
               <Play className={cn('absolute h-5 w-5 transition-[opacity,transform,filter] duration-(--dur-fast) ease-out-strong', running ? 'scale-[0.8] opacity-0 blur-[1px]' : 'scale-100 opacity-100')} aria-hidden="true" />
               <Pause className={cn('absolute h-5 w-5 transition-[opacity,transform,filter] duration-(--dur-fast) ease-out-strong', running ? 'scale-100 opacity-100' : 'scale-[0.8] opacity-0 blur-[1px]')} aria-hidden="true" />
@@ -543,8 +635,26 @@ function UpNext({ playlist }: { playlist: NonNullable<Props['playlist']> }) {
   );
 }
 
+/** Lo dejó a medias: dónde se quedó, cuánto lleva y la opción de seguir o empezar de nuevo. */
+function ResumeCard({ r, step, total, onResume, onRestart }: { r: Resume; step: string; total: number; onResume: () => void; onRestart: () => void }) {
+  return (
+    <section aria-labelledby="retomar" className="w-full rounded-[20px] bg-soi-sidebar p-1.5 text-left">
+      <div className="rounded-[14px] bg-white p-4 shadow-ring">
+        <p className="text-xs font-medium text-soi-accent">Lo dejaste a medias · {leftAgo(r.lastActiveAt)}</p>
+        <h2 id="retomar" className="mt-1 text-balance text-[17px] font-semibold leading-snug">Te quedaste en «{step}»</h2>
+        <p className="nums mt-0.5 text-sm text-soi-muted">Paso {r.index + 1} de {total} · {r.progress} % hecho</p>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-soi-tray" role="progressbar" aria-valuenow={r.progress} aria-valuemin={0} aria-valuemax={100} aria-label="Avance">
+          <div className="h-full origin-left rounded-full bg-soi-accent" style={{ transform: `scaleX(${r.progress / 100})` }} />
+        </div>
+        <Button size="lg" className="mt-4 w-full" onClick={onResume}><Play className="h-4 w-4 fill-current" aria-hidden="true" /> Retomar donde lo dejé</Button>
+        <Button variant="ghost" className="mt-1 w-full text-soi-muted" onClick={onRestart}>Empezar de nuevo</Button>
+      </div>
+    </section>
+  );
+}
+
 function Shell({ title, onExit, progress, voice, children }: {
-  title: string; onExit: string; progress?: { index: number; total: number };
+  title: string; onExit: string; progress?: { index: number; total: number; pct: number };
   voice?: { on: boolean; toggle: () => void }; children: React.ReactNode;
 }) {
   return (
@@ -557,6 +667,7 @@ function Shell({ title, onExit, progress, voice, children }: {
             ))}
           </ol>
         ) : <p className="flex-1 truncate text-sm text-soi-muted">{title}</p>}
+        {progress && <span className="nums w-10 text-right text-xs text-soi-muted" aria-label={`Avance ${progress.pct} por ciento`}>{progress.pct} %</span>}
         {voice && (
           <button type="button" onClick={voice.toggle} aria-pressed={voice.on} aria-label={voice.on ? 'Silenciar voz' : 'Activar voz'}
             className="press flex h-11 w-11 items-center justify-center rounded-lg text-soi-muted hover:bg-black/[0.04]">

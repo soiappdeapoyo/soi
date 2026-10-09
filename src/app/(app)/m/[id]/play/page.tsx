@@ -12,6 +12,7 @@ import { todayISO } from '@/lib/utils';
 import { MomentPlayer } from '@/components/moments/moment-player';
 import { loadDayPlan, playQueue, refOf } from '@/lib/day-plan';
 import { isCreatorAccount } from '@/lib/creators/profile';
+import { RESUME_WINDOW_MS, resumePoint, type SavedProgress } from '@/lib/moments/progress';
 
 export const metadata: Metadata = { title: 'Moment en curso' };
 
@@ -61,6 +62,22 @@ export default async function PlayMomentPage({ params, searchParams }: { params:
     : null;
   const ready = await resolveVideoBlocks(supabase, user.id, await resolveLibraryBlocks(toPlay, { youtube: access.youtube_embed }), access.youtube_embed);
 
+  // ¿Lo dejó a medias (una llamada, cerró la app)? Se ofrece retomar donde lo dejó: misma versión y, en un reto, el mismo día.
+  let resume = null;
+  if (allowed) {
+    let q = supabase.from('moment_runs').select('id, version, challenge_day, mood_before, outputs, step_index, step_block_id, step_remaining, progress, last_active_at')
+      .eq('user_id', user.id).is('completed_at', null).not('step_index', 'is', null)
+      .gte('last_active_at', new Date(Date.now() - RESUME_WINDOW_MS).toISOString())
+      .order('last_active_at', { ascending: false }).limit(1);
+    q = m.official ? q.eq('moment_slug', m.slug) : q.eq('moment_id', m.id);
+    const { data: run } = await q.maybeSingle();
+    const point = run && run.version === m.version && (run.challenge_day ?? null) === (challenge?.day ?? null)
+      ? resumePoint(ready, run as SavedProgress) : null;
+    if (run && point) {
+      resume = { runId: run.id as string, moodBefore: (run.mood_before as number | null) ?? null, outputs: (run.outputs ?? {}) as Record<string, unknown>, lastActiveAt: run.last_active_at as string, ...point };
+    }
+  }
+
   return (
     <MomentPlayer
       moment={{ id: m.id, title: m.title, objective: m.objective, source: m.source, author: m.author, cover: m.cover }}
@@ -72,6 +89,7 @@ export default async function PlayMomentPage({ params, searchParams }: { params:
       autoStart={Boolean(queue) && auto === '1' && allowed}
       ttsAllowed={access.tts && (profile?.tts_enabled ?? true)}
       voice={profile?.voice_preference}
+      resume={resume}
     />
   );
 }
