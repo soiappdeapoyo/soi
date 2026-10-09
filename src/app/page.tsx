@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { ArrowRight, Check, Mic, MoonStar } from 'lucide-react';
 import { buttonClass } from '@/components/ui/button';
 import { Cta } from '@/components/landing/cta';
+import { HowItWorksFilm } from '@/components/emotions/how-it-works-film';
+import type { FilmScript } from '@/config/emotions';
 import { getSettings } from '@/lib/settings';
 import { officialCover } from '@/lib/moments/types';
 
@@ -36,6 +38,26 @@ const STEPS = [
   { n: '02', t: 'Vive un Moment desde 5 minutos', d: 'Una práctica corta, guiada por voz, basada en el autor que ya te inspira. Una cosa a la vez.' },
   { n: '03', t: 'Mira en quién te estás convirtiendo', d: 'Cada Moment es evidencia. No acumulas videos: acumulas pruebas de tu nueva identidad.' },
 ];
+
+/** La animación de la landing: quien llega desde un video de Neville lo vive esa misma noche (SATS). */
+const FILM: FilmScript = {
+  message: 'Vi un video de Neville sobre dormirse con el deseo cumplido, pero no sé cómo hacerlo.',
+  reply: 'Qué bueno que quieras practicarlo. ¿Qué deseo te gustaría sentir cumplido esta noche?',
+  chip: 'Un trabajo nuevo',
+  chips: ['Un trabajo nuevo', 'Paz conmigo', 'Solo hablar'],
+  momentTitle: 'SATS: mi trabajo nuevo',
+  minutes: 15,
+  blocks: [
+    { icon: 'wind', label: 'Respiración 4-7-8', minutes: 2 },
+    { icon: 'brain', label: 'Relaja tu cuerpo', minutes: 3 },
+    { icon: 'eye', label: 'La escena del deseo cumplido', minutes: 8 },
+    { icon: 'sparkles', label: 'Repítela hasta dormir', minutes: 2 },
+  ],
+  playing: { label: 'La escena del deseo cumplido', cue: ['Ya es tuyo…', 'Siéntelo ahora…'] },
+  moodBefore: 4,
+  moodAfter: 8,
+  capacity: 'Confianza',
+};
 
 const ENEMIES = [
   { name: 'El Saboteador', whisper: 'Mañana lo hago.' },
@@ -135,19 +157,25 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* ---------- Cómo funciona ---------- */}
+      {/* ---------- Cómo funciona: los pasos y la animación con la UI real ---------- */}
       <section className="mx-auto max-w-5xl px-5 py-16 sm:py-20" aria-labelledby="como">
         <h2 id="como" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Del video a tu vida, en tres pasos</h2>
-        <ol className="mt-8 grid gap-3 sm:grid-cols-3">
-          {STEPS.map((s) => (
-            <li key={s.n} className="rounded-[20px] bg-white p-5 shadow-ring">
-              <span className="nums text-sm font-medium text-soi-accent">{s.n}</span>
-              <p className="mt-1 text-lg font-semibold">{s.t}</p>
-              <p className="mt-1 text-[15px] text-soi-muted">{s.d}</p>
-            </li>
-          ))}
-        </ol>
-        <Cta href={signup()} where="pasos" className={buttonClass('primary', 'lg', 'mt-8 w-full sm:w-auto')}>Empezar mi primer Moment</Cta>
+        {/* En el teléfono la animación va antes de los pasos; en escritorio, a la derecha. */}
+        <div className="mt-8 grid items-center gap-10 lg:grid-cols-[1fr_auto] lg:gap-12">
+          <HowItWorksFilm script={FILM} className="lg:order-last" />
+          <div>
+            <ol className="flex flex-col gap-3">
+              {STEPS.map((s) => (
+                <li key={s.n} className="rounded-[20px] bg-white p-5 shadow-ring">
+                  <span className="nums text-sm font-medium text-soi-accent">{s.n}</span>
+                  <p className="mt-1 text-lg font-semibold">{s.t}</p>
+                  <p className="mt-1 text-[15px] text-soi-muted">{s.d}</p>
+                </li>
+              ))}
+            </ol>
+            <Cta href={signup()} where="pasos" className={buttonClass('primary', 'lg', 'mt-8 w-full sm:w-auto')}>Empezar mi primer Moment</Cta>
+          </div>
+        </div>
       </section>
 
       {/* ---------- Escucha primero (cómo se siente SOI) ---------- */}
