@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-test('landing muestra el principio SOI', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Diseña tu identidad');
-  await expect(page.getByText('Pensamientos', { exact: true })).toBeVisible();
+test('landing: elegir al autor del video lleva a su reto de 7 días', async ({ page }) => {
+  await page.goto('/?de=neville');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Ya viste el video');
+  const first = page.locator('#elige a[href^="/login"]').first();
+  await expect(first).toContainText('El de tu video');
+  await expect(first).toHaveAttribute('href', `/login?next=${encodeURIComponent('/m/reto_neville_7/play')}`);
 });
 
 test('rutas protegidas redirigen a login', async ({ page }) => {

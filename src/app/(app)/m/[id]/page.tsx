@@ -64,7 +64,7 @@ export default async function MomentPage({ params, searchParams }: { params: Pro
         <div className="relative">
           <p className={cn('flex flex-wrap items-center gap-2 text-xs', m.cover ? 'text-white/85' : 'text-soi-muted')}>
             <span className={cn('rounded-md px-1.5 py-0.5 font-medium', m.cover ? 'bg-white/20 text-white backdrop-blur' : 'bg-soi-accent-soft text-soi-accent')}>{MOMENT_KINDS[m.kind].label}</span>
-            <span className="nums">{m.required_minutes} min · {blocks.length} acciones</span>
+            <span className="nums">{isChallenge ? `${m.required_minutes} min al día · ${totalDays} días` : `${m.required_minutes} min · ${blocks.length} acciones`}</span>
             {!m.official && m.version > 1 && <span className="nums">· versión {m.version}</span>}
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight [text-wrap:balance]">{m.title}</h1>

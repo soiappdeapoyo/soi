@@ -1,6 +1,7 @@
 import { ROUTINES, type RoutineId } from '@/config/routines';
 import type { ActionBlock, MomentKind } from '@/config/actions';
 import { officialCover, type MomentFlow } from '@/lib/moments/types';
+import { OFFICIAL_CHALLENGES } from '@/config/official-challenges';
 
 /**
  * Moments oficiales de SOI: las rutinas del marco teórico convertidas en flujos ejecutables.
@@ -91,7 +92,8 @@ function build(id: RoutineId): MomentFlow {
   };
 }
 
-export const OFFICIAL_MOMENTS: MomentFlow[] = (Object.keys(ROUTINES) as RoutineId[]).map(build);
+/** Las rutinas y los retos de 7 días (src/config/official-challenges.ts). */
+export const OFFICIAL_MOMENTS: MomentFlow[] = [...(Object.keys(ROUTINES) as RoutineId[]).map(build), ...OFFICIAL_CHALLENGES];
 
 export function officialMoment(slug: string): MomentFlow | null {
   return OFFICIAL_MOMENTS.find((m) => m.slug === slug) ?? null;

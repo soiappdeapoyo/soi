@@ -37,8 +37,10 @@ describe('catálogo de acciones', () => {
 
 describe('Moments oficiales', () => {
   it('son las 5 rutinas + el Cierre del día, cada bloque cita su fuente y todos los bloques son válidos', () => {
-    expect(OFFICIAL_MOMENTS).toHaveLength(6);
-    for (const m of OFFICIAL_MOMENTS) {
+    // Los retos de 7 días tienen su propia prueba (official-challenges.test.ts).
+    const routines = OFFICIAL_MOMENTS.filter((m) => m.kind !== 'challenge');
+    expect(routines).toHaveLength(6);
+    for (const m of routines) {
       expect(m.author).toBeTruthy();
       // Cada paso cita al autor de la rutina; el Cierre del día combina autores y cada paso cita el suyo.
       if (m.slug === 'cierre_del_dia') expect(m.blocks.every((x) => (x.source?.length ?? 0) > 10)).toBe(true);

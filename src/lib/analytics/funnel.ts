@@ -63,7 +63,8 @@ export function analyzeFunnel(rows: FunnelRow[]) {
     set.add(r.event);
     if (!geoOf.has(k) && (r.country || r.city)) geoOf.set(k, { country: r.country, city: r.city });
     if (r.event === 'cta_click' && r.detail) ctas.set(r.detail, (ctas.get(r.detail) ?? 0) + 1);
-    if (r.event === 'landing_view' && r.referrer) refs.set(r.referrer, (refs.get(r.referrer) ?? 0) + 1);
+    const src = r.event === 'landing_view' ? r.detail ?? r.referrer : null; // utm o navegador de la app; si no, el dominio
+    if (src) refs.set(src, (refs.get(src) ?? 0) + 1);
   });
 
   const visitors = [...by.entries()];

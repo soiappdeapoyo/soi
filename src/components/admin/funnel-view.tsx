@@ -3,8 +3,13 @@ import { pct } from '@/components/admin/nav-viz';
 
 type Funnel = ReturnType<typeof analyzeFunnel>;
 
-const CTA: Record<string, string> = { hero: 'Botón principal (arriba)', pasos: 'Cómo funciona', precio: 'Precio', cierre: 'Cierre de la página' };
-const ctaLabel = (w: string) => CTA[w] ?? (w.startsWith('tema:') ? `Tema · ${w.slice(5)}` : w);
+const CTA: Record<string, string> = { hero: 'Arriba', reto: 'Tu semana', pasos: 'Cómo funciona', precio: 'Precio', cierre: 'Cierre de la página', faq: 'Preguntas', tema: 'Tema' };
+const AUTHOR: Record<string, string> = { neville: 'Neville', tracy: 'Brian Tracy', hill: 'Napoleon Hill' };
+/** `hero:neville` → «Arriba · Neville» (el reto que eligió y dónde). */
+const ctaLabel = (w: string) => {
+  const [section, what] = w.split(':');
+  return what ? `${CTA[section!] ?? section} · ${AUTHOR[what] ?? what}` : CTA[w] ?? w;
+};
 
 /** Embudo landing → registro: pasos con conversión, quién se quedó a medias, de dónde vienen. */
 export function FunnelView({ f }: { f: Funnel }) {
