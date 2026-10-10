@@ -131,6 +131,7 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 | `0005_streaks_community_push.sql` | Escudo de racha, `register_ritual_day`, `toggle_reaction`, país, avatar, push, autor/demo en posts, **permisos por columna en `user_profiles` (anti-bypass del paywall)**, endurecimiento de `decrement_free_query`/`expire_trials` |
 | `0006_atomic_free_queries.sql` | `consume_chat_query` (comprueba y descuenta atómicamente), `refund_chat_query` (si fallan todos los proveedores), `purge_crisis_logs` (retención 90 días) |
 | `0008_momentum_signals.sql` | Amplía `momentum_events.kind` con `video_watched` y `checkin` |
+| `0033_reminders.sql` | Recordatorios para volver: `user_profiles.reminder_time` ('HH:MM' local; null = 09:00) y `reminders_enabled`; `notification_log` (un aviso por tipo, referencia y día local; solo servidor; `purge_notification_log` 90 días); **pg_cron** `soi-reminders` cada 5 min → `invoke_reminders()` → `pg_net` GET `/api/cron/reminders` con la URL y el secreto de **Supabase Vault** (`soi_app_url`, `soi_cron_secret`; nunca en git) |
 | `0032_messages_user_index.sql` | Índice parcial `messages (user_id, created_at) WHERE role = 'user'` para el loop principal (cuántos mensajes escribió y si escribió después de su primer Moment) |
 | `0031_moment_run_progress.sql` | Retomar un Moment: `moment_runs.step_index`, `step_block_id`, `step_remaining`, `progress` (0–99 por tiempo; 100 al terminar) y `last_active_at`, escribibles por la persona solo en sus ejecuciones sin terminar; índice de lo sin terminar |
 | `0030_funnel_film_events.sql` | `funnel_events.event` admite `film_progress` (escena 1–5 alcanzada) y `film_interact` (pausa, reproducir, toque de escena) de la animación «cómo funciona SOI» (`detail` = `<lugar>:<escena o acción>`; lugares `landing`, `emociones`, `emociones:<slug>`); se ve en `/panel/analytics` |
@@ -195,6 +196,13 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 - **Vía rápida al primer Moment** (`proposalMode` con `firstSession`, solo con acceso a ejecutar): con un mensaje concreto, `first_offer` ofrece algo de 3 minutos; al aceptar, `propose`. Respeta conversar, la ansiedad y no insiste.
 - Pendiente (Fase B/C): plantar el Moment de mañana, evidencia automática del seguimiento, embudo de activación en el panel. Cómo traer a la persona el día 2 (push/correo) está por decidir.
 
+## 🔔 Recordatorios y app instalable
+- **Qué se avisa** (`src/lib/reminders.ts`, puro y testeado): (1) la hora que puso a un Moment de Mi día → **alarma** (`requireInteraction`, vibración larga, `urgency: high`; se queda en pantalla hasta tocarla); (2) lo que pidió en el chat (`scheduleReminder`, `metadata.remind_at` local o con zona); (3) una **invitación al día** a su `reminder_time` con el siguiente paso del loop (`nudgeFor`), solo si hoy no vino (Moment o mensaje), nunca de 22:00 a 07:00 salvo que esa hora la eligió, y no junto a una alarma.
+- **Programador:** pg_cron cada 5 min (Vercel Hobby solo permite un cron al día) → `/api/cron/reminders` (`CRON_SECRET`). Un aviso por día por tipo y referencia (`notification_log`, se anota antes de enviar). Suscripción caducada (404/410) → se borra. `sendPushResult` (`src/lib/push/send.ts`).
+- **Sonido:** los navegadores no permiten sonidos propios en notificaciones; con SOI cerrada suena y vibra como el teléfono. Con SOI abierta, el service worker (`public/sw.js`) pasa el aviso a la app (`ReminderListener`) que toca **campanadas** (`playChime`, Web Audio, sin archivos) + toast con botón. Preferencia en Ajustes (`soi:reminder-sound`).
+- **Instalar (acceso directo):** no puede ser automático. `ReturnSetup` (Hoy desde el primer Moment, al terminar un Moment, Ajustes): Android/Chrome con un toque (`beforeinstallprompt`, `src/lib/pwa/platform.ts`); iPhone con instrucciones (Compartir → Agregar a inicio). En iPhone los avisos solo funcionan con SOI instalada (iOS 16.4+), por eso el orden instalar → avisos. Manifest con PNG (`public/icons/`), `apple-touch-icon`, accesos rápidos (Hoy, Hablar con SOI).
+- **Producción:** `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `CRON_SECRET` en Vercel (Production). El ritual diario ya no manda push a las 06:00 UTC (era medianoche en México). PostHog: `push_enabled`, `push_not_enabled`, `pwa_install_prompt`, `pwa_installed`, `notification_opened`, `notification_in_app`.
+
 ## 🔐 Autenticación (Google)
 
 - `/login`: **Continuar con Google** (`signInWithOAuth`) + enlace mágico.
@@ -257,7 +265,7 @@ Las Action Cards ya no se crean desde el chat: existen como bloque `next_step` d
 - **Cierre del día** (Moment oficial `cierre_del_dia`, 12 min, eslabón resultado): respiración → victoria → aprendizaje → gratitud → la tarea más importante de mañana → escena SATS; cada paso cita su fuente (Dispenza, Brian Tracy, Neville). Lo escrito alimenta la memoria y Mi Nuevo Yo. De noche, Hoy lo propone primero si aún no se hizo, y Mi día lo sugiere.
 - **Hoy avanzas hacia…**: una línea arriba de Hoy con su propósito o meta (o su identidad); sin ninguno, "¿Hacia dónde vas? Defínelo con SOI" abre el chat con Hill.
 - **Racha sin castigo** (`register_ritual_day`): 1 día sin practicar no rompe; 2 días consumen un escudo; hitos 7/21/40/90 regalan un escudo; la fase avanza con la racha (chispa → vacío → alineación → manifestación). Mensaje: "Ayer no te vimos, pero aquí seguimos. ¿Retomamos?"
-- **Cron:** `/api/cron/daily-ritual` (`0 6 * * *`, solo SOI+, push) y `/api/cron/expire-trials`.
+- **Cron:** `/api/cron/daily-ritual` (`0 6 * * *`, solo SOI+, genera el ritual; el aviso lo da `/api/cron/reminders`), `/api/cron/expire-trials` y `/api/cron/reminders` (pg_cron, cada 5 min).
 
 ---
 
@@ -437,7 +445,7 @@ Los días se cuentan en la zona horaria del perfil (`profile.timezone`), nunca e
 - [ ] Anti-sycophant refinado con evaluaciones
 - [ ] Voz premium ElevenLabs
 - [ ] Rate limiting (Upstash) en `/api/chat` y `/api/community`
-- [ ] Envío real de `scheduleReminder` (cron que lea `metadata.remind_at`)
+- [x] Envío real de `scheduleReminder` (`/api/cron/reminders`)
 
 ---
 

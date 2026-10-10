@@ -8,6 +8,7 @@ import { TimezoneSync } from '@/components/layout/timezone-sync';
 import { getConsentState } from '@/lib/consent';
 import { NavTracker } from '@/components/analytics/nav-tracker';
 import { Suspense } from 'react';
+import { ReminderListener } from '@/components/pwa/reminder-listener';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, user } = await getSessionUser();
@@ -37,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }}>
       <AnalyticsProvider userId={user.id} />
       <Suspense fallback={null}><NavTracker /></Suspense>
+      <ReminderListener />
       <TimezoneSync stored={profile?.timezone ?? null} auto={profile?.timezone_auto ?? true} />
       {children}
     </AppShell>

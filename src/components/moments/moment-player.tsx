@@ -18,6 +18,7 @@ import { ACTIONS, blockSeconds, type ActionBlock } from '@/config/actions';
 import { AUTO_ADVANCE, BlockRunner, MOODS, type BlockOutput } from './block-runners';
 import { cn } from '@/lib/utils';
 import { leftAgo, runProgress } from '@/lib/moments/progress';
+import { ReturnSetup } from '@/components/pwa/return-setup';
 
 type Props = {
   /** cover: portada (encabezado al empezar y fondo suave al terminar; nunca durante los pasos). */
@@ -36,6 +37,8 @@ type Props = {
   aiContent?: boolean;
   /** Ejecución que quedó a medias (una interrupción): se ofrece retomar donde la dejó. */
   resume?: Resume | null;
+  /** Instalar SOI y avisos: se ofrece al terminar (cuando más sentido tiene volver mañana). */
+  returnSetup?: { pushOn: boolean; reminderTime: string | null };
 };
 
 export type Resume = {
@@ -62,7 +65,7 @@ function fmt(s: number) {
 /** De dónde se abrió el Moment (chat, Hoy…), para medir en PostHog qué propuestas se viven. */
 const fromParam = () => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('from') ?? (window.location.search.includes('lista=hoy') ? 'hoy' : null));
 
-export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice, playlist, autoStart, aiContent = true, resume }: Props) {
+export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice, playlist, autoStart, aiContent = true, resume, returnSetup }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('before');
   const [runId, setRunId] = useState<string | null>(null);
@@ -576,6 +579,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
               <Link href="/evidencias/nueva" className="press py-2 text-soi-muted underline-offset-4 hover:underline">Llevar al Muro</Link>
               <Link href={`/impulso?compartir=${moment.id}`} className="press py-2 text-soi-muted underline-offset-4 hover:underline">Compartir</Link>
             </nav>
+            {returnSetup && <div className="mt-2 w-full text-left"><ReturnSetup pushOn={returnSetup.pushOn} reminderTime={returnSetup.reminderTime} where="moment_done" /></div>}
           </div>
         ) : (
           <section aria-labelledby="v2" className="mt-2 w-full animate-enter rounded-[20px] bg-soi-sidebar p-3 text-left">

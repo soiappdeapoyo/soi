@@ -16,7 +16,8 @@ export const metadata: Metadata = {
   keywords: ['manifestación', 'afirmaciones', 'meditación', 'Miracle Morning', 'Club de las 5 AM', 'Neville Goddard', 'Joe Dispenza', 'bienestar'],
   openGraph: { type: 'website', locale: 'es_MX', siteName: 'SOI', url },
   twitter: { card: 'summary_large_image' },
-  appleWebApp: { capable: true, title: 'SOI', statusBarStyle: 'black-translucent' },
+  appleWebApp: { capable: true, title: 'SOI', statusBarStyle: 'default' },
+  icons: { apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }] },
 };
 
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#FFFFFF' };

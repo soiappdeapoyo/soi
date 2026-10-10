@@ -26,6 +26,10 @@ export type UserProfile = {
   evening_time: string | null;
   timezone: string | null;
   timezone_auto?: boolean;
+  /** Avisos para volver (0033). */
+  push_subscription?: unknown;
+  reminder_time?: string | null;
+  reminders_enabled?: boolean;
   country: string;
   available_minutes: number | null;
   weakest_link: Eslabon | null;

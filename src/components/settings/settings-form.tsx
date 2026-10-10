@@ -7,18 +7,11 @@ import { Label, Select } from '@/components/ui/input';
 import { GUIDE_VOICES, guideVoice } from '@/config/voices';
 import { unlockAudio } from '@/lib/voice/player';
 
-type Props = { ttsEnabled: boolean; voice: string | null; ttsAllowed: boolean; hasSubscription: boolean; pushEnabled: boolean };
+type Props = { ttsEnabled: boolean; voice: string | null; ttsAllowed: boolean; hasSubscription: boolean };
 
-function urlBase64ToUint8Array(base64: string) {
-  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-  const raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
-  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
-}
-
-export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, pushEnabled }: Props) {
+export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription }: Props) {
   const [tts, setTts] = useState(ttsEnabled);
   const [v, setV] = useState<string>(guideVoice(voice));
-  const [push, setPush] = useState(pushEnabled);
   // Toasts (Sonner): copy corto, sin signos de exclamación.
   const setMsg = (m: string) => toast(m);
 
@@ -31,22 +24,6 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
     unlockAudio();
     const { speak } = await import('@/lib/voice/tts');
     await speak('Hola. Soy tu guía en SOI. Respira conmigo: inhala… y exhala. Hoy va a ser un buen día.', { voice: v, style: 'guide' });
-  }
-
-  async function togglePush() {
-    if (push) {
-      await fetch('/api/push/subscribe', { method: 'DELETE' });
-      setPush(false);
-      return;
-    }
-    const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!key || !('serviceWorker' in navigator) || !('PushManager' in window)) { setMsg('Tu navegador no soporta notificaciones'); return; }
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { setMsg('Permiso de notificaciones denegado'); return; }
-    const reg = await navigator.serviceWorker.register('/sw.js');
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
-    const res = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) });
-    setPush(res.ok);
   }
 
   async function portal() {
@@ -73,12 +50,6 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription, p
           <Button onClick={save} size="sm">Guardar</Button>
           <Button onClick={test} size="sm" variant="outline" disabled={!ttsAllowed}>Probar voz</Button>
         </div>
-      </section>
-
-      <section className="rounded-[20px] bg-white shadow-soft p-5">
-        <h2 className="text-lg font-semibold">Notificaciones</h2>
-        <p className="mt-1 text-sm text-soi-muted">Recibe tu ritual diario cada mañana (SOI+).</p>
-        <Button onClick={togglePush} size="sm" variant="outline" className="mt-3">{push ? 'Desactivar notificaciones' : 'Activar notificaciones'}</Button>
       </section>
 
       <section className="rounded-[20px] bg-white shadow-soft p-5">

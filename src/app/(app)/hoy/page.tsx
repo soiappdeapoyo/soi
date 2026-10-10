@@ -23,6 +23,7 @@ import { cn, startOfTodayISO } from '@/lib/utils';
 import { loadJourney } from '@/lib/journey-server';
 import { firstStepsProgress, nextStep } from '@/lib/journey';
 import { NextStepCard } from '@/components/today/next-step-card';
+import { ReturnSetup } from '@/components/pwa/return-setup';
 
 export const metadata: Metadata = { title: 'Hoy' };
 
@@ -206,6 +207,11 @@ export default async function HoyPage() {
             <span className="block text-sm text-soi-muted">Elige tus Moments una vez; aquí se reproducen solos.</span>
           </span>
         </Link>
+      )}
+
+      {/* Instalar y avisos: desde que vivió su primer Moment (antes, nada compite con el siguiente paso). Se oculta sola cuando ya está. */}
+      {(!welcome || step.kind === 'follow_up') && (
+        <ReturnSetup pushOn={Boolean(profile?.push_subscription)} reminderTime={profile?.reminder_time ?? null} where="hoy" />
       )}
 
       {/* En los primeros pasos, nada compite con el siguiente paso. */}

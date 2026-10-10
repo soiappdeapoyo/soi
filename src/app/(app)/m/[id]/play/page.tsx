@@ -90,6 +90,7 @@ export default async function PlayMomentPage({ params, searchParams }: { params:
       ttsAllowed={access.tts && (profile?.tts_enabled ?? true)}
       voice={profile?.voice_preference}
       resume={resume}
+      returnSetup={{ pushOn: Boolean(profile?.push_subscription), reminderTime: profile?.reminder_time ?? null }}
     />
   );
 }
