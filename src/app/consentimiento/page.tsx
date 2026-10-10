@@ -22,8 +22,9 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
       <Suspense fallback={null}><NavTracker /></Suspense>
       <div className="w-full max-w-md rounded-[24px] bg-white px-6 py-9 text-center shadow-ring sm:px-9">
         <p className="text-2xl font-semibold">SOI.</p>
-        <h1 className="mt-5 text-[26px] font-semibold leading-tight">Consentimiento legal</h1>
-        <p className="mt-2 text-soi-muted">
+        {/* Sin título visible: el encabezado queda solo para lectores de pantalla. */}
+        <h1 className="sr-only">Términos y aviso de privacidad</h1>
+        <p className="mt-5 text-soi-muted">
           {state === 'updated'
             ? 'Actualizamos nuestros términos. Léelos y acéptalos para continuar.'
             : 'Lee y acepta los términos para continuar.'}
