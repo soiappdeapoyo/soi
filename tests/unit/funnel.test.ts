@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeFilm, analyzeFunnel, filmDetail, geoFromHeaders, referrerHost, visitorFrom, type FunnelRow } from '@/lib/analytics/funnel';
+import { analyzeChat, analyzeFilm, analyzeFunnel, filmDetail, geoFromHeaders, referrerHost, visitorFrom, type FunnelRow } from '@/lib/analytics/funnel';
 
 const row = (vid: string, event: FunnelRow['event'], extra: Partial<FunnelRow> = {}): FunnelRow =>
   ({ visitor_id: vid, event, detail: null, country: 'MX', region: 'CMX', city: 'Mexico City', referrer: null, user_id: null, at: '2026-10-08T10:00:00Z', ...extra });
@@ -71,5 +71,28 @@ describe('animación «cómo funciona SOI»', () => {
     expect(analyzeFunnel(rows).visitors).toBe(1);
     expect(analyzeFilm(rows).places.find((p) => p.where === 'landing')?.viewers).toBe(1);
     expect(filmDetail('emociones:sentirse-estancado', 5)).toBe('emociones:sentirse-estancado:5');
+  });
+});
+
+describe('chat de la landing', () => {
+  it('sigue a cada visitante de escribir a guardar su Moment, por autor, crisis y errores', () => {
+    const rows = [
+      row('a', 'landing_view'), row('a', 'chat_message', { detail: '1' }), row('a', 'chat_message', { detail: '2' }),
+      row('a', 'chat_moment', { detail: 'neville' }), row('a', 'cta_click', { detail: 'chat:neville' }), row('a', 'signup'),
+      row('z', 'chat_claim', { detail: 'neville' }), // el enlace se abrió en otro navegador
+      row('b', 'chat_message', { detail: '1' }), row('b', 'cta_click', { detail: 'hero:neville' }), // tocó otro botón, no el del chat
+      row('c', 'chat_message', { detail: '1' }), row('c', 'chat_message', { detail: '2' }), row('c', 'chat_error', { detail: 'ia' }),
+      row('d', 'chat_message', { detail: '1' }), row('d', 'chat_crisis'),
+      row('e', 'landing_view'),
+    ];
+    const c = analyzeChat(rows);
+    expect(c.steps.map((s) => s.count)).toEqual([4, 2, 1, 1, 1]);
+    expect(c.stoppedAt).toEqual([1, 1]); // b tras el primero, c tras el segundo (d fue crisis)
+    expect(c.signupDesigned).toBe(1);
+    expect(c.crisis).toBe(1);
+    expect(c.errors).toEqual([{ kind: 'ia', count: 1 }]);
+    expect(c.byAuthor).toEqual([{ author: 'neville', designed: 1, started: 1, claimed: 1 }]);
+    // Los eventos del chat no cambian el embudo general.
+    expect(analyzeFunnel(rows).visitors).toBe(3);
   });
 });

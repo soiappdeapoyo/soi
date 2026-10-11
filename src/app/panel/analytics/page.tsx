@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin/auth';
 import { emailsById, loadNavEvents } from '@/lib/admin/analytics';
-import { loadFunnel } from '@/lib/admin/signups';
-import { analyzeFilm, analyzeFunnel } from '@/lib/analytics/funnel';
+import { loadChatOutcomes, loadFunnel } from '@/lib/admin/signups';
+import { analyzeChat, analyzeFilm, analyzeFunnel } from '@/lib/analytics/funnel';
 import { FunnelView } from '@/components/admin/funnel-view';
 import { FilmView } from '@/components/admin/film-view';
+import { ChatView } from '@/components/admin/chat-view';
 import { analyzeFlows, buildSessions, neighbors, pageLabel, type Friction } from '@/lib/analytics/nav';
 import { Bars, SessionPath, dur, pct, routeLabel } from '@/components/admin/nav-viz';
 import { cn } from '@/lib/utils';
@@ -44,9 +45,10 @@ export default async function PanelAnalytics({ searchParams }: { searchParams: P
   await requireAdmin();
   const sp = await searchParams;
   const days = RANGES.find((r) => String(r) === sp.dias) ?? 7;
-  const [{ events, truncated, error }, funnelData] = await Promise.all([loadNavEvents({ days }), loadFunnel(days)]);
+  const [{ events, truncated, error }, funnelData, chatOutcomes] = await Promise.all([loadNavEvents({ days }), loadFunnel(days), loadChatOutcomes(days)]);
   const funnel = analyzeFunnel(funnelData.rows);
   const film = analyzeFilm(funnelData.rows);
+  const chat = analyzeChat(funnelData.rows);
   const sessions = buildSessions(events);
   const f = analyzeFlows(sessions);
   const focus = sp.pantalla && f.pages.some((p) => p.path === sp.pantalla) ? sp.pantalla : f.entries[0]?.path ?? null;
@@ -79,6 +81,12 @@ export default async function PanelAnalytics({ searchParams }: { searchParams: P
         {funnelData.error
           ? <p className="text-sm text-soi-muted">No se pudo leer el embudo ({funnelData.error}). ¿Ya se aplicó la migración 0029?</p>
           : <FunnelView f={funnel} />}
+      </Card>
+
+      <Card title="El chat de la landing" hint="Su primer Moment sin cuenta: visitantes únicos que escribieron, hasta guardarlo y vivirlo. Solo qué pasó, nunca lo que escribieron.">
+        {funnelData.error
+          ? <p className="text-sm text-soi-muted">No se pudo leer el embudo ({funnelData.error}). ¿Ya se aplicó la migración 0034?</p>
+          : <ChatView chat={chat} outcomes={chatOutcomes} />}
       </Card>
 
       <Card title="La animación «cómo funciona SOI»" hint="Visitantes únicos que llegaron a cada escena (cada quien cuenta hasta la más lejana), en la landing y en /emociones.">

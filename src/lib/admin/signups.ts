@@ -65,3 +65,21 @@ export async function loadFunnel(days: number) {
   }
   return { rows, error };
 }
+
+/**
+ * Lo que pasó después con los Moments del chat de la landing reclamados en el periodo: cuántos se vivieron
+ * completos (al menos una ejecución terminada) y cuántos se empezaron sin terminar.
+ */
+export async function loadChatOutcomes(days: number) {
+  const a = createAdminClient();
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const { data, error } = await a.from('moment_drafts').select('moment_id').gte('claimed_at', since).not('moment_id', 'is', null).limit(1000);
+  if (error) return { claimed: 0, lived: 0, started: 0, error: error.message };
+  const ids = (data ?? []).map((d) => d.moment_id as string);
+  if (!ids.length) return { claimed: 0, lived: 0, started: 0, error: null };
+  const { data: runs } = await a.from('moment_runs').select('moment_id, completed_at').in('moment_id', ids).limit(5000);
+  const done = new Set<string>();
+  const any = new Set<string>();
+  for (const r of runs ?? []) { any.add(r.moment_id as string); if (r.completed_at) done.add(r.moment_id as string); }
+  return { claimed: ids.length, lived: done.size, started: [...any].filter((id) => !done.has(id)).length, error: null };
+}

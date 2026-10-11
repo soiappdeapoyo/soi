@@ -3,8 +3,8 @@ import { pct } from '@/components/admin/nav-viz';
 
 type Funnel = ReturnType<typeof analyzeFunnel>;
 
-const CTA: Record<string, string> = { hero: 'Arriba', reto: 'Tu semana', pasos: 'Cómo funciona', precio: 'Precio', cierre: 'Cierre de la página', faq: 'Preguntas', tema: 'Tema' };
-const AUTHOR: Record<string, string> = { neville: 'Neville', tracy: 'Brian Tracy', hill: 'Napoleon Hill' };
+const CTA: Record<string, string> = { hero: 'Arriba', reto: 'Tu semana', pasos: 'Cómo funciona', precio: 'Precio', cierre: 'Cierre de la página', faq: 'Preguntas', tema: 'Tema', chat: 'Chat (su Moment)' };
+const AUTHOR: Record<string, string> = { neville: 'Neville', tracy: 'Brian Tracy', hill: 'Napoleon Hill', general: 'sin autor' };
 /** `hero:neville` → «Arriba · Neville» (el reto que eligió y dónde). */
 const ctaLabel = (w: string) => {
   const [section, what] = w.split(':');

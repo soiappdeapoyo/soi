@@ -3,7 +3,9 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { FUNNEL_EVENTS, geoFromHeaders, referrerHost, visitorFrom } from '@/lib/analytics/funnel';
 
 // Lo que se puede registrar desde el navegador (registro e inicio de sesión los anota /auth/callback).
-const CLIENT_EVENTS = FUNNEL_EVENTS.filter((e) => e !== 'signup' && e !== 'login') as [string, ...string[]];
+// (los del chat, salvo chat_message, los anotan /api/landing-chat y /m/borrador.)
+const SERVER_EVENTS = new Set(['signup', 'login', 'chat_moment', 'chat_claim', 'chat_crisis', 'chat_error']);
+const CLIENT_EVENTS = FUNNEL_EVENTS.filter((e) => !SERVER_EVENTS.has(e)) as [string, ...string[]];
 
 const Body = z.object({
   event: z.enum(CLIENT_EVENTS),

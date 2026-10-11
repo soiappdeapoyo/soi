@@ -8,6 +8,7 @@ import { HowItWorksFilm } from '@/components/emotions/how-it-works-film';
 import { JsonLd } from '@/components/emotions/site-header';
 import type { FilmScript } from '@/config/emotions';
 import { FunnelBeacon } from '@/components/landing/funnel-beacon';
+import { LandingChat } from '@/components/landing/landing-chat';
 import { CHALLENGE_SLUGS } from '@/config/official-challenges';
 import { officialMoment } from '@/config/official-moments';
 import { getSettings } from '@/lib/settings';
@@ -159,7 +160,23 @@ export default async function LandingPage() {
               <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />Sin tarjeta</span>
               <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />En español</span>
             </p>
+            <a href="#crea" className="press mt-5 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-soi-gold underline-offset-4 hover:underline">
+              ¿Prefieres uno hecho para ti? Cuéntale a SOI qué te pasa <ChevronDown className="h-4 w-4" aria-hidden="true" />
+            </a>
           </div>
+        </div>
+      </section>
+
+      {/* ---------- Chat sin cuenta: su primer Moment, diseñado ahora. Comenzar → entrar → empieza. ---------- */}
+      <section id="crea" className="scroll-mt-4 bg-soi-sidebar py-16 sm:py-20" aria-labelledby="crea-titulo">
+        <div className="mx-auto grid max-w-5xl gap-8 px-5 lg:grid-cols-[1fr_1.2fr] lg:items-center">
+          <div>
+            <h2 id="crea-titulo" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Cuéntale a SOI qué te pasa. Te diseña tu primer Moment ahora.</h2>
+            <p className="mt-4 text-pretty text-lg text-soi-muted">Sin cuenta. Escribe lo que traes hoy: SOI te escucha, te hace una pregunta y arma unos minutos guiados por voz, con tus palabras y una técnica con su fuente.</p>
+            <p className="mt-3 text-pretty text-soi-muted">Cuando tocas <strong className="text-soi-ink">Comenzar</strong>, entras con Google o tu correo y tu Moment ya te está esperando.</p>
+            <p className="mt-4 text-xs text-soi-muted">Lo que escribes solo se usa para diseñar tu Moment (<Link href="/privacidad" className="underline">Aviso de privacidad</Link>). SOI no sustituye terapia.</p>
+          </div>
+          <LandingChat />
         </div>
       </section>
 

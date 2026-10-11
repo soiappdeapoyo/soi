@@ -3,7 +3,7 @@
  * → se registra. Puro y testeado: geolocalización desde los encabezados de Vercel y métricas por visitante.
  */
 
-export const FUNNEL_EVENTS = ['landing_view', 'cta_click', 'login_view', 'auth_start', 'signup', 'login', 'film_progress', 'film_interact'] as const;
+export const FUNNEL_EVENTS = ['landing_view', 'cta_click', 'login_view', 'auth_start', 'signup', 'login', 'film_progress', 'film_interact', 'chat_message', 'chat_moment', 'chat_claim', 'chat_crisis', 'chat_error'] as const;
 export type FunnelEventName = (typeof FUNNEL_EVENTS)[number];
 export const VISITOR_COOKIE = 'soi_vid';
 
@@ -56,7 +56,7 @@ export function analyzeFunnel(rows: FunnelRow[]) {
   const ctas = new Map<string, number>();
   const refs = new Map<string, number>();
   rows.forEach((r, i) => {
-    if (FILM_EVENTS.has(r.event)) return; // la animación tiene su propio análisis (analyzeFilm)
+    if (FILM_EVENTS.has(r.event) || CHAT_EVENTS.has(r.event)) return; // la animación y el chat tienen su propio análisis
     const k = key(r, i);
     let set = by.get(k);
     if (!set) { set = new Set(); by.set(k, set); }
@@ -114,6 +114,7 @@ export function analyzeFunnel(rows: FunnelRow[]) {
 /* ---------- La animación "cómo funciona SOI" (landing y /emociones) ---------- */
 
 const FILM_EVENTS = new Set<FunnelEventName>(['film_progress', 'film_interact']);
+const CHAT_EVENTS = new Set<FunnelEventName>(['chat_message', 'chat_moment', 'chat_claim', 'chat_crisis', 'chat_error']);
 export const FILM_SCENES = 5;
 export type FilmInteraction = 'pause' | 'play' | 'scene';
 
@@ -182,5 +183,63 @@ export function analyzeFilm(rows: FunnelRow[]) {
       notSeen: rate([...landingVisitors].filter((v) => !anyFilm.has(v))),
       landingVisitors: landingVisitors.size,
     } : null,
+  };
+}
+
+/* ---------- El chat de la landing (primer Moment sin cuenta) ---------- */
+
+export const CHAT_AUTHORS = ['neville', 'tracy', 'hill', 'general'] as const;
+const chatAuthor = (d: string | null) => (CHAT_AUTHORS as readonly string[]).includes(d ?? '') ? d! : 'general';
+
+/**
+ * Del chat de la landing a vivir su Moment: escribieron → respondieron la pregunta de SOI → SOI les diseñó su
+ * Moment → tocaron Comenzar (`cta_click` con `chat:<autor>`) → entraron y lo guardaron (`chat_claim`).
+ * "Guardaron" se cuenta por evento y no por visitante: el enlace mágico puede abrirse en otro navegador.
+ * También: hasta qué mensaje llegan, por autor del video, crisis y errores (tope o IA caída).
+ */
+export function analyzeChat(rows: FunnelRow[]) {
+  type V = { depth: number; author: string | null; designed: boolean; started: boolean; signup: boolean; crisis: boolean };
+  const by = new Map<string, V>();
+  const errors = new Map<string, number>();
+  const claims = new Map<string, number>();
+  let claimed = 0;
+
+  rows.forEach((r, i) => {
+    const vid = r.visitor_id ?? `anon-${i}`;
+    if (r.event === 'chat_claim') { claimed++; const a = chatAuthor(r.detail); claims.set(a, (claims.get(a) ?? 0) + 1); return; }
+    if (r.event === 'chat_error') { const k = r.detail || 'ia'; errors.set(k, (errors.get(k) ?? 0) + 1); }
+    const v = by.get(vid) ?? { depth: 0, author: null, designed: false, started: false, signup: false, crisis: false };
+    if (r.event === 'chat_message') v.depth = Math.max(v.depth, Number(r.detail) || 1);
+    else if (r.event === 'chat_moment') { v.designed = true; v.author = chatAuthor(r.detail); }
+    else if (r.event === 'chat_crisis') v.crisis = true;
+    else if (r.event === 'cta_click' && r.detail?.startsWith('chat:')) { v.started = true; v.author ??= chatAuthor(r.detail.slice(5)); }
+    else if (r.event === 'signup') v.signup = true;
+    else if (r.event !== 'chat_error') return;
+    by.set(vid, v);
+  });
+
+  const chatters = [...by.values()].filter((v) => v.depth > 0 || v.designed);
+  const n = (pred: (v: V) => boolean) => chatters.filter(pred).length;
+  const maxDepth = Math.max(0, ...chatters.map((v) => v.depth));
+  return {
+    steps: [
+      { id: 'wrote', label: 'Escribieron', count: chatters.length },
+      { id: 'answered', label: 'Respondieron la pregunta de SOI', count: n((v) => v.depth >= 2 || v.designed) },
+      { id: 'designed', label: 'SOI les diseñó su Moment', count: n((v) => v.designed) },
+      { id: 'started', label: 'Tocaron Comenzar', count: n((v) => v.started) },
+      { id: 'claimed', label: 'Entraron y lo guardaron', count: claimed },
+    ],
+    /** Visitantes que se quedaron en cada mensaje (1 = solo el primero) sin que SOI les diseñara su Moment. */
+    stoppedAt: Array.from({ length: maxDepth }, (_, i) => n((v) => v.depth === i + 1 && !v.designed && !v.crisis)),
+    /** Recibieron su Moment y se registraron en el mismo navegador. */
+    signupDesigned: n((v) => v.designed && v.signup),
+    crisis: n((v) => v.crisis),
+    errors: [...errors].sort((a, b) => b[1] - a[1]).map(([kind, count]) => ({ kind, count })),
+    byAuthor: CHAT_AUTHORS.map((a) => ({
+      author: a,
+      designed: n((v) => v.designed && v.author === a),
+      started: n((v) => v.started && v.author === a),
+      claimed: claims.get(a) ?? 0,
+    })).filter((r) => r.designed || r.started || r.claimed),
   };
 }
