@@ -172,9 +172,6 @@ export default async function LandingPage() {
         <div className="mx-auto grid max-w-5xl gap-8 px-5 lg:grid-cols-[1fr_1.2fr] lg:items-center">
           <div>
             <h2 id="crea-titulo" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Cuéntale a SOI qué te pasa. Te diseña tu primer Moment ahora.</h2>
-            <p className="mt-4 text-pretty text-lg text-soi-muted">Sin cuenta. Escribe lo que traes hoy: SOI te escucha, te hace una pregunta y arma unos minutos guiados por voz, con tus palabras y una técnica con su fuente.</p>
-            <p className="mt-3 text-pretty text-soi-muted">Cuando tocas <strong className="text-soi-ink">Comenzar</strong>, entras con Google o tu correo y tu Moment ya te está esperando.</p>
-            <p className="mt-4 text-xs text-soi-muted">Lo que escribes solo se usa para diseñar tu Moment (<Link href="/privacidad" className="underline">Aviso de privacidad</Link>). SOI no sustituye terapia.</p>
           </div>
           <LandingChat />
         </div>
