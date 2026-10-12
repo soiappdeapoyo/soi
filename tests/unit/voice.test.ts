@@ -83,3 +83,15 @@ describe('voz guía por OpenRouter', () => {
     expect(hasTtsProvider({ OPENROUTER_API_KEY: ' ' })).toBe(false);
   });
 });
+
+describe('indicaciones fijas de la voz', () => {
+  it('reconoce las palabras de la respiración y arma su URL compartida', async () => {
+    const { cueIdFor, cueUrl, VOICE_CUE_VERSION } = await import('@/config/voice-cues');
+    expect(cueIdFor('Inhala…', 'breath')).toBe('inhala');
+    expect(cueIdFor('Exhala…', 'breath')).toBe('exhala');
+    expect(cueIdFor('Diez segundos más.', 'guide')).toBe('diez');
+    expect(cueIdFor('Inhala…', 'calm')).toBeNull();
+    expect(cueIdFor('Respira hondo', 'breath')).toBeNull();
+    expect(cueUrl('Sulafat', 'inhala')).toBe(`/api/voice/cue/Sulafat/inhala?v=${VOICE_CUE_VERSION}`);
+  });
+});

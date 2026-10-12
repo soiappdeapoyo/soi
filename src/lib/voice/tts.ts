@@ -1,6 +1,7 @@
 'use client';
 
-import type { VoiceStyle } from '@/config/voices';
+import { DEFAULT_GUIDE_VOICE, guideVoice, type VoiceStyle } from '@/config/voices';
+import { cueIdFor, cueUrl } from '@/config/voice-cues';
 import { getPlayer, isUnlocked, unlockAudio } from './player';
 
 export { unlockAudio };
@@ -18,6 +19,12 @@ let generation = 0;
 let speaking = false;
 let neuralOff = false; // si el servidor dice que no hay voz neuronal, no insistimos en esta sesión
 const audioCache = new Map<string, Promise<string | null>>();
+let currentVoice: string = DEFAULT_GUIDE_VOICE;
+
+/** La voz de la persona (perfil): las indicaciones fijas se piden ya con ella, sin pasar por la sesión. */
+export function setGuideVoice(voice: string | null | undefined) {
+  currentVoice = guideVoice(voice);
+}
 
 function supported() {
   return typeof window !== 'undefined';
@@ -68,7 +75,16 @@ function fetchAudio(text: string, style: VoiceStyle, voice?: string): Promise<st
   const key = `${voice ?? ''}|${style}|${text}`;
   const cached = audioCache.get(key);
   if (cached) return cached;
+  const cueId = cueIdFor(text, style);
   const p = (async () => {
+    // Indicación fija (Inhala, Exhala…): audio compartido por todas las personas, en caché del CDN y del navegador.
+    if (cueId) {
+      try {
+        const res = await fetch(cueUrl(voice ?? currentVoice, cueId));
+        if (res.ok) return URL.createObjectURL(await res.blob());
+      } catch { /* respaldo: la voz del navegador */ }
+      return null;
+    }
     if (neuralOff) return null;
     // Un reintento: un fragmento que falla por tiempo casi siempre sale a la segunda.
     for (let attempt = 0; attempt < 2; attempt++) {

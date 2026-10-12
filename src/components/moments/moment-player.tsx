@@ -65,6 +65,11 @@ function fmt(s: number) {
 /** De dónde se abrió el Moment (chat, Hoy…), para medir en PostHog qué propuestas se viven. */
 const fromParam = () => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('from') ?? (window.location.search.includes('lista=hoy') ? 'hoy' : null));
 
+/** Las palabras de la respiración (audios fijos compartidos): se precargan antes del paso para que suenen al instante. */
+function prefetchBreath(prefetch: (text: string, style: VoiceStyle) => void) {
+  for (const w of ['Inhala…', 'Exhala…', 'Sostén…', 'Pausa…']) prefetch(w, 'breath');
+}
+
 export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, voice, playlist, autoStart, aiContent = true, resume, returnSetup }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('before');
@@ -115,7 +120,9 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     if (!voiceOn || !ttsAllowed) return;
     void import('@/lib/voice/tts').then(({ cue: c, cueNow }) => (style === 'breath' ? cueNow(text, style) : c(text, style))).catch(() => {});
   }, [voiceOn, ttsAllowed]);
-  void voice;
+  useEffect(() => {
+    void import('@/lib/voice/tts').then(({ setGuideVoice }) => setGuideVoice(voice)).catch(() => {});
+  }, [voice]);
 
   const saveOutputs = useCallback((id: string | null, data: Record<string, BlockOutput>) => {
     if (!id) return;
@@ -211,12 +218,10 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     if (phase !== 'run') return;
     const { text, style } = blockSpeech(block);
     if (block.type === 'breathing') {
-      // Respiración: la guía es "Inhala… / Exhala…" desde el primer segundo (las indicaciones se precargan).
-      void import('@/lib/voice/tts').then(({ prefetchSpeech, stopSpeaking }) => {
-        stopSpeaking();
-        prefetchSpeech('Inhala…', 'breath');
-        prefetchSpeech('Exhala…', 'breath'); prefetchSpeech('Sostén…', 'breath');
-      }).catch(() => {});
+      // Respiración: la guía es "Inhala… / Exhala…" desde el primer segundo (audios fijos, ya precargados).
+      // Sin stopSpeaking aquí: el halo (hijo) dice "Inhala…" antes que este efecto, y pararlo lo callaba.
+      // "Inhala…" ya corta lo que sonaba del paso anterior.
+      void import('@/lib/voice/tts').then(({ prefetchSpeech }) => prefetchBreath(prefetchSpeech)).catch(() => {});
     } else {
       void say(text, style);
     }
@@ -225,7 +230,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     if (following && voiceOn && ttsAllowed) {
       const n = blockSpeech(following);
       void import('@/lib/voice/tts').then(({ prefetchSpeech }) => {
-        if (following.type === 'breathing') { prefetchSpeech('Inhala…', 'breath'); prefetchSpeech('Exhala…', 'breath'); prefetchSpeech('Sostén…', 'breath'); }
+        if (following.type === 'breathing') prefetchBreath(prefetchSpeech);
         else prefetchSpeech(n.text, n.style);
       }).catch(() => {});
     }
@@ -236,8 +241,9 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   useEffect(() => {
     if (!voiceOn || !ttsAllowed || !blocks[0]) return;
     const first = blocks[0];
-    void import('@/lib/voice/tts').then(({ prefetchSpeech }) => {
-      if (first.type === 'breathing') { prefetchSpeech('Inhala…', 'breath'); prefetchSpeech('Exhala…', 'breath'); prefetchSpeech('Sostén…', 'breath'); }
+    void import('@/lib/voice/tts').then(({ prefetchSpeech, setGuideVoice }) => {
+      setGuideVoice(voice);
+      if (first.type === 'breathing') prefetchBreath(prefetchSpeech);
       else { const s = blockSpeech(first); prefetchSpeech(s.text, s.style, 3); }
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps

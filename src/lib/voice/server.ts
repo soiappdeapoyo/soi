@@ -63,7 +63,7 @@ export async function cachedVoice(key: string): Promise<Uint8Array | null> {
 }
 
 /** Gemini TTS por OpenRouter: PCM crudo de 16 bits, 24 kHz mono. */
-export async function speechViaOpenRouter(text: string, voice: string, style: VoiceStyle, fetchImpl: typeof fetch = fetch): Promise<Int16Array> {
+export async function speechViaOpenRouter(text: string, voice: string, style: VoiceStyle, fetchImpl: typeof fetch = fetch, instructions: string = VOICE_STYLES[style]): Promise<Int16Array> {
   const res = await fetchImpl(OPENROUTER_SPEECH_URL, {
     method: 'POST',
     headers: {
@@ -71,19 +71,19 @@ export async function speechViaOpenRouter(text: string, voice: string, style: Vo
       'Content-Type': 'application/json',
       'X-Title': 'SOI',
     },
-    body: JSON.stringify({ model: OPENROUTER_TTS_MODEL, input: text, voice, instructions: VOICE_STYLES[style], response_format: 'pcm' }),
+    body: JSON.stringify({ model: OPENROUTER_TTS_MODEL, input: text, voice, instructions, response_format: 'pcm' }),
     signal: AbortSignal.timeout(45_000),
   });
   if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
   return pcmFromWav(new Uint8Array(await res.arrayBuffer()));
 }
 
-async function speechViaGoogle(text: string, voice: string, style: VoiceStyle): Promise<Int16Array> {
+async function speechViaGoogle(text: string, voice: string, instructions: string): Promise<Int16Array> {
   const { audio } = await generateSpeech({
     model: google.speech(TTS_MODEL),
     text,
     voice,
-    instructions: VOICE_STYLES[style],
+    instructions,
     outputFormat: 'wav',
     abortSignal: AbortSignal.timeout(45_000),
     maxRetries: 1,
@@ -94,12 +94,14 @@ async function speechViaGoogle(text: string, voice: string, style: VoiceStyle): 
 /**
  * Genera la locución con la voz y el estilo de la guía y la guarda en caché. Devuelve MP3 y segundos.
  * OpenRouter primero (se paga con sus créditos); si falla o no hay clave, Google directo.
+ * `opts.instructions` y `opts.path`: las indicaciones fijas (Inhala, Exhala…) usan su propia instrucción y ruta.
  */
-export async function synthesize(text: string, voiceId: string | null | undefined, style: VoiceStyle) {
+export async function synthesize(text: string, voiceId: string | null | undefined, style: VoiceStyle, opts?: { instructions?: string; path?: string }) {
   const voice = guideVoice(voiceId);
+  const instructions = opts?.instructions ?? VOICE_STYLES[style];
   const providers: [string, () => Promise<Int16Array>][] = [];
-  if (process.env.OPENROUTER_API_KEY?.trim()) providers.push(['openrouter', () => speechViaOpenRouter(text, voice, style)]);
-  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()) providers.push(['google', () => speechViaGoogle(text, voice, style)]);
+  if (process.env.OPENROUTER_API_KEY?.trim()) providers.push(['openrouter', () => speechViaOpenRouter(text, voice, style, fetch, instructions)]);
+  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()) providers.push(['google', () => speechViaGoogle(text, voice, instructions)]);
 
   let pcm: Int16Array | null = null;
   const errors: string[] = [];
@@ -118,7 +120,7 @@ export async function synthesize(text: string, voiceId: string | null | undefine
   if (!pcm) throw new Error(errors.join(' · ') || 'sin proveedor de voz');
 
   const mp3 = encodeMp3(pcm);
-  const key = voiceKey(text, voice, style);
+  const key = opts?.path ?? voiceKey(text, voice, style);
   await createAdminClient().storage.from(BUCKET).upload(`${key}.mp3`, mp3, { contentType: 'audio/mpeg', upsert: true });
   return { mp3, seconds: Math.ceil(pcm.length / SAMPLE_RATE), key };
 }
