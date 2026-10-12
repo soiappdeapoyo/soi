@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { getStripe } from '@/lib/billing/stripe';
 import { creatorShare } from '@/config/creators';
 import { activateFromCheckout } from '@/lib/billing/activate';
+import { profileFields } from '@/lib/billing/subscription';
 
 export async function POST(req: Request) {
   const sig = req.headers.get('stripe-signature');
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
       const sub = event.data.object as Stripe.Subscription;
       const active = ['active', 'trialing', 'past_due'].includes(sub.status);
       await db.from('user_profiles')
-        .update({ subscription_status: sub.status, ...(active ? { plan: 'soi_plus' } : {}) })
+        .update({ ...profileFields(sub), ...(active ? { plan: 'soi_plus' } : {}) })
         .eq('stripe_subscription_id', sub.id);
       break;
     }

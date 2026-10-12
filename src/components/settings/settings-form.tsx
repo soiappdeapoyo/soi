@@ -7,9 +7,9 @@ import { Label, Select } from '@/components/ui/input';
 import { GUIDE_VOICES, guideVoice } from '@/config/voices';
 import { unlockAudio } from '@/lib/voice/player';
 
-type Props = { ttsEnabled: boolean; voice: string | null; ttsAllowed: boolean; hasSubscription: boolean };
+type Props = { ttsEnabled: boolean; voice: string | null; ttsAllowed: boolean; subscription: React.ReactNode };
 
-export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription }: Props) {
+export function SettingsForm({ ttsEnabled, voice, ttsAllowed, subscription }: Props) {
   const [tts, setTts] = useState(ttsEnabled);
   const [v, setV] = useState<string>(guideVoice(voice));
   // Toasts (Sonner): copy corto, sin signos de exclamación.
@@ -24,11 +24,6 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription }:
     unlockAudio();
     const { speak } = await import('@/lib/voice/tts');
     await speak('Hola. Soy tu guía en SOI. Respira conmigo: inhala… y exhala. Hoy va a ser un buen día.', { voice: v, style: 'guide' });
-  }
-
-  async function portal() {
-    const res = await fetch('/api/stripe/portal', { method: 'POST' });
-    if (res.ok) window.location.href = ((await res.json()) as { url: string }).url;
   }
 
   return (
@@ -52,12 +47,7 @@ export function SettingsForm({ ttsEnabled, voice, ttsAllowed, hasSubscription }:
         </div>
       </section>
 
-      <section className="rounded-[20px] bg-white shadow-soft p-5">
-        <h2 className="text-lg font-semibold">Suscripción</h2>
-        {hasSubscription
-          ? <Button onClick={portal} size="sm" variant="outline" className="mt-3">Administrar suscripción</Button>
-          : <a href="/planes" className="mt-3 inline-block underline">Ver planes SOI+</a>}
-      </section>
+      {subscription}
 
       <form action="/auth/signout" method="post">
         <Button type="submit" variant="ghost">Cerrar sesión</Button>

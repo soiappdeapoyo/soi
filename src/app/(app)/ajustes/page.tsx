@@ -5,6 +5,8 @@ import { getAccessMap } from '@/lib/billing/check-access';
 import { SettingsForm } from '@/components/settings/settings-form';
 import { TimezoneField } from '@/components/settings/timezone-field';
 import { ReturnSetup } from '@/components/pwa/return-setup';
+import { SubscriptionSection } from '@/components/settings/subscription-section';
+import { loadSubscription, subscriptionView } from '@/lib/billing/subscription';
 
 export const metadata: Metadata = { title: 'Ajustes' };
 
@@ -12,6 +14,10 @@ export default async function AjustesPage() {
   const { user } = await getSessionUser();
   if (!user) redirect('/login');
   const { profile, plan, access } = await getAccessMap(user.id);
+  // Stripe es la fuente de verdad (fecha de renovación, cancelación programada); si no responde, Ajustes sale igual.
+  const sub = profile?.stripe_customer_id
+    ? await loadSubscription(profile.stripe_customer_id, profile.stripe_subscription_id).catch((e: unknown) => { console.error('[stripe] ajustes', e instanceof Error ? e.message : e); return null; })
+    : null;
 
   return (
     <div className="mx-auto max-w-xl px-5 py-8">
@@ -28,7 +34,7 @@ export default async function AjustesPage() {
         ttsEnabled={profile?.tts_enabled ?? true}
         voice={profile?.voice_preference ?? null}
         ttsAllowed={access.tts}
-        hasSubscription={Boolean(profile?.stripe_customer_id)}
+        subscription={<SubscriptionSection subscription={sub ? subscriptionView(sub) : null} hasCustomer={Boolean(profile?.stripe_customer_id)} timezone={profile?.timezone ?? 'America/Mexico_City'} />}
       />
     </div>
   );

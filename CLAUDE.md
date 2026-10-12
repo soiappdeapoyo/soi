@@ -184,7 +184,7 @@ Una tabla maestra `agent_knowledge` (estilo Notion/Monday): `category` = base, `
 | SOI+ Mensual | $4.99 USD/mes | `STRIPE_PRICE_SOI_PLUS_MONTHLY` |
 | SOI+ Anual | $29.99 USD/año (50% dto.) | `STRIPE_PRICE_SOI_PLUS_YEARLY` |
 
-**Flujo Stripe:** `/planes` → `/api/stripe/checkout` → Checkout → `/checkout/success` → webhook `checkout.session.completed` → `plan='soi_plus'`. `customer.subscription.deleted` → `plan='free'`. Portal: `/api/stripe/portal`.
+**Flujo Stripe:** `/planes` → `/api/stripe/checkout` → Checkout → `/checkout/success` → webhook `checkout.session.completed` → `plan='soi_plus'`. `customer.subscription.deleted` → `plan='free'`. **Cancelar desde Ajustes** (`SubscriptionSection` + `/api/stripe/subscription`, `src/lib/billing/subscription.ts`): botón propio con confirmación, sin depender de la configuración del portal; cancela al final del periodo pagado (`cancel_at_period_end`, `subscription_ends_at`) y "Seguir con SOI+" lo deshace. Ajustes lee de Stripe la renovación o el fin. Portal (`/api/stripe/portal`): método de pago y facturas.
 
 ---
 
