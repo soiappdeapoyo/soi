@@ -18,6 +18,8 @@ type Opts = { style?: VoiceStyle; rate?: number; pauseMs?: number };
 let generation = 0;
 let speaking = false;
 let neuralOff = false; // si el servidor dice que no hay voz neuronal, no insistimos en esta sesión
+let neuralErrors = 0; // fallos seguidos del proveedor: con 2, la sesión sigue con la voz del navegador sin esperar
+let cuesOff = false; // si una indicación fija no llega, las siguientes van directo a la voz del navegador (a tiempo)
 const audioCache = new Map<string, Promise<string | null>>();
 let currentVoice: string = DEFAULT_GUIDE_VOICE;
 
@@ -78,11 +80,14 @@ function fetchAudio(text: string, style: VoiceStyle, voice?: string): Promise<st
   const cueId = cueIdFor(text, style);
   const p = (async () => {
     // Indicación fija (Inhala, Exhala…): audio compartido por todas las personas, en caché del CDN y del navegador.
+    // Si no llega, "Inhala…" no puede esperar: esta y las siguientes van con la voz del navegador.
     if (cueId) {
+      if (cuesOff) return null;
       try {
         const res = await fetch(cueUrl(voice ?? currentVoice, cueId));
         if (res.ok) return URL.createObjectURL(await res.blob());
       } catch { /* respaldo: la voz del navegador */ }
+      cuesOff = true;
       return null;
     }
     if (neuralOff) return null;
@@ -92,9 +97,11 @@ function fetchAudio(text: string, style: VoiceStyle, voice?: string): Promise<st
         const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, style, ...(voice ? { voice } : {}) }) });
         if (res.status === 204) {
           if (res.headers.get('x-soi-tts') !== 'error') { neuralOff = true; return null; } // sin acceso, sin clave o tope diario
+          // El proveedor falla (cuota, saldo): dos fallos seguidos y la sesión deja de esperarlo.
+          if (++neuralErrors >= 2) { neuralOff = true; return null; }
           continue;
         }
-        if (res.ok) return URL.createObjectURL(await res.blob());
+        if (res.ok) { neuralErrors = 0; return URL.createObjectURL(await res.blob()); }
       } catch { /* reintento */ }
     }
     return null;
