@@ -15,8 +15,8 @@ import { getSettings } from '@/lib/settings';
 import type { MomentFlow } from '@/lib/moments/types';
 
 export const metadata: Metadata = {
-  title: 'SOI · Ya viste el video. Ahora vívelo 7 días.',
-  description: 'Neville Goddard, Brian Tracy o Napoleon Hill: elige al autor de tu video y practica su técnica real 7 días, guiado por voz y en español. Gratis y sin tarjeta.',
+  title: 'SOI · Cuéntale qué te pasa. Te diseña tu práctica ahora.',
+  description: 'Cuéntale a SOI qué te pasa y te diseña una práctica de minutos, guiada por voz y en español, con las técnicas de Neville Goddard, Brian Tracy y Napoleon Hill. Gratis y sin tarjeta.',
 };
 
 const signup = (next?: string) => `/login${next ? `?next=${encodeURIComponent(next)}` : ''}`;
@@ -132,7 +132,7 @@ export default async function LandingPage() {
       <FunnelBeacon event="landing_view" />
       <JsonLd data={{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: FAQ.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })) }} />
 
-      {/* ---------- Héroe: el mundo de los videos + la elección de un toque ---------- */}
+      {/* ---------- Héroe estilo chat de IA: texto grande, resumen corto y el chat. Debajo, los retos por autor. ---------- */}
       <section className="relative isolate overflow-hidden bg-soi-ink text-white">
         <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
           <span className="text-2xl font-semibold">SOI.</span>
@@ -140,40 +140,29 @@ export default async function LandingPage() {
         </header>
 
         {/* El halo de respiración: la única expresividad de la página (estático con movimiento reducido). */}
-        <span aria-hidden="true" className="pointer-events-none absolute -right-24 top-24 -z-10 h-[28rem] w-[28rem] animate-breathe rounded-full bg-soi-accent-fill/25 blur-3xl sm:right-0" />
+        <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-24 -z-10 h-[28rem] w-[28rem] -translate-x-1/2 animate-breathe rounded-full bg-soi-accent-fill/25 blur-3xl" />
 
-        <div id="elige" className="mx-auto grid max-w-5xl scroll-mt-4 gap-10 px-5 pb-16 pt-4 sm:pb-24 sm:pt-12 lg:grid-cols-[1.1fr_1fr] lg:items-center">
-          <div>
-            <p className="text-sm font-medium text-white/70">¿Viste un video de Neville, Brian Tracy o Napoleon Hill?</p>
-            <h1 className="mt-3 text-balance text-[2.6rem] font-black uppercase leading-[0.95] tracking-tight sm:text-7xl">
-              Ya viste el video.<br /><span className="text-soi-gold">Ahora vívelo 7&nbsp;días.</span>
-            </h1>
-            <p className="mt-5 max-w-xl text-pretty text-lg text-white/80">
-              Su técnica real, guiada por voz y en español. Desde {MIN_MINUTES} minutos al día. Empiezas hoy.
-            </p>
-          </div>
-          <div>
-            <h2 className="mb-3 text-lg font-semibold">¿De quién era el video?</h2>
-            <AuthorPicker offers={OFFERS} where="hero" />
-            <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/60">
-              <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />Gratis {TRIAL_DAYS} días</span>
-              <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />Sin tarjeta</span>
-              <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />En español</span>
-            </p>
-            <a href="#crea" className="press mt-5 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-soi-gold underline-offset-4 hover:underline">
-              ¿Prefieres uno hecho para ti? Cuéntale a SOI qué te pasa <ChevronDown className="h-4 w-4" aria-hidden="true" />
-            </a>
+        <div id="crea" className="mx-auto max-w-2xl scroll-mt-4 px-5 pb-14 pt-6 text-center sm:pb-20 sm:pt-14">
+          <h1 className="text-balance text-[2.4rem] font-black uppercase leading-[0.95] tracking-tight sm:text-6xl">
+            Cuéntale a SOI qué te pasa.<br /><span className="text-soi-gold">Te diseña tu práctica ahora.</span>
+          </h1>
+          <p className="mx-auto mt-4 max-w-lg text-pretty text-[17px] text-white/75 sm:text-lg">
+            Unos minutos guiados por voz, en español, con las técnicas reales de Neville, Brian Tracy y Napoleon Hill. Gratis y sin tarjeta.
+          </p>
+          <div className="mt-7 text-left sm:mt-9">
+            <LandingChat />
           </div>
         </div>
-      </section>
 
-      {/* ---------- Chat sin cuenta: su primer Moment, diseñado ahora. Comenzar → entrar → empieza. ---------- */}
-      <section id="crea" className="scroll-mt-4 bg-soi-sidebar py-16 sm:py-20" aria-labelledby="crea-titulo">
-        <div className="mx-auto grid max-w-5xl gap-8 px-5 lg:grid-cols-[1fr_1.2fr] lg:items-center">
-          <div>
-            <h2 id="crea-titulo" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Cuéntale a SOI qué te pasa. Te diseña tu primer Moment ahora.</h2>
-          </div>
-          <LandingChat />
+        <div id="elige" className="mx-auto max-w-2xl scroll-mt-4 border-t border-white/10 px-5 pb-16 pt-12 sm:pb-20">
+          <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">¿Viste un video de Neville, Brian Tracy o Napoleon Hill?</h2>
+          <p className="mt-2 text-pretty text-white/70">Vive su reto de 7 días. Desde {MIN_MINUTES} minutos al día; tu día 1 empieza hoy.</p>
+          <div className="mt-5"><AuthorPicker offers={OFFERS} where="hero" /></div>
+          <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/60">
+            <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />Gratis {TRIAL_DAYS} días</span>
+            <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />Sin tarjeta</span>
+            <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />En español</span>
+          </p>
         </div>
       </section>
 
