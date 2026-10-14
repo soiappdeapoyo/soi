@@ -9,6 +9,7 @@ import { JsonLd } from '@/components/emotions/site-header';
 import type { FilmScript } from '@/config/emotions';
 import { FunnelBeacon } from '@/components/landing/funnel-beacon';
 import { LandingChat } from '@/components/landing/landing-chat';
+import { HeroQuestions } from '@/components/landing/hero-questions';
 import { CHALLENGE_SLUGS } from '@/config/official-challenges';
 import { officialMoment } from '@/config/official-moments';
 import { getSettings } from '@/lib/settings';
@@ -143,13 +144,9 @@ export default async function LandingPage() {
         <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-24 -z-10 h-[28rem] w-[28rem] -translate-x-1/2 animate-breathe rounded-full bg-soi-accent-fill/25 blur-3xl" />
 
         <div id="crea" className="mx-auto max-w-2xl scroll-mt-4 px-5 pb-14 pt-6 text-center sm:pb-20 sm:pt-14">
-          <h1 className="text-balance text-[2.4rem] font-black uppercase leading-[0.95] tracking-tight sm:text-6xl">
-            Cuéntale a SOI qué te pasa.<br /><span className="text-soi-gold">Te diseña tu práctica ahora.</span>
-          </h1>
-          <p className="mx-auto mt-4 max-w-lg text-pretty text-[17px] text-white/75 sm:text-lg">
-            Unos minutos guiados por voz, en español, con las técnicas reales de Neville, Brian Tracy y Napoleon Hill. Gratis y sin tarjeta.
-          </p>
-          <div className="mt-7 text-left sm:mt-9">
+          {/* Preguntas que rotan con la respuesta de SOI debajo (el título fijo queda para lectores y buscadores). */}
+          <HeroQuestions title="Cuéntale a SOI qué te pasa. Te diseña tu práctica ahora." />
+          <div className="mt-5 text-left sm:mt-7">
             <LandingChat />
           </div>
         </div>
