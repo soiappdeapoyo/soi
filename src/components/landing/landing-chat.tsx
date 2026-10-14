@@ -36,10 +36,15 @@ export function LandingChat() {
 
   useEffect(() => {
     setDe(authorFromUrl());
+    // Solo vuelve el Moment ya diseñado (para no perderlo). Una conversación a medias no se restaura:
+    // al volver, el chat empieza vacío, listo para escribir (si no, parece una imagen).
     const s = load();
-    if (s?.messages?.length) { setMessages(s.messages); setMoment(s.moment ?? null); setResources(s.resources ?? null); }
-    // Como en los chats de IA, se escribe al llegar; en el teléfono no se abre el teclado solo.
-    else if (window.matchMedia('(pointer: fine)').matches) inputRef.current?.focus({ preventScroll: true });
+    if (s?.moment && s.messages?.length) { setMessages(s.messages); setMoment(s.moment); }
+    else {
+      try { localStorage.removeItem(STORE); } catch { /* nada */ }
+      // Como en los chats de IA, se escribe al llegar; en el teléfono no se abre el teclado solo.
+      if (window.matchMedia('(pointer: fine)').matches) inputRef.current?.focus({ preventScroll: true });
+    }
   }, []);
   useEffect(() => {
     const el = listRef.current;
@@ -167,10 +172,10 @@ export function LandingChat() {
             <textarea id="landing-chat-input" ref={inputRef} rows={started ? 1 : 3} value={input} maxLength={LANDING_MAX_CHARS} disabled={!canWrite}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(input); } }}
-              placeholder={mine ? 'Responde aquí…' : 'Cuéntame qué te pasa hoy o qué quieres lograr…'}
+              placeholder={mine ? 'Cuéntale a SOI cómo te sientes o qué quieres lograr…' : 'Cuéntame qué te pasa hoy o qué quieres lograr…'}
               className="block max-h-40 w-full resize-none bg-transparent px-2 py-1.5 text-base leading-relaxed outline-none [field-sizing:content] placeholder:text-soi-muted disabled:opacity-60" />
             <div className="mt-2 flex items-center justify-between gap-3">
-              <span className="pl-2 text-xs text-soi-muted">{started ? 'SOI te pregunta lo justo y lo diseña.' : 'Sin cuenta para escribir · Guiado por voz'}</span>
+              <span className="pl-2 text-xs text-soi-muted">{started ? '' : 'Sin cuenta para escribir · Guiado por voz'}</span>
               <button type="submit" disabled={!canWrite || !input.trim()} aria-label="Enviar"
                 className="press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-soi-ink text-white disabled:opacity-30">
                 <ArrowUp className="h-5 w-5" aria-hidden="true" />
