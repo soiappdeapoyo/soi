@@ -10,6 +10,7 @@ import { IDEA_FIELDS, myInteractions } from '@/lib/social/queries';
 import { IdeaActions } from '@/components/social/idea-actions';
 import { IdeaOwnerControls } from '@/components/social/idea-owner-controls';
 import type { SoiMoment } from '@/types/database';
+import { IMPULSO_ENABLED } from '@/config/features';
 
 export const metadata: Metadata = { title: 'Idea' };
 
@@ -35,7 +36,7 @@ export default async function IdeaPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-8">
-      <Link href="/impulso" className="press inline-flex items-center gap-1 text-sm text-soi-muted hover:text-soi-ink"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Impulso</Link>
+      <Link href={IMPULSO_ENABLED ? '/impulso' : '/mi-vida?tab=moments'} className="press inline-flex items-center gap-1 text-sm text-soi-muted hover:text-soi-ink"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> {IMPULSO_ENABLED ? 'Impulso' : 'Mi Vida'}</Link>
 
       <p className="mt-5 text-xs text-soi-muted">
         {m.author_name ?? 'Alguien de SOI'} · {ESLABON_LABEL[m.category]}

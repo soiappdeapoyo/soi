@@ -11,6 +11,7 @@ import { compressImage, signedUrl, uploadMedia } from '@/lib/media/upload';
 import type { ActionBlock } from '@/config/actions';
 import type { BlockOutput } from './block-runners';
 import { cn } from '@/lib/utils';
+import { IMPULSO_ENABLED } from '@/config/features';
 
 export type V2Props = {
   block: ActionBlock;
@@ -348,7 +349,7 @@ function PhotoRunner({ block, output, setOutput, runId }: V2Props) {
           <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => pick(e.target.files?.[0])} />
         </label>
       </div>
-      {output.media && !busy && <p className="text-xs text-soi-muted">Solo tú puedes verla. Puedes compartirla después en Impulso.</p>}
+      {output.media && !busy && <p className="text-xs text-soi-muted">Solo tú puedes verla.{IMPULSO_ENABLED ? ' Puedes compartirla después en Impulso.' : ''}</p>}
       {msg && <p role="alert" className="text-sm text-soi-danger">{msg}</p>}
     </div>
   );

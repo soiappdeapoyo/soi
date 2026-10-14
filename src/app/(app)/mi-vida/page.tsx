@@ -29,6 +29,7 @@ import { PdfUpload } from '@/components/library/pdf-upload';
 import { ExerciseAnimation } from '@/components/library/exercise-animation';
 import { buttonClass } from '@/components/ui/button';
 import { cn, dateInTz } from '@/lib/utils';
+import { IMPULSO_ENABLED } from '@/config/features';
 
 export const metadata: Metadata = { title: 'Mi Vida' };
 
@@ -146,10 +147,10 @@ async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; us
             items={list.map((m) => ({ moment: m, deletable: ownIds.has(m.id), stale: isStale(m) }))} />
         ) : (
           <p className="rounded-[14px] bg-soi-sidebar p-4 text-sm text-soi-muted">
-            {filter === 'guardados' ? 'Cuando guardes tu versión de un Moment de Impulso, aparecerá aquí.'
+            {filter === 'guardados' ? 'Cuando guardes tu versión de un Moment, aparecerá aquí.'
               : filter === 'comprados' ? 'Aún no has comprado Moments.'
-              : filter === 'retos' ? 'Únete a un reto en Impulso y síguelo día a día desde aquí.'
-              : <>Crea uno en el <Link href="/m/nuevo" className="text-soi-accent underline underline-offset-4">constructor</Link>, pídeselo a SOI o guarda tu versión de uno de <Link href="/impulso" className="text-soi-accent underline underline-offset-4">Impulso</Link>.</>}
+              : filter === 'retos' ? 'Pídele a SOI un reto de 7 días y síguelo día a día desde aquí.'
+              : <>Crea uno en el <Link href="/m/nuevo" className="text-soi-accent underline underline-offset-4">constructor</Link> o pídeselo a SOI{IMPULSO_ENABLED && <>; también puedes guardar tu versión de uno de <Link href="/impulso" className="text-soi-accent underline underline-offset-4">Impulso</Link></>}.</>}
           </p>
         )}
       </section>

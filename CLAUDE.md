@@ -339,6 +339,7 @@ No es un agente más: es un bloque del system prompt que se suma a **cualquier**
 - **Hoy** (`/hoy`) = **lista de reproducción** de Mi día: "Reproducir mi día" (un toque habilita la voz en iOS con `PlayLink`) abre el siguiente Moment ya en marcha (`/m/[id]/play?lista=hoy&auto=1`, `playHref`/`playQueue` en `src/lib/day-plan.ts`); al terminar, "A continuación" pasa solo al siguiente en 8 s (se puede quedar; sin cuenta regresiva con movimiento reducido) y al final "Viviste todo tu día". Sin plan: una sola propuesta según `decideToday()` (REGULATE suma un minuto de respiración) + "Arma tu día". Debajo: check-in de un toque y los pasos por retomar plegados.
 
 ## 🧭 Navegación: 5 pestañas
+> **MVP: Impulso oculto** (`IMPULSO_ENABLED = false`, `src/config/features.ts`): 4 pestañas (Hoy, SOI, Mi Vida, Yo); sin "Compartir", "Compartir en Impulso" ni Mensajes en Yo; `/impulso`, `/mensajes`, `/actividad` y `/p` redirigen a `/hoy` (`requireImpulso`, `src/lib/impulso.ts`) salvo para administradores; `/m/[id]` vuelve a Mi Vida. El código sigue completo; para reactivarlo, poner `true`.
 | Pestaña | Ruta | Qué ocurre |
 |---|---|---|
 | Hoy | `/hoy` (inicio tras el login) | Tu día como lista de reproducción (o lo que SOI propone ahora) |

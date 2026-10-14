@@ -21,7 +21,7 @@ import { FeedList } from '@/components/feed/feed-list';
 import { MomentFlowCard } from '@/components/moments/moment-flow-card';
 import { ESLABON_LABEL } from '@/config/agents';
 import { RITUAL_PHASES, type RitualPhase } from '@/config/navigation';
-import { CREATOR_ACCOUNTS_ENABLED } from '@/config/features';
+import { CREATOR_ACCOUNTS_ENABLED, IMPULSO_ENABLED } from '@/config/features';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Yo' };
@@ -45,7 +45,7 @@ const ACCOUNT_LINKS = [
   { href: '/creadores', label: 'Cuenta de creador' },
   { href: '/planes', label: 'Planes SOI+' },
   { href: '/ajustes', label: 'Ajustes' },
-].filter((l) => CREATOR_ACCOUNTS_ENABLED || l.href !== '/creadores');
+].filter((l) => (CREATOR_ACCOUNTS_ENABLED || l.href !== '/creadores') && (IMPULSO_ENABLED || l.href !== '/mensajes'));
 
 /**
  * Yo, estilo Substack: la vista principal es tu perfil tal como lo ven los demás (foto, bio, enlaces, seguidores)

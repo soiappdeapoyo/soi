@@ -1,16 +1,22 @@
-import { CREATOR_ACCOUNTS_ENABLED } from '@/config/features';
+import { CREATOR_ACCOUNTS_ENABLED, IMPULSO_ENABLED } from '@/config/features';
 /**
- * Las 5 pestañas principales (barra inferior en móvil, primer grupo del sidebar en escritorio).
+ * Las pestañas principales (barra inferior en móvil, primer grupo del sidebar en escritorio).
  * `match`: prefijos de ruta que cuentan como "dentro" de la pestaña.
  */
-export const PRIMARY_TABS = [
+const ALL_TABS = [
   { id: 'hoy', href: '/hoy', label: 'Hoy', icon: 'Sun', match: ['/hoy', '/ritual'] },
   { id: 'impulso', href: '/impulso', label: 'Impulso', icon: 'Zap', match: ['/impulso', '/m', '/p', '/u', '/actividad', '/mensajes', '/momentos', '/blueprints', '/comunidad', '/c/'] },
   { id: 'soi', href: '/chat', label: 'SOI', icon: 'MessageCircle', match: ['/chat'] },
   { id: 'mi-vida', href: '/mi-vida', label: 'Mi Vida', icon: 'Orbit', match: ['/mi-vida', '/ideas', '/implementaciones', '/rutinas'] },
   { id: 'yo', href: '/yo', label: 'Yo', icon: 'User', match: ['/yo', '/perfil', '/ajustes', '/planes', '/evidencias', '/creadores'] },
 ] as const;
-export type PrimaryTab = (typeof PRIMARY_TABS)[number];
+type Tab = (typeof ALL_TABS)[number];
+export type PrimaryTab = { id: Tab['id']; href: string; label: string; icon: Tab['icon']; match: readonly string[] };
+
+/** Con Impulso oculto (`IMPULSO_ENABLED`) quedan 4 pestañas y el detalle de un Moment cuenta como Mi Vida. */
+export const PRIMARY_TABS: readonly PrimaryTab[] = IMPULSO_ENABLED ? ALL_TABS : ALL_TABS
+  .filter((t) => t.id !== 'impulso')
+  .map((t) => (t.id === 'mi-vida' ? { ...t, match: [...t.match, '/m', '/momentos', '/blueprints'] } : t));
 
 export function isTabActive(pathname: string, tab: { match: readonly string[] }) {
   return tab.match.some((m) => pathname === m || pathname.startsWith(m.endsWith('/') ? m : `${m}/`));

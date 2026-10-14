@@ -9,6 +9,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button, buttonClass } from '@/components/ui/button';
 import { formatPrice } from '@/config/creators';
 import { track } from '@/components/providers/analytics';
+import { IMPULSO_ENABLED } from '@/config/features';
 
 type Props = {
   id: string;
@@ -64,7 +65,7 @@ export function MomentActions({ id, own, status, canPublish, premium, startLabel
         <Link href={`/m/${id}/play`} className={buttonClass('primary', 'lg')}><Play className="h-4 w-4" aria-hidden="true" /> {startLabel ?? 'Comenzar'}</Link>
       )}
       <div className="flex flex-wrap gap-2">
-        {!locked && <Link href={`/impulso?compartir=${id}`} className={buttonClass('outline', 'sm')}><Share2 className="h-4 w-4" aria-hidden="true" /> Compartir en Impulso</Link>}
+        {!locked && IMPULSO_ENABLED && <Link href={`/impulso?compartir=${id}`} className={buttonClass('outline', 'sm')}><Share2 className="h-4 w-4" aria-hidden="true" /> Compartir en Impulso</Link>}
         {own ? (
           <>
             <Link href={`/m/nuevo?editar=${id}`} className={buttonClass('outline', 'sm')}><Pencil className="h-4 w-4" aria-hidden="true" /> Editar</Link>

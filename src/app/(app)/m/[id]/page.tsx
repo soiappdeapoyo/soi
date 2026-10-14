@@ -12,6 +12,7 @@ import { ACTIONS, MOMENT_KINDS, blockSeconds } from '@/config/actions';
 import { officialMoment } from '@/config/official-moments';
 import { Icon } from '@/components/ui/icon';
 import { MomentActions } from '@/components/moments/moment-actions';
+import { IMPULSO_ENABLED } from '@/config/features';
 
 export const metadata: Metadata = { title: 'Moment' };
 
@@ -50,7 +51,7 @@ export default async function MomentPage({ params, searchParams }: { params: Pro
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-6 md:py-8">
-      <Link href="/impulso" className="press inline-flex items-center gap-1 text-sm text-soi-muted hover:text-soi-ink"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Impulso</Link>
+      <Link href={IMPULSO_ENABLED ? '/impulso' : '/mi-vida?tab=moments'} className="press inline-flex items-center gap-1 text-sm text-soi-muted hover:text-soi-ink"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> {IMPULSO_ENABLED ? 'Impulso' : 'Mi Vida'}</Link>
       {compra === 'ok' && !purchase && <p role="status" className="mt-4 rounded-[14px] bg-soi-accent-soft p-3 text-sm text-soi-accent">Estamos confirmando tu pago. Recarga en unos segundos.</p>}
 
       <header className={cn('relative mt-5', m.cover && 'overflow-hidden rounded-[24px] bg-soi-ink px-5 pb-6 pt-28 text-white shadow-soft')}>

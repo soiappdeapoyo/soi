@@ -19,6 +19,7 @@ import { AUTO_ADVANCE, BlockRunner, MOODS, type BlockOutput } from './block-runn
 import { cn } from '@/lib/utils';
 import { leftAgo, runProgress } from '@/lib/moments/progress';
 import { ReturnSetup } from '@/components/pwa/return-setup';
+import { IMPULSO_ENABLED } from '@/config/features';
 
 type Props = {
   /** cover: portada (encabezado al empezar y fondo suave al terminar; nunca durante los pasos). */
@@ -583,7 +584,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
                 : <Link href={`/chat?nueva=1&run=${runId}`} className="press py-2 text-soi-muted underline-offset-4 hover:underline">Hablar con SOI</Link>}
               {aiContent && <button type="button" onClick={improve} disabled={improving} className="press py-2 text-soi-muted underline-offset-4 hover:underline">{improving ? 'Preparando tu versión…' : 'Mejorar mi Moment'}</button>}
               <Link href="/evidencias/nueva" className="press py-2 text-soi-muted underline-offset-4 hover:underline">Llevar al Muro</Link>
-              <Link href={`/impulso?compartir=${moment.id}`} className="press py-2 text-soi-muted underline-offset-4 hover:underline">Compartir</Link>
+              {IMPULSO_ENABLED && <Link href={`/impulso?compartir=${moment.id}`} className="press py-2 text-soi-muted underline-offset-4 hover:underline">Compartir</Link>}
             </nav>
             {returnSetup && <div className="mt-2 w-full text-left"><ReturnSetup pushOn={returnSetup.pushOn} reminderTime={returnSetup.reminderTime} where="moment_done" /></div>}
           </div>
