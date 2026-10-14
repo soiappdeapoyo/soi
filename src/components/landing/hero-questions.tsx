@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -31,22 +31,19 @@ const PUNCT_MS = 160;
  * - Todas se apilan en la misma celda de la cuadrícula: el alto es el de la más larga y el chat de abajo nunca salta.
  * - La que sale sube y se desvanece rápido (200 ms); la pregunta que entra llega completa desde abajo (450 ms) y la
  *   respuesta SOI la va escribiendo, como en el chat de abajo. El texto aún no escrito ocupa su lugar invisible, así
- *   que las líneas no se reacomodan mientras se escribe. La primera respuesta aparece completa (primera impresión
- *   inmediata). Con movimiento reducido: solo fundido, sin escritura.
+ *   que las líneas no se reacomodan mientras se escribe. También la primera, al abrir la página.
+ *   Con movimiento reducido: solo fundido, sin escritura.
  * - Lectores de pantalla y buscadores leen un título fijo; lo que rota es decorativo. Se puede pausar (WCAG 2.2.2) y se
  *   detiene con la pestaña oculta.
  */
 export function HeroQuestions({ title }: { title: string }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
-  // Letras escritas de la respuesta activa (la primera, completa).
-  const [typed, setTyped] = useState<number>(PAIRS[0][1].length);
-  const shown = useRef(0); // la respuesta ya escrita (evita reescribir la primera al montar)
+  // Letras escritas de la respuesta activa. Empieza en 0 también en el servidor: la primera se escribe al cargar.
+  const [typed, setTyped] = useState(0);
 
   // Antes de pintar: la respuesta nueva nunca se ve completa ni un cuadro antes de escribirse.
   useLayoutEffect(() => {
-    if (shown.current === i) return;
-    shown.current = i;
     const text = PAIRS[i]![1];
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setTyped(text.length); return; }
     setTyped(0);
