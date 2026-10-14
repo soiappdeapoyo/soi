@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,20 +18,46 @@ const PAIRS = [
   ['¿Qué pasaría si tuvieras un guía personal disponible todos los días?', 'SOI es tu acompañamiento inteligente para mantener claridad, enfoque y momentum.'],
 ] as const;
 
-/** Tiempo para leer la pregunta y su respuesta (~25 palabras). */
-const HOLD_MS = 6500;
+/** Tiempo de cada pregunta: ~3 s para que SOI escriba la respuesta y ~4 s para leerla completa. */
+const HOLD_MS = 7000;
+/** La respuesta empieza a escribirse cuando la pregunta ya llegó (200 ms de espera + 450 ms de entrada). */
+const TYPE_START_MS = 550;
+/** Por letra, y una pausa breve tras una coma o un punto, como quien escribe. */
+const CHAR_MS = 26;
+const PUNCT_MS = 160;
 
 /**
  * Héroe de la landing: las preguntas rotan con su respuesta debajo.
  * - Todas se apilan en la misma celda de la cuadrícula: el alto es el de la más larga y el chat de abajo nunca salta.
- * - La que sale sube y se desvanece rápido (200 ms); la que entra llega desde abajo después (450 ms, la respuesta
- *   80 ms más tarde), para que no se encimen dos textos. Solo opacidad y transform; con movimiento reducido, solo fundido.
+ * - La que sale sube y se desvanece rápido (200 ms); la pregunta que entra llega completa desde abajo (450 ms) y la
+ *   respuesta SOI la va escribiendo, como en el chat de abajo. El texto aún no escrito ocupa su lugar invisible, así
+ *   que las líneas no se reacomodan mientras se escribe. La primera respuesta aparece completa (primera impresión
+ *   inmediata). Con movimiento reducido: solo fundido, sin escritura.
  * - Lectores de pantalla y buscadores leen un título fijo; lo que rota es decorativo. Se puede pausar (WCAG 2.2.2) y se
  *   detiene con la pestaña oculta.
  */
 export function HeroQuestions({ title }: { title: string }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Letras escritas de la respuesta activa (la primera, completa).
+  const [typed, setTyped] = useState<number>(PAIRS[0][1].length);
+  const shown = useRef(0); // la respuesta ya escrita (evita reescribir la primera al montar)
+
+  // Antes de pintar: la respuesta nueva nunca se ve completa ni un cuadro antes de escribirse.
+  useLayoutEffect(() => {
+    if (shown.current === i) return;
+    shown.current = i;
+    const text = PAIRS[i]![1];
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setTyped(text.length); return; }
+    setTyped(0);
+    let n = 0;
+    let id = setTimeout(function tick() {
+      n += 1;
+      setTyped(n);
+      if (n < text.length) id = setTimeout(tick, /[.,]/.test(text[n - 1]!) ? PUNCT_MS : CHAR_MS);
+    }, TYPE_START_MS);
+    return () => clearTimeout(id);
+  }, [i]);
 
   useEffect(() => {
     if (paused) return;
@@ -66,9 +92,15 @@ export function HeroQuestions({ title }: { title: string }) {
       </div>
       <div aria-hidden="true" className="mx-auto mt-4 grid max-w-lg">
         {PAIRS.map(([, a], n) => (
-          <p key={n} className={cn(item, states[state(n)], state(n) === 'active' && 'delay-[280ms]',
-            'self-start text-pretty text-[17px] text-white/75 sm:text-lg')}>
-            {a}
+          <p key={n} className={cn(item, states[state(n)], 'self-start text-pretty text-[17px] text-white/75 sm:text-lg')}>
+            {n === i && typed < a.length ? (
+              <>
+                {a.slice(0, typed)}
+                {/* Cursor sin ancho: no mueve el texto. */}
+                <span className="relative"><span className="absolute -bottom-0.5 left-0 h-[1.15em] w-0.5 rounded-full bg-soi-gold" /></span>
+                <span className="opacity-0">{a.slice(typed)}</span>
+              </>
+            ) : a}
           </p>
         ))}
       </div>
