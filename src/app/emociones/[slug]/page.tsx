@@ -7,6 +7,7 @@ import { Cta } from '@/components/landing/cta';
 import { HowItWorksFilm } from '@/components/emotions/how-it-works-film';
 import { EmotionsHeader, JsonLd } from '@/components/emotions/site-header';
 import { EMOTIONS, ESLABON_LABEL, emotionBySlug } from '@/config/emotions';
+import { GUIDES } from '@/config/content';
 import { getSettings } from '@/lib/settings';
 import { appUrl } from '@/lib/utils';
 
@@ -46,6 +47,8 @@ export default async function EmotionPage({ params }: Props) {
   const url = `${base}/emociones/${e.slug}`;
   const signup = `/login?next=${encodeURIComponent(`/chat?agent=${e.agent}`)}`;
   const related = e.related.map(emotionBySlug).filter((r) => r !== null);
+  /** Guías de la raíz que profundizan en esta emoción (enlazado interno en los dos sentidos). */
+  const guides = GUIDES.filter((g) => g.emotions.includes(e.slug)).slice(0, 3);
 
   return (
     <>
@@ -200,6 +203,21 @@ export default async function EmotionPage({ params }: Props) {
               </li>
             ))}
           </ul>
+          {guides.length > 0 && (
+            <>
+              <h3 className="mt-10 text-lg font-semibold tracking-tight">Guías para ir más a fondo</h3>
+              <ul className="mt-4 grid gap-3 sm:grid-cols-3">
+                {guides.map((g) => (
+                  <li key={g.slug}>
+                    <Link href={`/${g.slug}`} className="press group flex h-full flex-col rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
+                      <span className="font-semibold">{g.h1}</span>
+                      <ArrowRight className="mt-3 h-4 w-4 transition-transform duration-(--dur-fast) ease-out-strong group-hover:translate-x-0.5" aria-hidden="true" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <Link href="/emociones" className="mt-6 inline-flex items-center gap-1 text-sm font-medium underline">Ver todas las emociones</Link>
         </nav>
       </article>

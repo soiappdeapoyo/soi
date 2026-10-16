@@ -335,10 +335,12 @@ export default async function LandingPage() {
       </section>
 
       <footer className="px-5 py-8 text-center text-sm text-soi-muted">
-        <nav className="flex justify-center gap-4" aria-label="Legal">
+        <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2" aria-label="Legal">
           <Link href="/privacidad" className="underline">Privacidad</Link>
           <Link href="/terminos" className="underline">Términos</Link>
           <Link href="/emociones" className="underline">Emociones</Link>
+          <Link href="/guias" className="underline">Guías</Link>
+          <Link href="/blog" className="underline">Blog</Link>
         </nav>
         <p className="mx-auto mt-3 max-w-2xl">
           SOI no está afiliado ni respaldado por los autores citados; sus enseñanzas se usan como fuente de las prácticas.
