@@ -96,7 +96,7 @@ async function speechViaGoogle(text: string, voice: string, instructions: string
  * OpenRouter primero (se paga con sus créditos); si falla o no hay clave, Google directo.
  * `opts.instructions` y `opts.path`: las indicaciones fijas (Inhala, Exhala…) usan su propia instrucción y ruta.
  */
-export async function synthesize(text: string, voiceId: string | null | undefined, style: VoiceStyle, opts?: { instructions?: string; path?: string }) {
+export async function synthesize(text: string, voiceId: string | null | undefined, style: VoiceStyle, opts?: { instructions?: string; path?: string; deferStore?: boolean }) {
   const voice = guideVoice(voiceId);
   const instructions = opts?.instructions ?? VOICE_STYLES[style];
   const providers: [string, () => Promise<Int16Array>][] = [];
@@ -104,10 +104,12 @@ export async function synthesize(text: string, voiceId: string | null | undefine
   if (process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()) providers.push(['google', () => speechViaGoogle(text, voice, instructions)]);
 
   let pcm: Int16Array | null = null;
+  let provider = '';
   const errors: string[] = [];
   for (const [name, run] of providers) {
     try {
       pcm = await run();
+      provider = name;
       if (pcm.length) break;
       errors.push(`${name}: audio vacío`);
     } catch (error) {
@@ -121,6 +123,8 @@ export async function synthesize(text: string, voiceId: string | null | undefine
 
   const mp3 = encodeMp3(pcm);
   const key = opts?.path ?? voiceKey(text, voice, style);
-  await createAdminClient().storage.from(BUCKET).upload(`${key}.mp3`, mp3, { contentType: 'audio/mpeg', upsert: true });
-  return { mp3, seconds: Math.ceil(pcm.length / SAMPLE_RATE), key };
+  // `deferStore`: quien llama guarda en caché después de responder (la persona no espera la subida).
+  const store = () => createAdminClient().storage.from(BUCKET).upload(`${key}.mp3`, mp3, { contentType: 'audio/mpeg', upsert: true }).then(() => undefined);
+  if (!opts?.deferStore) await store();
+  return { mp3, seconds: Math.ceil(pcm.length / SAMPLE_RATE), key, provider, store };
 }

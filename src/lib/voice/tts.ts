@@ -40,7 +40,7 @@ export function isSpeaking() {
  * Frases agrupadas para la voz neuronal. La primera muy corta (empieza rápido) y las demás de ~260 caracteres:
  * con fragmentos de 600 la generación tardaba casi lo que dura el audio, se agotaba el tiempo y la voz "se acababa".
  */
-export function chunkForVoice(text: string, first = 140, rest = 260): string[] {
+export function chunkForVoice(text: string, first = 90, rest = 260): string[] {
   const parts = splitForSpeech(text, rest);
   const out: string[] = [];
   let cur = '';

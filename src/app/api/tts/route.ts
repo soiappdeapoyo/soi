@@ -1,4 +1,5 @@
 import { getSettings } from '@/lib/settings';
+import { after } from 'next/server';
 import { z } from 'zod/v3';
 import { getSessionUser } from '@/lib/supabase/server';
 import { canAccess, getProfile } from '@/lib/billing/check-access';
@@ -28,26 +29,34 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return new Response('Datos inválidos', { status: 400 });
   if (!hasTtsProvider()) return new Response(null, { status: 204 });
-  if (!(await canAccess(user.id, 'tts')).allowed) return new Response(null, { status: 204 });
-
   const text = normalizeSpeech(parsed.data.text);
   if (!text) return new Response(null, { status: 204 });
+  const t0 = Date.now();
+  // Todo lo que no depende de lo demás, a la vez (antes eran 5 viajes en fila antes de empezar a generar).
+  const day = new Date().toISOString().slice(0, 10);
+  const [access, profile, usage, settings] = await Promise.all([
+    canAccess(user.id, 'tts'),
+    parsed.data.voice ? Promise.resolve(null) : getProfile(user.id),
+    supabase.from('tts_usage').select('seconds').eq('user_id', user.id).eq('day', day).maybeSingle(),
+    getSettings(),
+  ]);
+  if (!access.allowed) return new Response(null, { status: 204 });
   const style = parsed.data.style;
-  const profile = await getProfile(user.id);
   const voice = guideVoice(parsed.data.voice ?? profile?.voice_preference);
   const key = voiceKey(text, voice, style);
 
   const hit = await cachedVoice(key);
   if (hit) return parsed.data.prefetch ? new Response(null, { status: 204 }) : audioResponse(hit);
 
-  const { data: today } = await supabase.from('tts_usage').select('seconds').eq('user_id', user.id).eq('day', new Date().toISOString().slice(0, 10)).maybeSingle();
   // Tope diario de audio nuevo (panel).
-  const DAILY_SECONDS = (await getSettings()).ttsDailyMinutes * 60;
-  if ((today?.seconds ?? 0) >= DAILY_SECONDS) return new Response(null, { status: 204, headers: { 'x-soi-tts': 'limit' } });
+  if ((usage.data?.seconds ?? 0) >= settings.ttsDailyMinutes * 60) return new Response(null, { status: 204, headers: { 'x-soi-tts': 'limit' } });
 
   try {
-    const { mp3, seconds } = await synthesize(text, voice, style);
-    await supabase.rpc('add_tts_seconds', { p_seconds: Math.min(600, seconds) });
+    // Guardar en caché y sumar al tope van después de responder: la persona escucha sin esperarlos.
+    const { mp3, seconds, provider, store } = await synthesize(text, voice, style, { deferStore: true });
+    const finish = () => Promise.all([store(), supabase.rpc('add_tts_seconds', { p_seconds: Math.min(600, seconds) })]).then(() => undefined, (e) => console.error('[tts] guardar', e));
+    try { after(finish); } catch { void finish(); }
+    console.info(`[tts] ${provider} ${text.length} caracteres → ${seconds} s de audio en ${Date.now() - t0} ms`);
     return parsed.data.prefetch ? new Response(null, { status: 204 }) : audioResponse(mp3);
   } catch (error) {
     console.error('[tts]', error instanceof Error ? error.message : error);
