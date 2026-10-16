@@ -64,6 +64,26 @@ describe('conversar o accionar', () => {
   });
 });
 
+describe('aceptar una oferta no vuelve a pedir permiso (bucle "¿te lo preparo?" → "sí")', () => {
+  const one = ['Me siento muy estancado con mi trabajo, no logro avanzar con mi proyecto y me frustra mucho cada día'];
+  it('cualquier forma de ofrecer + cualquier forma de aceptar → diseña ya', () => {
+    for (const prev of ['¿Te lo preparo?', '¿Quieres que lo armemos juntos?', '¿Probamos algo de 3 minutos?', 'Puedo prepararte un Moment de 3 minutos. ¿Lo quieres?']) {
+      expect(proposalMode({ text: 'sí', userTurns: 2, previousAssistant: prev, anxiety: false, userTexts: [...one, 'sí'] })).toBe('propose');
+    }
+    for (const yes of ['sip', 'okey', 'hazlo', 'prepáralo', 'órale', 'Arma uno', 'de una']) {
+      expect(proposalMode({ text: yes, userTurns: 2, previousAssistant: '¿Te lo preparo?', anxiety: false, userTexts: [...one, yes] })).toBe('propose');
+    }
+  });
+  it('una pregunta que no ofrece nada, o un "todavía no", no es permiso', () => {
+    expect(proposalMode({ text: 'Sí', userTurns: 2, previousAssistant: '¿Cuánto tiempo tienes ahora?', anxiety: false, userTexts: [...one, 'Sí'] })).not.toBe('propose');
+    expect(proposalMode({ text: 'Sí, más tarde', userTurns: 2, previousAssistant: '¿Te lo preparo?', anxiety: false, userTexts: [...one, 'Sí, más tarde'] })).not.toBe('propose');
+  });
+  it('si pidió una propuesta y contestó las preguntas de SOI, diseña', () => {
+    const answer = 'Es que no duermo bien por el trabajo, siento el pecho apretado y quiero calma';
+    expect(proposalMode({ text: answer, userTurns: 2, previousAssistant: 'Quiero que sea para ti. ¿Qué pasa exactamente? Si prefieres algo rápido ya, dímelo.', anxiety: false, userTexts: ['Proponme algo', answer] })).toBe('propose');
+  });
+});
+
 describe('saludo sin imponer', () => {
   it('sin señal fuerte: sin tarjeta ni ritual, con "Proponme algo" a un toque', () => {
     const o = buildOpener({ name: 'Ana', hour: 8, today: '2026-10-06', onboardingCompleted: true, lastRitualDate: null, ritualAvailable: true, weakestLink: null, lastConversationTitle: null, proposal: null });

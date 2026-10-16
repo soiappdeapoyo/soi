@@ -13,9 +13,21 @@ export type ProposalMode = 'listen' | 'talk' | 'explore' | 'invite' | 'offer' | 
 
 const ASK = /(prop[oó]n(me|er|es)|qu[eé] (hago|puedo hacer|me recomiendas)|dame (algo|un|una)|ay[uú]dame con (algo|un|una)|\bun moment|una (rutina|meditaci[oó]n|pr[aá]ctica|respiraci[oó]n|afirmaci[oó]n|manifestaci[oó]n|visualizaci[oó]n)|un (ejercicio|reto|ritual|plan)|hazme (otro|otra|un|una)|algo m[aá]s corto|otra cosa|\bvideos?\b|charla|quiero (empezar|hacer algo|practicar)|mi reflexi[oó]n de)/i;
 // Sin \b tras vocales con tilde (en JS \b no las reconoce): fin de palabra explícito.
-const YES = /^\s*(s[ií]+|dale|va|vale|claro|ok(ay)?|por ?fa(vor)?|sale|me late|hag[aá]moslo|bueno|perfecto|ad[eé]lante|venga|de acuerdo|me (encantar[ií]a|gustar[ií]a|parece( bien)?|sirve)|estar[ií]a (bien|genial)|quiero|ándale|obvio|por supuesto|listo)(?=$|[\s,.!¡?])/i;
+const YES = /^\s*(s[ií]+p?|dale|va|vale|claro|ok(ay|ey|i)?|yes|por ?fa(vor|s|is)?|sale|me late|hag[aá]moslo|h[aá]zlo|prep[aá]ralo|[aá]rmalo|arma(lo)? (uno|una|algo)|dise[ñn]alo|bueno|perfecto|ad[eé]lante|venga|de acuerdo|de una|[oó]rale|me (encantar[ií]a|gustar[ií]a|parece( bien)?|sirve)|estar[ií]a (bien|genial)|quiero|[aá]ndale|obvio|por supuesto|listo|con gusto|est[aá] bien|me animo|va que va)(?=$|[\s,.!¡?])/i;
+/** "Sí, pero…" o "todavía no": no es permiso. */
+const NOT_YET = /(\bpero\b|todav[ií]a no|a[uú]n no|ahora no|m[aá]s tarde|despu[eé]s)/i;
 /** SOI ofreció algo en su último mensaje (cualquier forma de "¿te preparo / diseñamos / armamos…?"). */
 const INVITED = /(te propongo|te preparo|¿(quieres|te gustar[ií]a|te parece) que (te )?(prepar|dise[ñn]|arm|cre|hag|propong)|¿(lo hacemos|hacemos|armamos|dise[ñn]amos|preparamos|creamos|probamos|empezamos)|¿te (comparto|preparo|armo|dise[ñn]o)|¿te gustar[ií]a (probar|hacer|que))/i;
+/** La última pregunta de SOI ofrece hacer algo ("¿Te lo preparo?", "¿Quieres que lo armemos?", "¿Probamos algo corto?"). */
+const OFFER_VERB = /(prepar|arm[aeo]|dise[ñn]|cre[aeo]|hag|hac[eé]|prob|intent|propon|propong|compart|empez|comenz|practic|ayud[eo]|te animas|lo quieres|te late|\bmoment\b)/i;
+function offered(prev: string): boolean {
+  if (INVITED.test(prev)) return true;
+  const questions = prev.match(/¿[^?]*\?|[^.!?¿\n]*\?/g) ?? [];
+  const lastQ = questions.at(-1);
+  return Boolean(lastQ && OFFER_VERB.test(lastQ));
+}
+/** Pedido explícito de una propuesta ("Proponme algo", "Dame un Moment"), no solo contar lo que quiere lograr. */
+const REQUEST = /(prop[oó]n(me|er)|qu[eé] (hago|puedo hacer|me recomiendas)|dame (algo|un|una)|hazme (un|una|algo)|ay[uú]dame con (algo|un|una)|\bun moment)/i;
 /** Quiere algo ya, sin más preguntas: se respeta. */
 const INSIST = /(ya,? (solo|nada m[aá]s)|solo (dame|prop[oó]n)|r[aá]pido|sin preguntas|no me preguntes|lo que sea|cualquier cosa|ahorita|ya mismo|mi reflexi[oó]n de)/i;
 /** Solo quiere conversar o desahogarse: SOI no propone nada hasta que lo pida. */
@@ -52,10 +64,17 @@ export function proposalMode(i: {
 }): ProposalMode {
   const texts = i.userTexts ?? [i.text];
   const asked = ASK.test(i.text) && !TALK.test(i.text);
-  const accepted = Boolean(i.previousAssistant && INVITED.test(i.previousAssistant) && YES.test(i.text));
+  const accepted = Boolean(i.previousAssistant && offered(i.previousAssistant) && YES.test(i.text) && !NOT_YET.test(i.text));
   // En la primera sesión basta con un mensaje con algo concreto (como si ya hubieran hablado del tema).
   const enough = understood(texts, i.hasHistory || i.firstSession) || INSIST.test(i.text);
-  if (asked || accepted) return enough ? 'propose' : i.anxiety ? 'soothe' : 'explore';
+  // Aceptó lo que SOI le ofreció: SOI solo ofrece cuando ya entiende, así que se diseña ya (sin volver a preguntar
+  // ni a pedir permiso: eso dejaba a la persona en un bucle de "¿te lo preparo?" → "sí" → "¿te lo preparo?").
+  if (accepted) return 'propose';
+  // Ya lo había pedido en esta conversación y SOI le hizo preguntas (explore): con lo que contestó, se diseña.
+  const askedBefore = !i.alreadyProposed && texts.slice(0, -1).some((t) => REQUEST.test(t) && !TALK.test(t));
+  if (asked) return enough ? 'propose' : i.anxiety ? 'soothe' : 'explore';
+  // (Ya respondió a las preguntas de SOI: basta con un mensaje concreto, como con continuidad.)
+  if (askedBefore && (enough || understood(texts, true)) && !wantsToTalk(texts.slice(-1))) return 'propose';
   // Eligió solo conversar: se respeta hasta que pida algo.
   if (wantsToTalk(texts)) return 'talk';
   if (i.anxiety) return 'soothe';

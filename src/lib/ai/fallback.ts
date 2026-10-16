@@ -150,8 +150,9 @@ export async function streamWithFallback(
           logFailure(provider.name, error);
           forget(provider.name);
         },
-        onEnd: async ({ text, usage, toolCalls, toolResults }) =>
-          onEnd?.({ text, provider: provider.name, tokens: usage?.totalTokens, toolCalls, toolResults }),
+        // `text` y `usage` son solo del último paso: lo que SOI dijo antes de crear un Moment estaba en otro paso.
+        onEnd: async ({ steps, totalUsage, toolCalls, toolResults }) =>
+          onEnd?.({ text: steps.map((s) => s.text.trim()).filter(Boolean).join('\n\n'), provider: provider.name, tokens: totalUsage?.totalTokens, toolCalls, toolResults }),
       });
       const error = await firstPartIsError(result);
       if (error) {
