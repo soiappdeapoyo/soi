@@ -72,5 +72,34 @@ export type Post = {
   updated?: string;
 };
 
+/**
+ * Página de autor (`/neville-goddard`, `/brian-tracy`, `/napoleon-hill`): quién fue, sus ideas parafraseadas
+ * (nunca su texto), cómo aplicarlas hoy y su reto de 7 días. Centro del clúster: enlaza a guías y artículos.
+ */
+export type Author = {
+  slug: string;
+  /** Clave del reto (`CHALLENGE_SLUGS`) y de `?de=` en la landing. */
+  key: 'neville' | 'tracy' | 'hill';
+  name: string;
+  /** Título SEO (≤ 54 caracteres; la plantilla agrega « · SOI»). */
+  title: string;
+  /** Meta descripción (110–160 caracteres). */
+  description: string;
+  h1: string;
+  /** Quién fue y su idea central, en 35–75 palabras (fragmento destacado). */
+  answer: string;
+  intro: string[];
+  /** Datos breves (nacimiento, obra clave…). */
+  facts: { label: string; value: string }[];
+  /** Fuentes externas sobre la persona (JSON-LD `sameAs`). */
+  sameAs: string[];
+  books: { title: string; year: number; idea: string }[];
+  sections: ContentSection[];
+  cta: { heading: string; text: string; button: string };
+  faq: Faq[];
+  guides: string[];
+  posts: string[];
+};
+
 /** Fecha de la última revisión del contenido de las guías. */
 export const GUIDES_UPDATED = '2026-10-16';

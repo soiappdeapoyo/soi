@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { appUrl } from '@/lib/utils';
 import { EMOTIONS } from '@/config/emotions';
-import { GUIDES, GUIDES_UPDATED, POSTS } from '@/config/content';
+import { AUTHORS, GUIDES, GUIDES_UPDATED, POSTS } from '@/config/content';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = appUrl();
@@ -15,6 +15,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const guides = [
     { url: `${base}/guias`, changeFrequency: 'weekly' as const, priority: 0.9 },
     ...GUIDES.map((g) => ({ url: `${base}/${g.slug}`, lastModified: GUIDES_UPDATED, changeFrequency: 'monthly' as const, priority: 0.9 })),
+    // Páginas de autor: el centro de cada clúster.
+    ...AUTHORS.map((a) => ({ url: `${base}/${a.slug}`, lastModified: GUIDES_UPDATED, changeFrequency: 'monthly' as const, priority: 0.9 })),
   ];
   const blog = [
     { url: `${base}/blog`, changeFrequency: 'weekly' as const, priority: 0.8 },

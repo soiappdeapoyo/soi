@@ -4,7 +4,7 @@ import { Cta } from '@/components/landing/cta';
 import { EmotionsHeader, JsonLd } from '@/components/emotions/site-header';
 import { Breadcrumbs, LinkCard } from '@/components/seo/content-blocks';
 import { ESLABON_LABEL } from '@/config/emotions';
-import { GUIDES, POSTS } from '@/config/content';
+import { AUTHORS, GUIDES, POSTS } from '@/config/content';
 import type { Eslabon } from '@/config/agents';
 import { getSettings } from '@/lib/settings';
 import { appUrl } from '@/lib/utils';
@@ -63,6 +63,13 @@ export default async function GuidesHub() {
             </section>
           );
         })}
+
+        <section aria-labelledby="autores-h">
+          <h2 id="autores-h" className="text-2xl font-semibold tracking-tight">Por autor</h2>
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {AUTHORS.map((a) => <li key={a.slug}><LinkCard href={`/${a.slug}`} eyebrow="Autor" title={a.name} text={a.description} /></li>)}
+          </ul>
+        </section>
 
         <section aria-labelledby="blog-h">
           <h2 id="blog-h" className="text-2xl font-semibold tracking-tight">Del blog</h2>

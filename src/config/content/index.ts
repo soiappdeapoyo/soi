@@ -3,7 +3,9 @@ import { GUIDES_MIND } from './guides-mind';
 import { GUIDES_IDENTITY } from './guides-identity';
 import { POSTS_MIND_HABITS } from './posts-mind-habits';
 import { POSTS_MANIFEST_MONEY } from './posts-manifest-money';
-import { POST_CATEGORIES, type ContentSection, type Guide, type Post, type PostCategory } from './types';
+import { POSTS_LONGTAIL } from './posts-longtail';
+import { AUTHORS } from './authors';
+import { POST_CATEGORIES, type Author, type ContentSection, type Guide, type Post, type PostCategory } from './types';
 
 export * from './types';
 
@@ -11,7 +13,14 @@ export * from './types';
 export const GUIDES: Guide[] = [...GUIDES_ACTION, ...GUIDES_MIND, ...GUIDES_IDENTITY];
 
 /** Artículos del blog (`/blog/<slug>`). */
-export const POSTS: Post[] = [...POSTS_MIND_HABITS, ...POSTS_MANIFEST_MONEY];
+export const POSTS: Post[] = [...POSTS_MIND_HABITS, ...POSTS_MANIFEST_MONEY, ...POSTS_LONGTAIL];
+
+/** Páginas de autor en la raíz (`/neville-goddard`, `/brian-tracy`, `/napoleon-hill`). */
+export { AUTHORS };
+
+export function authorBySlug(slug: string): Author | null {
+  return AUTHORS.find((a) => a.slug === slug) ?? null;
+}
 
 export function guideBySlug(slug: string): Guide | null {
   return GUIDES.find((g) => g.slug === slug) ?? null;

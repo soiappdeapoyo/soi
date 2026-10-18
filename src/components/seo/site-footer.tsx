@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { EMOTIONS } from '@/config/emotions';
-import { CATEGORY_SLUG, GUIDES, POST_CATEGORIES } from '@/config/content';
+import { AUTHORS, CATEGORY_SLUG, GUIDES, POST_CATEGORIES } from '@/config/content';
 import { CRISIS_RESOURCES } from '@/config/crisis-resources';
 
 /** Líneas de ayuda que se muestran en todo el contenido público (las más usadas por el público de SOI). */
@@ -20,7 +20,7 @@ export function SeoFooter() {
   return (
     <footer className="border-t border-black/5 bg-soi-sidebar px-5 py-10 text-sm text-soi-muted">
       <div className="mx-auto max-w-5xl">
-        <div className="grid gap-8 sm:grid-cols-3">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <nav aria-label="Guías">
             <p className="font-medium text-soi-ink"><Link href="/guias" className="hover:underline">Guías</Link></p>
             <ul className="mt-3 flex flex-col gap-2">
@@ -31,6 +31,12 @@ export function SeoFooter() {
             <p className="font-medium text-soi-ink"><Link href="/emociones" className="hover:underline">Emociones</Link></p>
             <ul className="mt-3 flex flex-col gap-2">
               {EMOTIONS.map((e) => <li key={e.slug}><Link href={`/emociones/${e.slug}`} className={linkClass}>{e.name}</Link></li>)}
+            </ul>
+          </nav>
+          <nav aria-label="Autores">
+            <p className="font-medium text-soi-ink">Autores</p>
+            <ul className="mt-3 flex flex-col gap-2">
+              {AUTHORS.map((a) => <li key={a.slug}><Link href={`/${a.slug}`} className={linkClass}>{a.name}</Link></li>)}
             </ul>
           </nav>
           <nav aria-label="Blog">

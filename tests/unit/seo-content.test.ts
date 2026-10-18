@@ -2,7 +2,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EMOTIONS, emotionBySlug } from '@/config/emotions';
-import { GUIDES, POSTS, anchorFor, guideBySlug, plainText, postBySlug, readingMinutes } from '@/config/content';
+import { AUTHORS, GUIDES, POSTS, anchorFor, authorBySlug, guideBySlug, plainText, postBySlug, readingMinutes } from '@/config/content';
+import { CHALLENGE_SLUGS } from '@/config/official-challenges';
+import { officialMoment } from '@/config/official-moments';
 import { GUIDE_WEEKS } from '@/config/content/guide-weeks';
 import { PROTECTED_PREFIXES } from '@/config/navigation';
 
@@ -22,7 +24,7 @@ function isKnownRoute(href: string): boolean {
   if (['/', '/guias', '/blog', '/emociones', '/login'].includes(path)) return true;
   if (path.startsWith('/blog/')) return postBySlug(path.slice(6)) !== null;
   if (path.startsWith('/emociones/')) return emotionBySlug(path.slice(11)) !== null;
-  return guideBySlug(path.slice(1)) !== null;
+  return guideBySlug(path.slice(1)) !== null || authorBySlug(path.slice(1)) !== null;
 }
 
 describe('guías SEO en la raíz', () => {
@@ -104,9 +106,45 @@ describe('blog', () => {
   });
 });
 
+describe('páginas de autor', () => {
+  it('una por reto de la landing, cada una con su página y sin chocar con guías ni rutas de la app', () => {
+    expect(AUTHORS.map((a) => a.key).sort()).toEqual(Object.keys(CHALLENGE_SLUGS).sort());
+    for (const a of AUTHORS) {
+      expect(existsSync(join(process.cwd(), 'src/app/(contenido)', a.slug, 'page.tsx')), a.slug).toBe(true);
+      expect(guideBySlug(a.slug), a.slug).toBeNull();
+      expect(officialMoment(CHALLENGE_SLUGS[a.key]), a.key).not.toBeNull();
+      for (const p of PROTECTED_PREFIXES) expect(`/${a.slug}`.startsWith(`${p}/`) || `/${a.slug}` === p, a.slug).toBe(false);
+    }
+  });
+
+  it('cumple los límites de SEO y cita sus fuentes', () => {
+    for (const a of AUTHORS) {
+      expect(a.title.length, a.slug).toBeLessThanOrEqual(54);
+      expect(a.description.length, a.slug).toBeLessThanOrEqual(160);
+      expect(a.description.length, a.slug).toBeGreaterThanOrEqual(110);
+      const words = plainText(a.answer).split(/\s+/).length;
+      expect(words, `${a.slug}: respuesta corta`).toBeGreaterThanOrEqual(35);
+      expect(words, `${a.slug}: respuesta corta`).toBeLessThanOrEqual(75);
+      expect(readingMinutes(a), a.slug).toBeGreaterThanOrEqual(4);
+      expect(a.sections.filter((s) => s.source).length, a.slug).toBeGreaterThanOrEqual(4);
+      expect(a.books.length, a.slug).toBeGreaterThanOrEqual(3);
+      expect(a.faq.length, a.slug).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('las referencias existen y las anclas son únicas', () => {
+    for (const a of AUTHORS) {
+      for (const g of a.guides) expect(guideBySlug(g), `${a.slug} → ${g}`).not.toBeNull();
+      for (const p of a.posts) expect(postBySlug(p), `${a.slug} → blog/${p}`).not.toBeNull();
+      const ids = a.sections.map((s) => anchorFor(s.h2));
+      expect(new Set([...ids, 'libros', 'reto', 'preguntas']).size, a.slug).toBe(ids.length + 3);
+    }
+  });
+});
+
 describe('texto enriquecido', () => {
   it('todo enlace interno apunta a una página que existe', () => {
-    const all = [...GUIDES.map((g) => [g.slug, texts(g)] as const), ...POSTS.map((p) => [p.slug, texts(p)] as const)];
+    const all = [...GUIDES.map((g) => [g.slug, texts(g)] as const), ...POSTS.map((p) => [p.slug, texts(p)] as const), ...AUTHORS.map((a) => [a.slug, texts(a)] as const)];
     for (const [slug, list] of all) for (const t of list) {
       for (const m of t.matchAll(/\]\(([^)]+)\)/g)) {
         expect(m[1]!.startsWith('/'), `${slug}: ${m[1]}`).toBe(true);
@@ -120,6 +158,12 @@ describe('texto enriquecido', () => {
   it('cada guía y artículo enlaza al menos a otra página dentro del texto', () => {
     for (const g of GUIDES) expect(texts(g).some((t) => t.includes('](/')), g.slug).toBe(true);
     for (const p of POSTS) expect(texts(p).some((t) => t.includes('](/')), p.slug).toBe(true);
+    for (const a of AUTHORS) expect(texts(a).some((t) => t.includes('](/')), a.slug).toBe(true);
+  });
+
+  it('cada autor recibe enlaces desde el texto de otra página', () => {
+    const all = [...GUIDES.flatMap(texts), ...POSTS.flatMap(texts)];
+    for (const a of AUTHORS) expect(all.some((t) => t.includes(`](/${a.slug})`)), a.slug).toBe(true);
   });
 
   it('las emociones con guía la enlazan (sin huérfanas)', () => {
