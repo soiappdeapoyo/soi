@@ -12,6 +12,7 @@ import { ACTION_TYPES, MomentKindSchema, parseBlocks, type ActionType } from '@/
 import { ownsDocuments, resolveLibraryBlocks } from '@/lib/moments/library-blocks';
 import { generateAutosuggestion, generateGuided, personalContext, saveGuided } from './content-agents';
 import { HillPatchSchema, loadHillMemory, saveHillMemory } from './hill-memory';
+import { HabitPatchSchema, saveHabit } from './habit-memory';
 import { ENEMY_IDS } from '@/config/enemies';
 import { recordEnemy } from '@/lib/battles';
 import { scheduleAutoCover } from '@/lib/moments/auto-cover';
@@ -20,7 +21,7 @@ import { PROPOSAL_TOOLS } from './proposal-gate';
 import { forkOfficial, getMoment } from '@/lib/moments/server';
 import { isNearDuplicate } from '@/lib/moments/reuse';
 import { polishMoment } from '@/lib/moments/polish';
-import { partOfDay } from '@/lib/day-plan';
+import { DayItemsSchema, partOfDay, placeInDay } from '@/lib/day-plan';
 import { hourInTz } from '@/lib/utils';
 import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import type { VideoPolicy } from '@/lib/momentum';
@@ -166,6 +167,7 @@ function allTools({ supabase, userId, authorName, access, video = 'quick', anxie
     createMoment: tool({
       description: `Diseña un SOI Moment ÚNICO para esta persona: una experiencia corta (3 a 6 pasos) con intención, objetivo y resultado esperado, lista para comenzar. Primero llena \`understanding\` y \`libraryCheck\`.
 FORMA (arco): 1) Llegar: 30–90 s para aterrizar (respiración con patrón adecuado: calma 4-6 para soltar, 4-7-8 antes de dormir, caja para enfocar, coherencia para equilibrar; o escaneo corporal). 2) Núcleo: 1–3 acciones de la técnica que encaja con su eslabón — Pensamientos: reframe (con SU pensamiento), affirmation, writing; Emociones: body_scan, meditation (guion completo), gratitude, letter; Acciones: next_step, pomodoro, checklist, agenda; Resultados: tracking, goal, celebration. 3) Integrar: UNA pregunta (reflection) o escritura breve. 4) Llevarlo a la vida: next_step concreto (qué, cuándo) o celebración.
+HÁBITO (crear o dejar uno; cualquier agente, ideas de James Clear, «Atomic Habits»): llena \`habit\` y diseña el Moment que la persona repetirá cada día: corto (≤ 5 min salvo que pida más), el núcleo es la VERSIÓN DE 2 MINUTOS con sus palabras, sin respiración de llegada si no hace falta; la señal en el primer paso o en un next_step («Después de…, voy a…»); tracking si quiere registrar. El servidor lo cierra con un voto por su identidad. Si aceptó ponerlo en su día y tiene hora, addToMyDay: true (queda en Mi día con alarma diaria).
 PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, guion, afirmación, escena) usa sus palabras, su meta, su gente, su hora. Ajusta la duración al tiempo que tiene. La voz lee todo: frases cortas, naturales. Cita la fuente cuando uses la técnica de un autor.`,
       inputSchema: z.object({
         understanding: z.object({
@@ -190,6 +192,9 @@ PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, gu
         })).min(2).max(20),
         durationDays: z.number().int().optional().describe('Solo retos (kind challenge): cuántos días dura, de 2 a 30'),
         basedOn: z.string().max(60).optional().describe('id de un Moment que ya tiene y que estás ajustando: se guarda como nueva versión de ese mismo Moment (no uno nuevo)'),
+        habit: HabitPatchSchema.pick({ name: true, mode: true, identity: true, tiny: true, cue: true, time: true }).extend({
+          addToMyDay: z.boolean().default(false).describe('true solo si la persona aceptó ponerlo en Mi día'),
+        }).optional().describe('Solo si este Moment es para crear o dejar un hábito'),
       }),
       execute: async (m) => {
         const parsed = parseBlocks(m.blocks.map((b, i) => ({ ...b, id: `b${i + 1}` })));
@@ -208,11 +213,33 @@ PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, gu
         if (!docsOk) errors.push('Un bloque document usaba un PDF que no está en la biblioteca de la persona; se quitó.');
         if (blocks.length < 2) return { ok: false as const, errors: errors.slice(0, 3) };
         // Pulido por reglas: llegar (con ansiedad), cerrar, y respetar el tiempo que tiene.
-        ({ blocks } = polishMoment(blocks, { minutes: m.understanding?.minutes ?? null, anxiety: Boolean(anxiety) }));
-        const proposal = (id: string, minutes: number, extra: Record<string, unknown> = {}) => ({
-          ok: true as const, id, title: m.title, kind: m.kind, reason: m.reason, minutes,
-          blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })), locked: access.routines === false, ...extra,
-        });
+        ({ blocks } = polishMoment(blocks, { minutes: m.understanding?.minutes ?? null, anxiety: Boolean(anxiety), habit: m.habit ?? null }));
+        // Un hábito se repite: es un Moment diario.
+        const kind = m.habit ? 'daily' as const : m.kind;
+        // Hábito: queda en la memoria del coach y, si aceptó, en Mi día con su hora (alarma diaria). Después de responder.
+        let addedToDay = false;
+        const linkHabit = (id: string, ref: string) => {
+          if (!m.habit) return;
+          const { addToMyDay, ...habit } = m.habit;
+          addedToDay = addToMyDay;
+          const write = async () => {
+            await saveHabit(supabase, userId, { ...habit, moment_id: id }).catch(() => false);
+            if (!addToMyDay) return;
+            const { data: plan } = await supabase.from('day_plans').select('items').eq('user_id', userId).maybeSingle();
+            const parsed = DayItemsSchema.safeParse(plan?.items ?? []);
+            const items = placeInDay(parsed.success ? parsed.data : [], ref, habit.time, `h${Date.now().toString(36)}`);
+            await supabase.from('day_plans').upsert({ user_id: userId, items, updated_at: new Date().toISOString() });
+          };
+          try { after(write); } catch { void write(); }
+        };
+        const proposal = (id: string, minutes: number, extra: Record<string, unknown> = {}) => {
+          linkHabit(id, `m:${id}`);
+          return {
+            ok: true as const, id, title: m.title, kind, reason: m.reason, minutes,
+            blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })), locked: access.routines === false,
+            ...(m.habit ? { habit: true, addedToDay, time: m.habit.time } : {}), ...extra,
+          };
+        };
         // Ajustar uno existente: nueva versión del mismo Moment (propio) o tu copia de un oficial.
         if (m.basedOn) {
           const base = await getMoment(supabase, m.basedOn);
@@ -230,7 +257,7 @@ PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, gu
         const twin = (mine ?? []).map(toMomentFlow).find((x) => isNearDuplicate({ title: m.title, objective: m.objective, blocks }, x));
         if (twin) return { ...proposal(twin.id, twin.required_minutes, { reused: true, cover: twin.cover }), title: twin.title, blocks: twin.blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })) };
         const { data, error } = await supabase.from('soi_blueprints').insert({
-          creator_id: userId, title: m.title, objective: m.objective, kind: m.kind, source: m.source,
+          creator_id: userId, title: m.title, objective: m.objective, kind, source: m.source,
           blocks, steps: [], status: 'private', ...(m.kind === 'challenge' && m.durationDays && m.durationDays >= 2 ? { duration_days: Math.min(30, m.durationDays) } : {}),
         }).select('id, required_minutes').single();
         if (error) return { ok: false as const, errors: ['No se pudo guardar el Moment.'] };
@@ -247,15 +274,11 @@ PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, gu
         }
         // Portada aesthetic automática (después de responder: el chat no espera).
         scheduleAutoCover(data.id as string, {
-          title: m.title, objective: m.objective, kind: m.kind, blocks,
+          title: m.title, objective: m.objective, kind, blocks,
           context: m.understanding ? `${m.understanding.situation}. ${m.understanding.wants}` : null,
           part: partOfDay(hourInTz(timeZone ?? 'America/Mexico_City')),
         });
-        return {
-          ok: true as const, id: data.id as string, title: m.title, kind: m.kind, reason: m.reason,
-          minutes: data.required_minutes as number, blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })),
-          locked: access.routines === false,
-        };
+        return proposal(data.id as string, data.required_minutes as number);
       },
     }),
 
@@ -273,6 +296,12 @@ PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, gu
       description: 'Napoleon Hill: guarda o actualiza la memoria longitudinal del propósito de la persona (propósito principal definido, meta, fecha, por qué, qué dará a cambio, plan, obstáculo, miedo, conocimiento que falta, mastermind, etapa del ciclo, compromisos). Úsala en silencio cuando la persona defina o cambie algo.',
       inputSchema: HillPatchSchema,
       execute: async (patch) => ({ ok: await saveHillMemory(supabase, userId, patch) }),
+    }),
+
+    updateHabit: tool({
+      description: 'Coach de hábitos (James Clear): guarda o actualiza un hábito que la persona está creando o dejando (nombre, identidad, versión de 2 minutos, señal, hora, lugar, entorno, recompensa, la ley que falla, estado). Úsala en silencio cuando defina o cambie algo; "automatic" cuando ya le sale solo.',
+      inputSchema: HabitPatchSchema,
+      execute: async (patch) => ({ ok: await saveHabit(supabase, userId, patch) }),
     }),
 
     offerMoment: tool({

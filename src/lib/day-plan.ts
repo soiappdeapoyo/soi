@@ -30,6 +30,17 @@ export function partOfTime(time?: string): DayPart | null {
   return time ? partOfDay(Number(time.slice(0, 2))) : null;
 }
 
+/**
+ * Pone un Moment en Mi día (puro): si ya está, solo cambia su hora; si no, se agrega al final (máx. 20).
+ * Con hora, el aviso de esa hora llega como alarma cada día (src/lib/reminders.ts). Un hábito vive aquí.
+ */
+export function placeInDay(items: DayItem[], ref: string, time: string | undefined, id: string): DayItem[] {
+  const i = items.findIndex((x) => x.ref === ref);
+  if (i >= 0) return items.map((x, j) => (j === i ? { ...x, ...(time ? { time } : {}) } : x));
+  if (items.length >= 20) return items;
+  return [...items, { id, ref, ...(time ? { time } : {}) }];
+}
+
 export const refOf = (m: Pick<MomentFlow, 'id' | 'official' | 'slug'>) => (m.official ? `s:${m.slug}` : `m:${m.id}`);
 
 /**

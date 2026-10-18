@@ -4,6 +4,7 @@ import type { UserProfile } from '@/types/database';
 import { renderTemplate } from './template';
 import { AGENT_SPECS, CRISIS_PROMPT } from './agent-specs';
 import { hillPrompt, type HillMemory } from './napoleon-hill';
+import { clearPrompt, type HabitMemory } from './james-clear';
 import { ENEMIES } from '@/config/enemies';
 
 export type PromptContext = {
@@ -15,6 +16,8 @@ export type PromptContext = {
   library?: { kind: 'book' | 'pdf' | 'exercise'; id: string; title: string; author?: string | null; status?: string; externalId?: string | null }[];
   /** Memoria de Napoleon Hill (solo se usa si el agente es napoleon_hill). */
   hill?: HillMemory | null;
+  /** Hábitos que está construyendo (solo se usa si el agente es james_clear). */
+  habits?: HabitMemory | null;
 };
 
 /** Sanitiza datos del usuario antes de inyectarlos (anti prompt-injection). */
@@ -66,7 +69,7 @@ export function buildSystemPrompt(agentId: AgentId, ctx: PromptContext = {}): st
     : '';
 
   const tools = `HERRAMIENTAS:
-- updateProfile, scheduleReminder, suggestPractice, offerMoment, createMoment, createGuidedContent, captureIdea, updateHillPlan y registerEnemy: disponibles.
+- updateProfile, scheduleReminder, suggestPractice, offerMoment, createMoment, createGuidedContent, captureIdea, updateHillPlan, updateHabit y registerEnemy: disponibles.
 - Meditar, manifestar o afirmar SIEMPRE con contenido: en un Moment usa bloques meditation (guion), manifestation (deseo, asunción, escena) o affirmation (varias afirmaciones); nunca un temporizador vacío que solo diga "medita" o "manifiesta". Si la persona pide solo una meditación, afirmaciones o una manifestación, usa createGuidedContent.
 - Después de offerMoment, createMoment o createGuidedContent, pregunta en una frase breve si le hace sentido para hoy. Si dice que no, pregunta qué cambiar o diseña otro distinto (otro enfoque, no el mismo con otro nombre).
 - webSearch: solo para datos verificables (no para técnicas).
@@ -87,13 +90,14 @@ ${ctx.library.slice(0, 25).map((i) => i.kind === 'book'
 - exercise: movimiento físico (calistenia sin equipo por defecto). Usa query en inglés para encontrarlo (p. ej. "push up", "squat", "plank") y name en español; sets, reps o seconds y rest. Ideal para EXECUTE o cuando hay energía baja por sedentarismo. Sin consejos médicos.`;
 
   const hill = agentId === 'napoleon_hill' ? hillPrompt(ctx.hill ?? null) : '';
+  const clear = agentId === 'james_clear' ? clearPrompt(ctx.habits ?? null) : '';
 
   const enemies = `ENEMIGOS INTERIORES (patrones que todos tenemos, no diagnósticos): ${ENEMIES.map((e) => `${e.id}=${e.name} («${e.whisper}»)`).join('; ')}.
 - SOI lucha JUNTO a la persona contra ellos. Si reconoces uno en lo que cuenta, nómbralo como algo externo ("Parece que El Perfeccionista intentó tomar el control hoy"), nunca como un defecto de la persona ("eres perfeccionista"), y regístralo con registerEnemy sin anunciarlo.
 - Después, propón cómo vencerlo: un Moment que entrene a sus aliados (${ENEMIES.slice(0, 3).map((e) => `${e.name}: ${e.allies.join(', ')}`).join('; ')}…). No lo menciones si no aparece.`;
 
   // Orden pensado para la caché de prefijo de los proveedores: lo fijo del agente primero, lo de la persona y el mensaje al final.
-  return [base, filter, enemies, library, tools, hill, profile, discovery, lib, memory].filter(Boolean).join('\n\n');
+  return [base, filter, enemies, library, tools, hill, clear, profile, discovery, lib, memory].filter(Boolean).join('\n\n');
 }
 
 export { AGENT_SPECS };

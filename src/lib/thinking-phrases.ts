@@ -9,6 +9,7 @@ export const PHRASES = {
   logro: ['Un deseo claro es el primer paso de todo logro.', 'Decide qué quieres; el cómo se construye después.', 'Persistir es elegir tu meta otra vez, cada día.', 'Cada decisión firme te acerca a lo que quieres.'],
   manifestar: ['Siéntelo como si ya fuera real.', 'Lo que imaginas con emoción empieza a guiar tus pasos.', 'Asúmelo hoy; actúa desde ahí.'],
   calma: ['Mientras tanto, nota tu respiración.', 'El silencio también responde.', 'Aquí, ahora, sin prisa.'],
+  habito: ['Un hábito empieza con dos minutos, no con una hora.', 'Fallar un día no rompe un hábito; abandonarlo sí.', 'Cada vez que lo haces es un voto por quien quieres ser.', 'Primero presentarse; después mejorar.'],
   identidad: ['Cada acción pequeña dice quién estás eligiendo ser.', 'Lo que repites, te construye.', 'Tu ritmo es válido.', 'No eres tus pensamientos: eres quien los observa.'],
   manana: ['Un buen inicio hace un buen día.', 'Hoy puede empezar con un paso pequeño.'],
   noche: ['Lo que hiciste hoy cuenta, aunque haya sido poco.', 'Descansar también es parte del plan.'],
@@ -20,11 +21,12 @@ const TESTS: [RegExp, keyof typeof PHRASES][] = [
   [/mañana|pospon|procrastin|no he empezado|no empiezo|flojera|no tengo ganas de empezar/i, 'postergar'],
   [/dinero|negocio|empresa|clientes|vender|rico|riqueza|meta|objetivo|decidir|decisi[oó]n/i, 'logro'],
   [/manifest|visualiz|deseo|abundancia|atraer/i, 'manifestar'],
+  [/h[aá]bito|constan|todos los d[ií]as|lo dejo|disciplin/i, 'habito'],
 ];
 
 const AGENT_POOL: Record<string, keyof typeof PHRASES> = {
   meditacion: 'calma', manifestacion: 'manifestar', afirmacion: 'identidad', napoleon_hill: 'logro', riqueza: 'logro',
-  brian_tracy: 'postergar', rutinas: 'postergar', suenos: 'calma', evidencias: 'identidad', anti_sycophant: 'identidad',
+  brian_tracy: 'postergar', james_clear: 'habito', rutinas: 'postergar', suenos: 'calma', evidencias: 'identidad', anti_sycophant: 'identidad',
 };
 
 /** Lista ordenada de frases para esta espera: primero lo que hace SOI, después las del contexto, luego identidad. */
