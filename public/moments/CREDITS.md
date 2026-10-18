@@ -13,3 +13,4 @@ Fotos de [Unsplash](https://unsplash.com) bajo la [Licencia Unsplash](https://un
 
 - `moments/cierre-del-dia.webp` — George Becker · https://stocksnap.io/photo/candle-light-IB1L0U71X9 (StockSnap, dominio público CC0)
 - `moments/reto-hill-7.webp` — Vintage RS · https://stocksnap.io/photo/fountain-pen-CJETOU0HKX (StockSnap, dominio público CC0)
+- `moments/reto-clear-7.webp` — StockSnap · https://stocksnap.io/photo/running-shoes-645GI8G1W4 (StockSnap, dominio público CC0)

@@ -1,7 +1,7 @@
 import type { Author } from './types';
 
 /**
- * Páginas de autor: el centro de cada clúster temático. Quien llega desde un video de TikTok busca al autor;
+ * Páginas de autor (Neville, Tracy, Hill y James Clear): el centro de cada clúster temático. Quien llega desde un video de TikTok busca al autor;
  * aquí encuentra quién fue, sus ideas parafraseadas con su fuente (Regla #8), lo que la evidencia dice de ellas
  * y su reto de 7 días. Nada de texto protegido: solo frases cortas que ya usan los Moments oficiales.
  */
@@ -363,5 +363,125 @@ export const AUTHORS: Author[] = [
     ],
     guides: ['encontrar-proposito', 'metas-personales', 'disciplina-personal', 'mentalidad-ganadora'],
     posts: ['los-6-pasos-de-napoleon-hill', 'mentalidad-de-abundancia-vs-escasez', 'cambiar-tu-relacion-con-el-dinero'],
+  },
+
+  {
+    slug: 'james-clear',
+    key: 'clear',
+    name: 'James Clear',
+    title: 'James Clear: Hábitos atómicos, explicado y aplicado',
+    description: 'Las ideas de «Hábitos atómicos» de James Clear: hábitos basados en identidad, las 4 leyes, la regla de los 2 minutos y cómo aplicarlas en 7 días.',
+    h1: 'James Clear: cómo aplicar «Hábitos atómicos» en tu vida',
+    answer: 'James Clear es el autor estadounidense de «Hábitos atómicos» (2018). Su idea central es que los cambios que duran empiezan por la **identidad**: cada vez que haces un hábito votas por la persona que quieres ser. Para construirlo propone 4 leyes: hacerlo obvio, atractivo, fácil y satisfactorio, empezando por una versión de 2 minutos.',
+    intro: [
+      '«Hábitos atómicos» es probablemente el libro de hábitos más leído de la última década. Su éxito tiene una razón: no te pide más fuerza de voluntad, sino un mejor sistema. Si no logras ser constante, el problema casi nunca eres tú: es el diseño.',
+      'Aquí tienes sus ideas centrales con el capítulo donde aparecen, lo que dice la investigación y cómo practicarlas una semana. Si te reconoces en «empiezo con todo y a las dos semanas lo dejo», lee también [por qué no logras crear hábitos](/blog/por-que-no-logro-crear-habitos).',
+    ],
+    facts: [
+      { label: 'Nació', value: '1986, Estados Unidos' },
+      { label: 'Obra clave', value: 'Atomic Habits (2018)' },
+      { label: 'Su práctica', value: 'Las 4 leyes, regla de 2 minutos' },
+      { label: 'Eslabón SOI', value: 'Acciones → identidad' },
+    ],
+    sameAs: ['https://jamesclear.com'],
+    books: [
+      { title: 'Atomic Habits (Hábitos atómicos)', year: 2018, idea: 'Cambios pequeños, sistemas mejores y una identidad nueva, voto a voto.' },
+    ],
+    sections: [
+      {
+        h2: 'La idea central: hábitos basados en identidad',
+        paragraphs: [
+          'Clear distingue tres capas de cambio: los resultados (lo que obtienes), los procesos (lo que haces) y la identidad (lo que crees de ti). La mayoría empieza por los resultados: «quiero bajar 10 kilos». Él propone empezar por la identidad: «soy alguien que cuida su cuerpo».',
+          'La razón es práctica: tu conducta tiende a ser coherente con quien crees que eres. Y la identidad no cambia porque lo decidas, sino porque acumulas pruebas. Cada vez que haces el hábito es **un voto** por esa persona. No necesitas ganar todas las votaciones, solo la mayoría. Lo explicamos en [cómo reprogramar tu identidad](/blog/como-reprogramar-tu-identidad).',
+        ],
+        source: 'James Clear, «Atomic Habits» (2018), cap. 2',
+      },
+      {
+        h2: 'El ciclo del hábito',
+        paragraphs: [
+          'Todo hábito sigue cuatro pasos: una **señal** (algo que lo dispara), un **deseo** (lo que esperas sentir), una **respuesta** (el hábito en sí) y una **recompensa** (lo que obtienes). Si uno de los cuatro falla, el hábito no se sostiene.',
+          'Por ejemplo: entras a tu cuarto (señal), quieres desconectarte (deseo), tomas el teléfono (respuesta) y sientes alivio (recompensa). Entender el ciclo te deja intervenir donde falla, en lugar de culparte.',
+        ],
+        source: 'James Clear, «Atomic Habits» (2018), cap. 3',
+      },
+      {
+        h2: 'Las 4 leyes del cambio de conducta',
+        paragraphs: ['A cada paso del ciclo le corresponde una ley. Para dejar un mal hábito se usan al revés:'],
+        list: [
+          '**Hazlo obvio** (la señal). Para dejarlo: hazlo invisible.',
+          '**Hazlo atractivo** (el deseo). Para dejarlo: hazlo poco atractivo.',
+          '**Hazlo fácil** (la respuesta). Para dejarlo: hazlo difícil.',
+          '**Hazlo satisfactorio** (la recompensa). Para dejarlo: hazlo insatisfactorio.',
+        ],
+        source: 'James Clear, «Atomic Habits» (2018), cap. 3',
+      },
+      {
+        h2: 'La regla de los 2 minutos',
+        paragraphs: [
+          'Cuando empiezas un hábito, la versión inicial debe tomar menos de dos minutos. «Leer antes de dormir» se vuelve «leer una página». «Hacer ejercicio» se vuelve «ponerme los tenis». Parece demasiado poco, y esa es la idea: primero aprendes a presentarte; después mejoras.',
+          'Un hábito tiene que existir antes de poder mejorarse. La versión pequeña te saca del todo o nada y convierte el inicio, que es lo más difícil, en algo casi automático. Si te cuesta empezar, mira también la [guía para dejar de procrastinar](/procrastinacion).',
+        ],
+        source: 'James Clear, «Atomic Habits» (2018), cap. 13',
+      },
+      {
+        h2: 'Apilar hábitos: dale una señal clara',
+        paragraphs: [
+          'Decir «voy a meditar más» no funciona porque no dice cuándo. Clear propone dos fórmulas. La intención de implementación: «Voy a [hábito] a las [hora] en [lugar]». Y apilar hábitos: «Después de [algo que ya haces], voy a [hábito nuevo]».',
+          'Por ejemplo: «Después de servirme el café, escribo mis tres prioridades». El hábito viejo se vuelve la señal del nuevo y ya no dependes de acordarte.',
+        ],
+        source: 'James Clear, «Atomic Habits» (2018), cap. 5; Gollwitzer y Sheeran (2006)',
+      },
+      {
+        h2: 'El entorno pesa más que la motivación',
+        paragraphs: [
+          'Las personas que parecen tener mucho autocontrol, dice Clear, en realidad se exponen menos a la tentación. Diseñan su entorno para que lo bueno sea fácil y lo malo cueste: la fruta a la vista, el teléfono fuera del cuarto, la ropa de ejercicio lista la noche anterior.',
+          'Es una idea con mucho respaldo: Wendy Wood estima que cerca de la mitad de lo que hacemos cada día lo hacemos en automático, disparado por el contexto. Cambiar el contexto rinde más que pelearte contigo. Lo aplicamos en la [guía de disciplina personal](/disciplina-personal).',
+        ],
+        source: 'James Clear, «Atomic Habits» (2018), cap. 6 y 7; Wendy Wood, «Good Habits, Bad Habits» (2019)',
+      },
+      {
+        h2: 'Registra y nunca falles dos veces',
+        paragraphs: [
+          'La última ley es la que más se olvida: el cerebro repite lo que se siente bien de inmediato, y los beneficios de un buen hábito tardan en llegar. Por eso Clear sugiere registrar el hábito (una marca en un calendario, una casilla) para que el progreso sea visible hoy.',
+          'Y una regla para los días malos: **nunca fallar dos veces seguidas**. Fallar un día es un accidente; dos, el comienzo de otro hábito. Si no puedes hacerlo completo, haz la versión de 2 minutos. En SOI la racha funciona así: un día sin practicar no la rompe.',
+        ],
+        source: 'James Clear, «Atomic Habits» (2018), cap. 16',
+      },
+      {
+        h2: 'Lo que dice la evidencia',
+        paragraphs: [
+          'Varias ideas de Clear coinciden con la investigación. Phillippa Lally y su equipo midieron cuánto tarda un hábito en volverse automático: en promedio 66 días, con un rango de 18 a 254, y fallar un día no cambió el resultado de forma importante. Las intenciones de implementación (el «cuándo y dónde») tienen un efecto de mediano a grande, según un metaanálisis de Gollwitzer y Sheeran.',
+          'Dos matices honestos. El famoso «1 % mejor cada día» es una ilustración matemática, no una promesa: el progreso real va por rachas y mesetas, lo que Clear llama la meseta del potencial latente. Y no todo es hábito: si algo toca una adicción o tu salud, el diseño ayuda, pero vale la pena apoyarte en un profesional.',
+        ],
+        source: 'Lally y otros, European Journal of Social Psychology (2010); Gollwitzer y Sheeran (2006); James Clear, «Atomic Habits» (2018), cap. 1',
+      },
+      {
+        h2: 'Cómo practicar a Clear esta semana',
+        paragraphs: [],
+        list: [
+          '**Día 1:** escribe quién quieres ser («soy alguien que…») y elige un solo hábito en su versión de 2 minutos.',
+          '**Día 2:** hazlo obvio: «Después de ___, voy a ___», con hora.',
+          '**Día 3:** cambia tu entorno: deja la señal a la vista y quita una fricción.',
+          '**Día 4:** hazlo atractivo: júntalo con algo que disfrutas.',
+          '**Día 5:** hazlo satisfactorio: empieza a registrarlo.',
+          '**Día 6:** comprométete a no fallar dos veces seguidas.',
+          '**Día 7:** revisa tu semana y decide el siguiente 1 %.',
+        ],
+        ordered: true,
+      },
+    ],
+    cta: {
+      heading: '7 días con James Clear, guiados por voz',
+      text: 'Unos minutos al día con un solo hábito: cada día una ley nueva, siempre tu versión de 2 minutos y un voto por la persona que quieres ser.',
+      button: 'Empezar el día 1 gratis',
+    },
+    faq: [
+      { q: '¿Quién es James Clear?', a: 'Un escritor estadounidense especializado en hábitos y toma de decisiones, autor de «Atomic Habits» (2018), publicado en español como «Hábitos atómicos», uno de los libros de desarrollo personal más vendidos de los últimos años.' },
+      { q: '¿Cuáles son las 4 leyes de «Hábitos atómicos»?', a: 'Hacerlo obvio, hacerlo atractivo, hacerlo fácil y hacerlo satisfactorio. Para dejar un mal hábito se invierten: hacerlo invisible, poco atractivo, difícil e insatisfactorio.' },
+      { q: '¿Qué es la regla de los 2 minutos?', a: 'Empezar cualquier hábito con una versión que tome menos de dos minutos, como leer una página o ponerte los tenis. El objetivo es aprender a presentarte todos los días antes de buscar más.' },
+      { q: '¿Cuánto tarda en formarse un hábito?', a: 'Según el estudio de Phillippa Lally (2010), un promedio de 66 días, con mucha variación según la persona y el hábito. La idea de los 21 días no tiene respaldo.' },
+    ],
+    guides: ['crear-habitos', 'disciplina-personal', 'procrastinacion', 'rutina-mananas'],
+    posts: ['por-que-no-logro-crear-habitos', 'crear-un-habito-en-5-minutos-al-dia', 'se-lo-que-tengo-que-hacer-pero-no-lo-hago'],
   },
 ];

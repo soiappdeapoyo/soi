@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EMOTIONS, emotionBySlug } from '@/config/emotions';
 import { AUTHORS, GUIDES, POSTS, anchorFor, authorBySlug, guideBySlug, plainText, postBySlug, readingMinutes } from '@/config/content';
-import { CHALLENGE_SLUGS } from '@/config/official-challenges';
+import { AUTHOR_CHALLENGES, CHALLENGE_SLUGS } from '@/config/official-challenges';
 import { officialMoment } from '@/config/official-moments';
 import { GUIDE_WEEKS } from '@/config/content/guide-weeks';
 import { PROTECTED_PREFIXES } from '@/config/navigation';
@@ -107,12 +107,13 @@ describe('blog', () => {
 });
 
 describe('páginas de autor', () => {
-  it('una por reto de la landing, cada una con su página y sin chocar con guías ni rutas de la app', () => {
-    expect(AUTHORS.map((a) => a.key).sort()).toEqual(Object.keys(CHALLENGE_SLUGS).sort());
+  it('una por reto (los de la landing y James Clear), cada una con su página y sin chocar con guías ni rutas de la app', () => {
+    expect(AUTHORS.map((a) => a.key).sort()).toEqual(Object.keys(AUTHOR_CHALLENGES).sort());
+    for (const k of Object.keys(CHALLENGE_SLUGS)) expect(AUTHORS.some((a) => a.key === k), k).toBe(true);
     for (const a of AUTHORS) {
       expect(existsSync(join(process.cwd(), 'src/app/(contenido)', a.slug, 'page.tsx')), a.slug).toBe(true);
       expect(guideBySlug(a.slug), a.slug).toBeNull();
-      expect(officialMoment(CHALLENGE_SLUGS[a.key]), a.key).not.toBeNull();
+      expect(officialMoment(AUTHOR_CHALLENGES[a.key]), a.key).not.toBeNull();
       for (const p of PROTECTED_PREFIXES) expect(`/${a.slug}`.startsWith(`${p}/`) || `/${a.slug}` === p, a.slug).toBe(false);
     }
   });
@@ -127,7 +128,7 @@ describe('páginas de autor', () => {
       expect(words, `${a.slug}: respuesta corta`).toBeLessThanOrEqual(75);
       expect(readingMinutes(a), a.slug).toBeGreaterThanOrEqual(4);
       expect(a.sections.filter((s) => s.source).length, a.slug).toBeGreaterThanOrEqual(4);
-      expect(a.books.length, a.slug).toBeGreaterThanOrEqual(3);
+      expect(a.books.length, a.slug).toBeGreaterThanOrEqual(1);
       expect(a.faq.length, a.slug).toBeGreaterThanOrEqual(3);
     }
   });

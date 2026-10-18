@@ -5,7 +5,7 @@ import { buttonClass } from '@/components/ui/button';
 import { Cta } from '@/components/landing/cta';
 import { EmotionsHeader, JsonLd } from '@/components/emotions/site-header';
 import { AUTHORS, GUIDES_UPDATED, anchorFor, authorBySlug, guideBySlug, plainText, postBySlug } from '@/config/content';
-import { CHALLENGE_SLUGS, dayMinutes } from '@/config/official-challenges';
+import { AUTHOR_CHALLENGES, dayMinutes } from '@/config/official-challenges';
 import { officialMoment } from '@/config/official-moments';
 import { getSettings } from '@/lib/settings';
 import { appUrl } from '@/lib/utils';
@@ -33,7 +33,7 @@ export function authorMetadata(slug: string): Metadata {
 export async function AuthorPage({ slug }: { slug: string }) {
   const a = authorBySlug(slug);
   if (!a) notFound();
-  const challenge = officialMoment(CHALLENGE_SLUGS[a.key]);
+  const challenge = officialMoment(AUTHOR_CHALLENGES[a.key]);
   if (!challenge) notFound();
   const { trialDays } = await getSettings();
   const base = appUrl();
@@ -48,9 +48,10 @@ export async function AuthorPage({ slug }: { slug: string }) {
   const guides = a.guides.map(guideBySlug).filter((g) => g !== null);
   const posts = a.posts.map(postBySlug).filter((p) => p !== null);
   const others = AUTHORS.filter((o) => o.slug !== a.slug);
+  const booksLabel = a.books.length === 1 ? 'Su libro' : 'Sus libros principales';
   const toc = [
     ...a.sections.map((s) => ({ id: anchorFor(s.h2), label: s.h2 })),
-    { id: 'libros', label: 'Sus libros principales' },
+    { id: 'libros', label: booksLabel },
     { id: 'reto', label: a.cta.heading },
     { id: 'preguntas', label: 'Preguntas frecuentes' },
   ];
@@ -117,7 +118,7 @@ export async function AuthorPage({ slug }: { slug: string }) {
 
         {/* ---------- Libros ---------- */}
         <section id="libros" className="mx-auto max-w-3xl scroll-mt-4 px-5 pb-14" aria-labelledby="libros-h">
-          <h2 id="libros-h" className="text-2xl font-semibold tracking-tight sm:text-3xl">Sus libros principales</h2>
+          <h2 id="libros-h" className="text-2xl font-semibold tracking-tight sm:text-3xl">{booksLabel}</h2>
           <ul className="mt-5 grid gap-2.5">
             {a.books.map((b) => (
               <li key={b.title} className="flex gap-4 rounded-[20px] bg-white px-5 py-4 shadow-ring">

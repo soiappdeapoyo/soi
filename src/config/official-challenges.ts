@@ -15,6 +15,7 @@ const OOTW = 'Neville Goddard — Out of This World';
 const GOALS = 'Brian Tracy — Goals!';
 const FROG = 'Brian Tracy — Eat That Frog!';
 const TGR = 'Napoleon Hill — Think and Grow Rich (1937), cap. 2: Deseo';
+const AH = 'James Clear — Atomic Habits (2018)';
 
 const NEVILLE: Def = {
   slug: 'reto_neville_7', title: '7 noches con Neville', author: 'Neville Goddard', eslabon: 'emocion', source: FTS,
@@ -107,6 +108,35 @@ const HILL: Def = {
   ],
 };
 
+const CLEAR: Def = {
+  slug: 'reto_clear_7', title: '7 días con James Clear', author: 'James Clear', eslabon: 'accion', source: AH,
+  objective: 'Construir UN hábito empezando por quién quieres ser: cada día una de las 4 leyes de Hábitos Atómicos y, siempre, su versión de 2 minutos.',
+  blocks: [
+    { id: 'd1_identity', day: 1, type: 'writing', title: 'Quién quieres ser', minutes: 2, source: `${AH}, cap. 2`,
+      config: { prompt: 'Antes del hábito, la identidad. Completa la frase: «Soy alguien que…». No «quiero bajar 10 kilos», sino «soy alguien que cuida su cuerpo».' } },
+    { id: 'd1_habit', day: 1, type: 'goal', title: 'Un solo hábito, en pequeño', minutes: 2, source: `${AH}, cap. 13: la regla de los 2 minutos`,
+      config: { prompt: 'Elige UN hábito que vote por esa identidad. Ahora achícalo hasta que tome 2 minutos: «leer» es «abrir el libro y leer una página»; «correr» es «ponerme los tenis».' } },
+    { id: 'd2_cue', day: 2, type: 'agenda', title: 'Hazlo obvio: tu señal', minutes: 2, source: `${AH}, cap. 5: apilar hábitos`,
+      config: { prompt: 'Ancla tu hábito a algo que ya haces: «Después de ___, voy a ___». ¿A qué hora suele pasar eso? Pon esa hora.', defaultTime: '07:00' } },
+    { id: 'd3_space', day: 3, type: 'writing', title: 'Tu entorno', minutes: 2, source: `${AH}, cap. 6 y 12: diseño del entorno y la ley del menor esfuerzo`,
+      config: { prompt: 'El entorno pesa más que la motivación. Escribe una cosa que vas a dejar a la vista para tu hábito (el libro en la almohada, los tenis junto a la cama) y una fricción que vas a quitar hoy.' } },
+    { id: 'd4_bundle', day: 4, type: 'writing', title: 'Hazlo atractivo', minutes: 2, source: `${AH}, cap. 8: agrupar tentaciones`,
+      config: { prompt: 'Junta tu hábito con algo que disfrutas: «Solo escucho mi podcast mientras camino». Y cambia «tengo que» por «tengo la oportunidad de». Escribe los dos.' } },
+    { id: 'd5_track', day: 5, type: 'tracking', title: 'Hazlo satisfactorio: tu registro', minutes: 1, source: `${AH}, cap. 16: registrar el hábito`,
+      config: { metric: 'Días que hice mi hábito esta semana', unit: 'días', target: 7 } },
+    { id: 'd6_twice', day: 6, type: 'contract', title: 'Nunca dos veces seguidas', minutes: 2, source: `${AH}, cap. 16 y 17: nunca fallar dos veces y el contrato de hábito`,
+      config: { commitment: 'Si un día fallo, al siguiente hago la versión de 2 minutos. Puedo fallar un día; no fallo dos seguidos.', consequence: 'Le cuento a una persona de confianza cómo voy cada domingo.' } },
+    { id: 'd7_review', day: 7, type: 'reflection', title: 'Tu semana', minutes: 2, source: `${AH}, cap. 20: reflexión y revisión`,
+      config: { question: 'Mira estos 7 días: ¿cuántas veces votaste por la persona que quieres ser? ¿Qué ley te costó más: obvio, atractivo, fácil o satisfactorio?' } },
+    { id: 'd7_next', day: 7, type: 'writing', title: 'El siguiente 1 %', minutes: 2, source: `${AH}, cap. 19: la regla de Ricitos de Oro`,
+      config: { prompt: 'Para la próxima semana, ¿cómo harías tu hábito un poco más grande sin que deje de ser fácil? Solo un poco: lo justo para que no aburra.' } },
+    { id: 'tiny', type: 'timer', title: 'Tu versión de 2 minutos', minutes: 2, source: `${AH}, cap. 13`,
+      config: { instruction: 'Haz ahora la versión de 2 minutos de tu hábito. Si no es el momento, hazla en cuanto llegue tu señal. Hoy lo que cuenta es presentarte.' } },
+    { id: 'vote', type: 'celebration', title: 'Tu voto de hoy', minutes: 1, source: `${AH}, cap. 2`,
+      config: { message: 'Un voto más por la persona que estás eligiendo ser. No necesitas ganar todas las votaciones: solo la mayoría.' } },
+  ],
+};
+
 const DAYS = 7;
 
 /** Minutos de un día del reto (lo que se repite + lo de ese día). */
@@ -128,7 +158,10 @@ function build(d: Def): MomentFlow {
   };
 }
 
-export const OFFICIAL_CHALLENGES: MomentFlow[] = [NEVILLE, TRACY, HILL].map(build);
+export const OFFICIAL_CHALLENGES: MomentFlow[] = [NEVILLE, TRACY, HILL, CLEAR].map(build);
 
 /** Los retos que ofrece la landing, por autor. */
 export const CHALLENGE_SLUGS = { neville: 'reto_neville_7', tracy: 'reto_tracy_7', hill: 'reto_hill_7' } as const;
+
+/** El reto de cada página de autor (`/neville-goddard`…): los de la landing y James Clear (aún fuera de la landing). */
+export const AUTHOR_CHALLENGES = { ...CHALLENGE_SLUGS, clear: 'reto_clear_7' } as const;

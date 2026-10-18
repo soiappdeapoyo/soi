@@ -153,7 +153,7 @@ export const POSTS_LONGTAIL: Post[] = [
       {
         h2: '6. Buscabas un resultado, no una identidad',
         paragraphs: [
-          '«Quiero correr un maratón» es un resultado. «Soy alguien que corre» es una identidad. Cuando el hábito depende del resultado, en cuanto el resultado tarda, la motivación cae. Cuando depende de quién eres, cada día que lo haces es una prueba a tu favor.',
+          '«Quiero correr un maratón» es un resultado. «Soy alguien que corre» es una identidad. Es la idea central de [James Clear](/james-clear) en «Hábitos atómicos». Cuando el hábito depende del resultado, en cuanto el resultado tarda, la motivación cae. Cuando depende de quién eres, cada día que lo haces es una prueba a tu favor.',
           'Por eso en SOI cada práctica cuenta como evidencia de la persona que te estás volviendo. Lo explicamos en [cómo reprogramar tu identidad](/blog/como-reprogramar-tu-identidad).',
         ],
         source: 'James Clear, «Atomic Habits» (2018)',

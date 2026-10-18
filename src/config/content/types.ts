@@ -73,13 +73,13 @@ export type Post = {
 };
 
 /**
- * Página de autor (`/neville-goddard`, `/brian-tracy`, `/napoleon-hill`): quién fue, sus ideas parafraseadas
+ * Página de autor (`/neville-goddard`, `/brian-tracy`, `/napoleon-hill`, `/james-clear`): quién fue, sus ideas parafraseadas
  * (nunca su texto), cómo aplicarlas hoy y su reto de 7 días. Centro del clúster: enlaza a guías y artículos.
  */
 export type Author = {
   slug: string;
-  /** Clave del reto (`CHALLENGE_SLUGS`) y de `?de=` en la landing. */
-  key: 'neville' | 'tracy' | 'hill';
+  /** Clave del reto (`AUTHOR_CHALLENGES`; las de la landing también son su `?de=`). */
+  key: 'neville' | 'tracy' | 'hill' | 'clear';
   name: string;
   /** Título SEO (≤ 54 caracteres; la plantilla agrega « · SOI»). */
   title: string;

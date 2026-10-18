@@ -1,12 +1,14 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CHALLENGE_SLUGS, OFFICIAL_CHALLENGES, dayMinutes } from '@/config/official-challenges';
+import { AUTHOR_CHALLENGES, OFFICIAL_CHALLENGES, dayMinutes } from '@/config/official-challenges';
 import { OFFICIAL_MOMENTS, officialMoment } from '@/config/official-moments';
 import { parseBlocks } from '@/config/actions';
 import { blocksForDay, challengeLength } from '@/lib/moments/challenge';
 
 describe('retos oficiales de 7 días', () => {
   it('están entre los Moments oficiales con slug único', () => {
-    for (const slug of Object.values(CHALLENGE_SLUGS)) expect(officialMoment(slug)?.kind).toBe('challenge');
+    for (const slug of Object.values(AUTHOR_CHALLENGES)) expect(officialMoment(slug)?.kind).toBe('challenge');
     const slugs = OFFICIAL_MOMENTS.map((m) => m.slug);
     expect(new Set(slugs).size).toBe(slugs.length);
   });
@@ -18,6 +20,9 @@ describe('retos oficiales de 7 días', () => {
         expect(errors).toEqual([]);
         expect(blocks).toHaveLength(m.blocks.length);
         expect(new Set(m.blocks.map((b) => b.id)).size).toBe(m.blocks.length);
+      });
+      it('su portada existe en public/', () => {
+        expect(m.cover && existsSync(join(process.cwd(), 'public', m.cover))).toBe(true);
       });
       it('cada práctica cita su fuente (Regla #8)', () => {
         expect(m.blocks.filter((b) => b.type !== 'celebration' && !b.source)).toEqual([]);
