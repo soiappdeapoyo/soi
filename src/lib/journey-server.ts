@@ -12,7 +12,7 @@ const PROPOSAL_WINDOW_MS = 3 * 86_400_000;
  * Si una consulta falla se asume lo conservador (ya conoce SOI): nunca se le presenta SOI a quien ya lo usa.
  */
 export const loadJourney = cache(async (supabase: SupabaseClient, userId: string, canRun: boolean): Promise<JourneyState> => {
-  const [msgs, done, firstRun, recentOwn, startedRuns, unfinished] = await Promise.all([
+  const [msgs, done, firstRun, recentOwn, startedRuns, unfinished, maps] = await Promise.all([
     supabase.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('role', 'user'),
     supabase.from('moment_runs').select('id', { count: 'exact', head: true }).eq('user_id', userId).not('completed_at', 'is', null),
     supabase.from('moment_runs').select('id, completed_at').eq('user_id', userId).not('completed_at', 'is', null)
@@ -21,6 +21,7 @@ export const loadJourney = cache(async (supabase: SupabaseClient, userId: string
       .gte('created_at', new Date(Date.now() - PROPOSAL_WINDOW_MS).toISOString()).order('created_at', { ascending: false }).limit(5),
     supabase.from('moment_runs').select('moment_id').eq('user_id', userId).not('moment_id', 'is', null).limit(200),
     loadUnfinished(supabase, userId),
+    supabase.from('life_assessments').select('id', { count: 'exact', head: true }).eq('user_id', userId).neq('kind', 'semanal'),
   ]);
   const failed = Boolean(msgs.error || done.error);
   const userMessages = failed ? 1 : msgs.count ?? 0;
@@ -50,5 +51,5 @@ export const loadJourney = cache(async (supabase: SupabaseClient, userId: string
     if (title) unfinishedView = { title, href: `/m/${id}/play?from=hoy`, progress: u.progress };
   }
 
-  return { userMessages, completedRuns, firstCompleted, followedUp, proposal, unfinished: unfinishedView, canRun };
+  return { userMessages, completedRuns, firstCompleted, followedUp, proposal, unfinished: unfinishedView, canRun, hasMap: maps.error ? true : (maps.count ?? 0) > 0 };
 });

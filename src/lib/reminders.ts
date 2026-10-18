@@ -40,6 +40,8 @@ export type ReminderInput = {
   pendingToday: number;
   /** Recordatorios pedidos en el chat cuya hora ya llegó (dentro de la ventana). */
   scheduled: { id: string; title: string }[];
+  /** Toca su revisión de la semana (domingo o lunes temprano, con mapa y sin revisión). */
+  reviewDue?: boolean;
 };
 
 export const toMinutes = (hhmm: string | null | undefined): number | null => {
@@ -58,14 +60,18 @@ export function inWindow(localMinutes: number, at: number): boolean {
 const quiet = (m: number) => m >= QUIET_FROM || m < QUIET_TO;
 
 /** El texto de la invitación diaria según el siguiente paso (sin cifras que presionen ni culpa). */
-export function nudgeFor(step: NextStep, i: Pick<ReminderInput, 'streak' | 'pendingToday'>): Omit<Notice, 'kind' | 'ref' | 'alarm'> {
+export function nudgeFor(step: NextStep, i: Pick<ReminderInput, 'streak' | 'pendingToday' | 'reviewDue'>): Omit<Notice, 'kind' | 'ref' | 'alarm'> {
   switch (step.kind) {
     case 'resume': return { title: 'Lo dejaste a medias', body: `${step.title.replace(/^Lo dejaste a medias: /, '')} · sigue justo donde te quedaste.`, url: step.href };
     case 'first_moment': return { title: 'Tu primer Moment te espera', body: step.detail, url: step.href };
     case 'follow_up': return { title: '¿Cómo te fue con tu primer Moment?', body: 'Cuéntaselo a SOI: con eso aprende qué te ayuda.', url: step.href };
     case 'talk': return { title: '¿Cómo llegas hoy?', body: 'SOI te escucha. Con lo que le cuentes prepara tu primer Moment.', url: step.href };
     case 'keep_talking': return { title: 'SOI sigue aquí', body: 'Tu primer Moment está a un par de mensajes.', url: step.href };
+    case 'map':
+      if (i.pendingToday === 0) return { title: 'Dibuja tu mapa', body: '5 minutos para ver dónde estás y a dónde quieres llegar. Con eso SOI guía tus días.', url: step.href };
+    // fallthrough: si tiene Moments pendientes hoy, primero su día.
     default:
+      if (i.reviewDue && i.pendingToday === 0) return { title: 'Tu revisión de la semana', body: '3 minutos para cerrar tu semana y elegir tu foco para la que empieza.', url: '/mapa/semana' };
       if (i.pendingToday > 0) return { title: 'Tu día está listo', body: `${i.pendingToday === 1 ? 'Un Moment te espera' : `${i.pendingToday} Moments te esperan`}. Dale play y SOI te guía.`, url: '/hoy' };
       if (i.streak > 1) return { title: `Llevas ${i.streak} días`, body: 'Un Moment de pocos minutos y sigues construyendo quién eres.', url: '/hoy' };
       return { title: 'Un momento para ti', body: '¿Cómo llegas hoy? Cuéntaselo a SOI.', url: '/hoy' };

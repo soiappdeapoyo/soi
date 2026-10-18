@@ -24,11 +24,13 @@ export function isTabActive(pathname: string, tab: { match: readonly string[] })
 
 /** Pantallas inmersivas donde la barra inferior se oculta (ejecución de un Moment). */
 export function hidesBottomNav(pathname: string) {
-  return /^\/m\/[^/]+\/play$/.test(pathname) || /^\/rutinas\/[^/]+$/.test(pathname);
+  // Los flujos de pantalla completa (reproductor, diagnóstico y revisión del mapa) llevan su propio botón abajo.
+  return /^\/m\/[^/]+\/play$/.test(pathname) || /^\/rutinas\/[^/]+$/.test(pathname) || /^\/mapa\//.test(pathname);
 }
 
 /** Accesos directos a Mi Vida (sidebar y menú móvil): lo que alimenta Hoy y tu identidad. */
 export const MY_LIFE = [
+  { href: '/mi-vida?tab=mapa', label: 'Mi mapa', icon: 'Map' },
   { href: '/mi-vida?tab=dia', label: 'Mi día', icon: 'CalendarClock' },
   { href: '/mi-vida?tab=nuevo-yo', label: 'Mi Nuevo Yo', icon: 'Crown' },
   { href: '/mi-vida?tab=batallas', label: 'Batallas', icon: 'Flame' },
@@ -45,7 +47,7 @@ export const CREATE_LINKS = ALL_CREATE_LINKS.filter((l) => CREATOR_ACCOUNTS_ENAB
 export const PROTECTED_PREFIXES = [
   '/hoy', '/impulso', '/mi-vida', '/yo',
   '/chat', '/onboarding', '/rutinas', '/ritual', '/evidencias', '/comunidad', '/perfil', '/ajustes', '/planes',
-  '/momentos', '/blueprints', '/implementaciones', '/creadores', '/m', '/ideas', '/p', '/u', '/actividad', '/mensajes', '/panel',
+  '/momentos', '/blueprints', '/implementaciones', '/creadores', '/m', '/ideas', '/p', '/u', '/actividad', '/mensajes', '/panel', '/mapa',
 ];
 
 export const STREAK_MILESTONES = [7, 21, 40, 90] as const;

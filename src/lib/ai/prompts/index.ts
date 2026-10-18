@@ -5,6 +5,8 @@ import { renderTemplate } from './template';
 import { AGENT_SPECS, CRISIS_PROMPT } from './agent-specs';
 import { hillPrompt, type HillMemory } from './napoleon-hill';
 import { clearPrompt, type HabitMemory } from './james-clear';
+import { northPrompt } from './north';
+import type { North } from '@/lib/north';
 import { ENEMIES } from '@/config/enemies';
 
 export type PromptContext = {
@@ -18,6 +20,8 @@ export type PromptContext = {
   hill?: HillMemory | null;
   /** Hábitos que está construyendo (solo se usa si el agente es james_clear). */
   habits?: HabitMemory | null;
+  /** Norte de la persona (Tu mapa, plan, foco de la semana): lo reciben todos los agentes. */
+  north?: North | null;
 };
 
 /** Sanitiza datos del usuario antes de inyectarlos (anti prompt-injection). */
@@ -97,7 +101,7 @@ ${ctx.library.slice(0, 25).map((i) => i.kind === 'book'
 - Después, propón cómo vencerlo: un Moment que entrene a sus aliados (${ENEMIES.slice(0, 3).map((e) => `${e.name}: ${e.allies.join(', ')}`).join('; ')}…). No lo menciones si no aparece.`;
 
   // Orden pensado para la caché de prefijo de los proveedores: lo fijo del agente primero, lo de la persona y el mensaje al final.
-  return [base, filter, enemies, library, tools, hill, clear, profile, discovery, lib, memory].filter(Boolean).join('\n\n');
+  return [base, filter, enemies, library, tools, hill, clear, profile, northPrompt(ctx.north), discovery, lib, memory].filter(Boolean).join('\n\n');
 }
 
 export { AGENT_SPECS };

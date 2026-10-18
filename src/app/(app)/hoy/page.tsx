@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { Check, Compass, ListPlus, Play } from 'lucide-react';
+import { ArrowRight, CalendarCheck, Check, Compass, ListPlus, Map as MapIcon, Play } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import { loadToday } from '@/lib/today';
@@ -24,6 +24,7 @@ import { loadJourney } from '@/lib/journey-server';
 import { firstStepsProgress, nextStep } from '@/lib/journey';
 import { NextStepCard } from '@/components/today/next-step-card';
 import { ReturnSetup } from '@/components/pwa/return-setup';
+import { loadOsToday } from '@/lib/life-plan-server';
 
 export const metadata: Metadata = { title: 'Hoy' };
 
@@ -47,14 +48,22 @@ export default async function HoyPage() {
   if (!user) redirect('/login');
   const { profile, access } = await getAccessMap(user.id);
   const tz = profile?.timezone ?? 'America/Mexico_City';
-  const [today, plan, north, journey] = await Promise.all([
+  const [today, plan, north, journey, os] = await Promise.all([
     loadToday(supabase, user.id, profile, access.daily_ritual),
     loadDayPlan(supabase, user.id, tz),
     loadNorth(supabase, user.id, profile),
     loadJourney(supabase, user.id, access.routine_execution),
+    loadOsToday(supabase, user.id, tz).catch(() => null),
   ]);
-  // Hacia dónde va: su propósito o meta; si no, la identidad que eligió.
-  const aim = north.aim ?? north.identity?.name ?? null;
+  // Hacia dónde va: el foco de esta semana (revisión), la meta a 90 días de su plan, su propósito o meta, o su identidad.
+  const aimLabel = north.week ? `Esta semana · ${north.week.label}:` : 'Hoy avanzas hacia:';
+  const aim = north.week?.one_thing ?? north.focus.find((f) => f.goal)?.goal ?? north.aim ?? north.identity?.name ?? null;
+  // Una sola tarjeta del sistema a la vez: revisión de la semana > chequeo del mes > dibujar el mapa (loop).
+  const osCard = os?.reviewDue
+    ? { title: 'Tu revisión de la semana', detail: '3 minutos: qué funcionó, qué aprendiste y tu foco para la semana que empieza.', href: '/mapa/semana', icon: 'review' as const }
+    : os?.checkinDue
+    ? { title: 'Tu chequeo del mes', detail: '2 minutos para volver a calificar tus áreas y ver cuánto avanzaste.', href: '/mapa/diagnostico', icon: 'map' as const }
+    : null;
   const { decision } = today;
   const items = plan.items;
   const pending = items.filter((i) => !i.done);
@@ -64,7 +73,8 @@ export default async function HoyPage() {
   // Si lo que quedó a medias ya es lo siguiente de su día, la tarjeta de su día ya lo retoma.
   const step = nextStep(journey);
   const welcome = firstStepsProgress(journey);
-  const guided = step.kind !== 'routine' && !(step.kind === 'resume' && next?.partial != null);
+  // El mapa no esconde su día: va como invitación aparte, debajo de lo que sigue.
+  const guided = step.kind !== 'routine' && step.kind !== 'map' && !(step.kind === 'resume' && next?.partial != null);
   // Sin plan (o ya vivido), una sola propuesta según el estado.
   // De noche, lo primero que se propone es cerrar el día (si aún no lo hizo hoy).
   const night = partOfDay(plan.hour) === 'noche' && decision.mode !== 'REGULATE';
@@ -98,7 +108,7 @@ export default async function HoyPage() {
       {aim ? (
         <p className="-mt-1 flex items-start gap-2 text-[15px] leading-snug">
           <Compass className="mt-0.5 h-4 w-4 shrink-0 text-soi-accent" aria-hidden="true" />
-          <span className="line-clamp-2"><span className="text-soi-muted">Hoy avanzas hacia:</span> <span className="font-medium">{aim}</span></span>
+          <span className="line-clamp-2"><span className="text-soi-muted">{aimLabel}</span> <span className="font-medium">{aim}</span></span>
         </p>
       ) : (
         <Link href="/chat?nueva=1&agent=napoleon_hill" className="press -mt-1 flex items-center gap-2 self-start text-sm text-soi-accent">
@@ -206,6 +216,19 @@ export default async function HoyPage() {
             <span className="block font-medium">Arma tu día</span>
             <span className="block text-sm text-soi-muted">Elige tus Moments una vez; aquí se reproducen solos.</span>
           </span>
+        </Link>
+      )}
+
+      {(osCard ?? (step.kind === 'map' ? step : null)) && (
+        <Link href={(osCard ?? step).href} className="press flex items-center gap-3 rounded-[20px] bg-soi-accent-soft p-4">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-soi-accent">
+            {osCard?.icon === 'review' ? <CalendarCheck className="h-5 w-5" aria-hidden="true" /> : <MapIcon className="h-5 w-5" aria-hidden="true" />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">{(osCard ?? step).title}</span>
+            <span className="block text-sm text-soi-muted">{(osCard ?? step).detail}</span>
+          </span>
+          <ArrowRight className="h-5 w-5 shrink-0 text-soi-accent" aria-hidden="true" />
         </Link>
       )}
 

@@ -7,6 +7,8 @@ import { DEFAULT_REMINDER_TIME, dueReminders, inWindow, localMinutesIn, schedule
 import { sendPushResult } from '@/lib/push/send';
 import { startOfTodayISO, todayISO } from '@/lib/utils';
 import type { PushSubscription } from 'web-push';
+import { reviewWeek } from '@/lib/life-plan';
+import { loadOsToday } from '@/lib/life-plan-server';
 
 export const maxDuration = 60;
 
@@ -50,11 +52,12 @@ export async function GET(req: Request) {
 
       const localDate = todayISO(tz);
       const since = startOfTodayISO(tz);
-      const [{ data: log }, runsToday, msgsToday, journey] = await Promise.all([
+      const [{ data: log }, runsToday, msgsToday, journey, os] = await Promise.all([
         db.from('notification_log').select('kind, ref').eq('user_id', p.user_id).eq('local_date', localDate),
         nudgeNow ? db.from('moment_runs').select('id', { count: 'exact', head: true }).eq('user_id', p.user_id).gte('completed_at', since) : Promise.resolve({ count: 0 }),
         nudgeNow ? db.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', p.user_id).eq('role', 'user').gte('created_at', since) : Promise.resolve({ count: 0 }),
         nudgeNow ? loadJourney(db, p.user_id, evaluateAccess(p, 'routine_execution', now).allowed) : Promise.resolve(null),
+        nudgeNow && reviewWeek(tz, now).due ? loadOsToday(db, p.user_id, tz).catch(() => null) : Promise.resolve(null),
       ]);
 
       const notices = dueReminders({
@@ -67,6 +70,7 @@ export async function GET(req: Request) {
         streak: p.streak_current ?? 0,
         pendingToday: plan.items.filter((i) => !i.done).length,
         scheduled,
+        reviewDue: Boolean(os?.reviewDue),
       });
 
       for (const n of notices) {

@@ -19,9 +19,11 @@ export type JourneyState = {
   unfinished: { title: string; href: string; progress: number } | null;
   /** Puede ejecutar Moments (prueba o SOI+). */
   canRun: boolean;
+  /** Ya dibujó su mapa (diagnóstico inicial). Sin el dato se asume que sí: nunca se insiste por un error. */
+  hasMap?: boolean;
 };
 
-export type StepKind = 'resume' | 'talk' | 'keep_talking' | 'first_moment' | 'follow_up' | 'routine';
+export type StepKind = 'resume' | 'talk' | 'keep_talking' | 'first_moment' | 'follow_up' | 'map' | 'routine';
 
 export type NextStep = {
   kind: StepKind;
@@ -78,14 +80,21 @@ export function nextStep(s: JourneyState, now = Date.now()): NextStep {
       cta: 'Contarle cómo me fue', href: `/chat?nueva=1&run=${s.firstCompleted.runId}`,
     };
   }
-  // 4) Ya tiene su ritmo: Hoy decide (su día, el ritual, lo que SOI propone).
+  // 4) Ya conoce SOI: dibujar su mapa (dónde está, a dónde va, la distancia). Con eso SOI guía sus días.
+  if (s.hasMap === false) {
+    return {
+      kind: 'map', title: 'Dibuja tu mapa', detail: '5 minutos para ver dónde estás hoy, a dónde quieres llegar y cuánto te falta. Con eso SOI guía tus días.',
+      cta: 'Hacer mi mapa', href: '/mapa/diagnostico',
+    };
+  }
+  // 5) Ya tiene su ritmo: Hoy decide (su día, el ritual, lo que SOI propone).
   return { kind: 'routine', title: '', detail: '', cta: 'Ir a Hoy', href: '/hoy' };
 }
 
 /** En qué punto de los primeros pasos va (null cuando ya los completó: la bienvenida desaparece). */
 export function firstStepsProgress(s: JourneyState, now = Date.now()): { done: FirstStepId[]; current: FirstStepId } | null {
   const step = nextStep({ ...s, unfinished: null }, now);
-  if (step.kind === 'routine') return null;
+  if (step.kind === 'routine' || step.kind === 'map') return null;
   const current: FirstStepId = step.kind === 'follow_up' ? 'follow_up' : step.kind === 'first_moment' || step.kind === 'keep_talking' ? 'moment' : 'talk';
   const order = FIRST_STEPS.map((f) => f.id);
   return { done: order.slice(0, order.indexOf(current)), current };

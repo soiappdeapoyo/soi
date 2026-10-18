@@ -61,3 +61,12 @@ export async function saveHabit(supabase: SupabaseClient, userId: string, patch:
   });
   return !error;
 }
+
+/** Quita un hábito de la memoria (la persona dijo "esto ya no"). */
+export async function removeHabit(supabase: SupabaseClient, userId: string, name: string): Promise<boolean> {
+  const { id, memory } = await loadHabits(supabase, userId);
+  if (!id || !memory) return true;
+  const habits = memory.habits.filter((h) => key(h.name) !== key(name));
+  const { error } = await supabase.from('agent_knowledge').update({ metadata: { habits } satisfies HabitMemory }).eq('id', id).eq('user_id', userId);
+  return !error;
+}

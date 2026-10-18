@@ -27,6 +27,7 @@ import { creatorMethodPrompt } from '@/lib/ai/creator-method';
 import { timeContextPrompt } from '@/lib/time-of-day';
 import { loadHillMemory } from '@/lib/ai/hill-memory';
 import { loadHabits } from '@/lib/ai/habit-memory';
+import { loadNorth } from '@/lib/north';
 import { detectEnemies } from '@/config/enemies';
 import { recordEnemy } from '@/lib/battles';
 
@@ -169,13 +170,15 @@ export async function POST(req: Request) {
   // Video rápido o dentro del Moment (nunca los dos), según cómo llega.
   const video = videoPolicy(state ? STATE_INTERVENTION[state] : null, text);
   const time = timeContextPrompt(profile?.timezone ?? 'America/Mexico_City');
-  const [hill, habits] = await Promise.all([
+  const [hill, habits, north] = await Promise.all([
     agent === 'napoleon_hill' ? loadHillMemory(supabase, user.id).then((r) => r.memory) : null,
     agent === 'james_clear' ? loadHabits(supabase, user.id).then((r) => r.memory) : null,
+    // El norte (mapa, plan, foco de la semana) lo reciben todos los agentes, nunca en crisis.
+    agent === 'crisis' ? null : loadNorth(supabase, user.id, profile).catch(() => null),
   ]);
   const system = [
     buildSystemPrompt(agent, {
-      profile, memories, tools: toolAccess, weakestLink: route.weakestLink, hill, habits,
+      profile, memories, tools: toolAccess, weakestLink: route.weakestLink, hill, habits, north,
       library: ((libraryRows ?? []) as { id: string; kind: 'book' | 'pdf' | 'exercise'; title: string; author: string | null; status: string; external_id: string | null }[])
         .map((r) => ({ id: r.id, kind: r.kind, title: r.title, author: r.author, status: r.status, externalId: r.external_id })),
     }),

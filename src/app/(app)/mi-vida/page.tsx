@@ -30,10 +30,12 @@ import { ExerciseAnimation } from '@/components/library/exercise-animation';
 import { buttonClass } from '@/components/ui/button';
 import { cn, dateInTz } from '@/lib/utils';
 import { IMPULSO_ENABLED } from '@/config/features';
+import { MapTab } from '@/components/map/map-tab';
 
 export const metadata: Metadata = { title: 'Mi Vida' };
 
 const TABS: ProfileTab[] = [
+  { id: 'mapa', label: 'Mi mapa' },
   { id: 'dia', label: 'Mi día' },
   { id: 'moments', label: 'Moments' },
   { id: 'nuevo-yo', label: 'Mi Nuevo Yo' },
@@ -43,7 +45,8 @@ const TABS: ProfileTab[] = [
 
 /**
  * Mi Vida: todo lo que guardaste, para volver con facilidad.
- * Mi día · Moments (continúa + colección con portada) · Mi Nuevo Yo (identidad con evidencia) · Biblioteca.
+ * Mi mapa (quién eres hoy, quién quieres ser y la distancia) · Mi día · Moments (continúa + colección con portada) ·
+ * Mi Nuevo Yo (identidad con evidencia) · Batallas · Biblioteca.
  */
 export default async function MiVidaPage({ searchParams }: { searchParams: Promise<{ tab?: string; filtro?: string; ordenar?: string }> }) {
   const { tab: t, filtro, ordenar } = await searchParams;
@@ -60,6 +63,7 @@ export default async function MiVidaPage({ searchParams }: { searchParams: Promi
       </header>
       <ProfileTabs tabs={TABS} active={tab} base="/mi-vida" />
       <div className="pt-5">
+        {tab === 'mapa' && <MapTabLoader supabase={supabase} userId={user.id} />}
         {tab === 'dia' && <DayTab supabase={supabase} userId={user.id} />}
         {tab === 'moments' && <MomentsTab supabase={supabase} userId={user.id} filter={(MY_FILTERS.some((f) => f.id === filtro) ? filtro : 'todos') as MyMomentsFilter} tidy={ordenar === '1'} />}
         {tab === 'biblioteca' && <LibraryTab supabase={supabase} userId={user.id} />}
@@ -71,6 +75,11 @@ export default async function MiVidaPage({ searchParams }: { searchParams: Promi
 }
 
 type Sb = Awaited<ReturnType<typeof getSessionUser>>['supabase'];
+
+async function MapTabLoader({ supabase, userId }: { supabase: Sb; userId: string }) {
+  const profile = await getProfile(userId);
+  return <MapTab supabase={supabase} userId={userId} profile={profile} timeZone={profile?.timezone ?? 'America/Mexico_City'} />;
+}
 
 async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; userId: string; filter: MyMomentsFilter; tidy: boolean }) {
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
