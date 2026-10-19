@@ -47,7 +47,7 @@ export const CREATE_LINKS = ALL_CREATE_LINKS.filter((l) => CREATOR_ACCOUNTS_ENAB
 export const PROTECTED_PREFIXES = [
   '/hoy', '/impulso', '/mi-vida', '/yo',
   '/chat', '/onboarding', '/rutinas', '/ritual', '/evidencias', '/comunidad', '/perfil', '/ajustes', '/planes',
-  '/momentos', '/blueprints', '/implementaciones', '/creadores', '/m', '/ideas', '/p', '/u', '/actividad', '/mensajes', '/panel', '/mapa',
+  '/momentos', '/blueprints', '/implementaciones', '/creadores', '/m', '/ideas', '/p', '/u', '/actividad', '/mensajes', '/panel', '/mapa', '/aprender',
 ];
 
 export const STREAK_MILESTONES = [7, 21, 40, 90] as const;

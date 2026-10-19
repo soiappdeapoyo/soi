@@ -14,7 +14,7 @@ const all = (n: number) => Object.fromEntries(LIFE_AREAS.map((a) => [a.id, n]));
 
 describe('áreas de vida', () => {
   it('seis áreas, con capacidades reales y un agente que existe', () => {
-    expect(LIFE_AREAS).toHaveLength(6);
+    expect(LIFE_AREAS).toHaveLength(7);
     for (const a of LIFE_AREAS) {
       expect(a.capacities.every((c) => (CAPACITIES as readonly string[]).includes(c)), a.id).toBe(true);
       expect(a.agent in AGENTS, a.id).toBe(true);

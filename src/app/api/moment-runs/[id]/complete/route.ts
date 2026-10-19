@@ -23,6 +23,7 @@ import { todayISO } from '@/lib/utils';
 import { challengeLength } from '@/lib/moments/challenge';
 import { outputMemories, type RunOutput } from '@/lib/moments/outputs';
 import { resolveRefs } from '@/lib/day-plan';
+import { practiceFromRun } from '@/lib/beliefs-server';
 
 const Body = z.object({
   moodAfter: z.number().int().min(1).max(5).optional(),
@@ -67,6 +68,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         momentTitle: m.title, blockTitles: Object.fromEntries(m.blocks.map((b) => [b.id, b.title])),
         moodBefore: run.mood_before as number | null, moodAfter: parsed.data.moodAfter ?? null,
       });
+      // Creencias: el Moment de una creencia o un reencuadre del mismo pensamiento cuentan como práctica.
+      const thoughts = m.blocks.filter((b) => b.type === 'reframe' && !outputs[b.id]?.skipped)
+        .map((b) => outputs[b.id]?.fields?.thought?.trim() || String((b.config as { thought?: string }).thought ?? '')).filter(Boolean);
+      if (run.moment_id || thoughts.length) {
+        const write = () => practiceFromRun(createAdminClient(), user.id, run.moment_id as string | null, thoughts).catch(() => undefined);
+        try { after(write); } catch { void write(); }
+      }
       for (const mem of mems) {
         await remember(supabase, {
           user_id: user.id, category: mem.category, title: mem.title, content: mem.content, tags: ['moment_output', mem.blockType],

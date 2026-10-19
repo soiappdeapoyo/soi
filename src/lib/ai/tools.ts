@@ -22,7 +22,13 @@ import { forkOfficial, getMoment } from '@/lib/moments/server';
 import { isNearDuplicate } from '@/lib/moments/reuse';
 import { polishMoment } from '@/lib/moments/polish';
 import { DayItemsSchema, partOfDay, placeInDay } from '@/lib/day-plan';
-import { hourInTz } from '@/lib/utils';
+import { hourInTz, todayISO } from '@/lib/utils';
+import { BeliefInput } from '@/lib/beliefs';
+import { registerBelief } from '@/lib/beliefs-server';
+import { LearningInput, OUTCOMES } from '@/lib/learning';
+import { closeLearning, saveLearning } from '@/lib/learning-server';
+import { DECISION_TAG } from '@/lib/timeline';
+import { LIFE_AREA_IDS } from '@/config/life-areas';
 import { MOMENT_FIELDS, toMomentFlow } from '@/lib/moments/types';
 import type { VideoPolicy } from '@/lib/momentum';
 import type { UserProfile } from '@/types/database';
@@ -290,6 +296,47 @@ PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, gu
         goal: z.string().max(160).optional().describe('La meta afectada, si la hay'),
       }),
       execute: async ({ enemy, evidence, goal }) => ({ ok: await recordEnemy(userId, enemy, { source: 'chat', evidence, goal }) }),
+    }),
+
+    registerBelief: tool({
+      description: 'Registra en silencio una CREENCIA LIMITANTE que reconoces en lo que cuenta la persona (una idea sobre sí o su realidad que la frena: «no soy constante», «el dinero no es para mí», «siempre arruino todo»), con su frase exacta. Si ya la registraste, suma que volvió a aparecer. Cuando juntos elijan una creencia más útil y CREÍBLE hoy, regístrala en replacement. Es entrenamiento mental, no terapia: no la diagnostiques.',
+      inputSchema: BeliefInput,
+      execute: async (b) => ({ ok: (await registerBelief(supabase, userId, b)).ok }),
+    }),
+
+    saveLearning: tool({
+      description: 'Sistema de aprendizaje: cuando la persona cuenta lo que aprendió de un libro, video, curso o conversación, guárdalo con sus 4 respuestas (qué aprendió, qué significa para ella, qué acción hará hoy, cómo sabrá que funcionó); SOI le preguntará en unos días si funcionó. Pregunta lo que falte, de una en una, antes de guardar. Para registrar si funcionó un aprendizaje pendiente, usa closeId con outcome.',
+      inputSchema: LearningInput.partial().extend({
+        closeId: z.string().uuid().optional().describe('id del aprendizaje por revisar (del NORTE) para guardar si funcionó'),
+        outcome: z.enum(OUTCOMES).optional().describe('Solo con closeId: funciono, a_medias o no_lo_hice'),
+        note: z.string().max(400).optional().describe('Solo con closeId: lo que notó, con sus palabras'),
+      }),
+      execute: async ({ closeId, outcome, note, ...rest }) => {
+        if (closeId) {
+          if (!outcome) return { ok: false as const, errors: ['Falta outcome.'] };
+          return { ok: await closeLearning(supabase, userId, closeId, outcome, note) };
+        }
+        const parsed = LearningInput.safeParse(rest);
+        if (!parsed.success) return { ok: false as const, errors: ['Falta qué fue (source) o qué aprendió (learned).'] };
+        const id = await saveLearning(supabase, userId, parsed.data, todayISO(timeZone ?? 'America/Mexico_City'), { origin: 'chat' });
+        return { ok: Boolean(id), checkInDays: parsed.data.action ? 3 : null };
+      },
+    }),
+
+    recordDecision: tool({
+      description: 'Guarda en silencio una DECISIÓN importante que la persona tomó (cambiar de trabajo, terminar algo, empezar un proyecto, comprometerse con algo), con su porqué. Forma parte de su historia: SOI se la recordará con el tiempo. No para decisiones pequeñas del día.',
+      inputSchema: z.object({
+        decision: z.string().trim().min(4).max(200).describe('La decisión, en primera persona'),
+        why: z.string().trim().max(300).optional().describe('Por qué la tomó, con sus palabras'),
+        area: z.enum(LIFE_AREA_IDS).optional(),
+      }),
+      execute: async ({ decision, why, area }) => {
+        const id = await remember(supabase, {
+          user_id: userId, category: 'pensamiento', title: decision.slice(0, 120), content: `Decidí: ${decision}${why ? `\nPorque: ${why}` : ''}`,
+          tags: [DECISION_TAG], metadata: { eslabon_soi: 'accion', why: why ?? null, area: area ?? null },
+        });
+        return { ok: Boolean(id) };
+      },
     }),
 
     updateHillPlan: tool({

@@ -60,6 +60,8 @@ const AGENT_OPENERS: Partial<Record<AgentId, string>> = {
   brian_tracy: 'Empecemos por lo importante. ¿Cuál es esa tarea que llevas días posponiendo?',
   anti_sycophant: 'Aquí te voy a hablar con cariño y con honestidad. ¿Qué quieres mirar de frente?',
   james_clear: 'Los hábitos no empiezan por la meta, sino por quién quieres ser. ¿Qué hábito te gustaría que fuera parte de ti?',
+  stephen_covey: 'Empecemos por lo que de verdad te importa. ¿Qué es importante para ti esta semana y aún no tiene lugar en tu agenda?',
+  jim_rohn: 'Las disciplinas pequeñas de cada día cambian un año entero. ¿En qué estación de tu vida sientes que estás ahora?',
   napoleon_hill: 'Empecemos por lo esencial: ¿qué quieres exactamente, y qué estás haciendo hoy para conseguirlo?',
 };
 

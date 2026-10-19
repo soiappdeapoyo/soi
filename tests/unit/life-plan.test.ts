@@ -82,7 +82,7 @@ describe('revisión semanal', () => {
 });
 
 describe('norte compartido', () => {
-  const base: North = { aim: 'Lanzar mi estudio', aimSource: 'purpose', obstacle: null, identity: { name: 'Empresaria', description: null }, enemy: null, hasMap: true, vision: 'Alguien que crea y cuida su cuerpo', focus: [{ label: 'Salud y energía', current: 4, target: 7, goal: 'Dormir 7 horas', habit: 'Caminar 2 minutos (Después de lavarme la cara)' }], week: { label: 'Salud y energía', one_thing: 'Celular fuera del cuarto' }, habits: [{ name: 'Caminar', cue: 'Después de lavarme la cara', time: '07:00' }] };
+  const base: North = { aim: 'Lanzar mi estudio', aimSource: 'purpose', obstacle: null, identity: { name: 'Empresaria', description: null }, enemy: null, hasMap: true, vision: 'Alguien que crea y cuida su cuerpo', focus: [{ label: 'Salud y energía', current: 4, target: 7, goal: 'Dormir 7 horas', habit: 'Caminar 2 minutos (Después de lavarme la cara)' }], week: { label: 'Salud y energía', one_thing: 'Celular fuera del cuarto' }, habits: [{ name: 'Caminar', cue: 'Después de lavarme la cara', time: '07:00' }], values: [], conflict: null, belief: null, works: '', drift: null, learning: null };
 
   it('con mapa: visión, enfoque con la distancia, el foco de la semana y sus hábitos', () => {
     const p = northPrompt(base);

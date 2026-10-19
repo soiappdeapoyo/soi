@@ -7,27 +7,29 @@ import { toast } from 'sonner';
 import { Icon } from '@/components/ui/icon';
 import { buttonClass } from '@/components/ui/button';
 import { track } from '@/components/providers/analytics';
-import { LIFE_AREAS, MAX_FOCUS, lifeArea, type LifeAreaId } from '@/config/life-areas';
+import { LIFE_AREAS, LIFE_AREAS_WORD, MAX_FOCUS, lifeArea, type LifeAreaId } from '@/config/life-areas';
+import { MAX_VALUES, MIN_VALUES, VALUES, type ValueId } from '@/config/values';
 import { suggestFocus, type AreaScores } from '@/lib/life-map';
 import { cn } from '@/lib/utils';
 
-type Step = { kind: 'intro' } | { kind: 'score'; area: LifeAreaId } | { kind: 'focus' } | { kind: 'target'; area: LifeAreaId } | { kind: 'vision' };
+type Step = { kind: 'intro' } | { kind: 'score'; area: LifeAreaId } | { kind: 'focus' } | { kind: 'target'; area: LifeAreaId } | { kind: 'vision' } | { kind: 'values' };
 
 const SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
 
 /**
  * El diagnóstico de "Tu mapa" (≈ 5 min). Inicial: cada área del 1 al 10 → hasta 2 áreas de enfoque → a dónde
- * llevarlas en 90 días y cómo se vería → la visión ("En un año, quiero ser alguien que…").
+ * llevarlas en 90 días y cómo se vería → la visión ("En un año, quiero ser alguien que…") → sus valores (3 a 5).
  * Mensual: solo vuelve a calificar (con la calificación anterior de referencia); la distancia se recalcula sola.
  * Una pregunta por pantalla, botones de 44 px y sin animación entre pasos (es un formulario, no una celebración).
  */
-export function MapWizard({ mode, previous, prevFocus, prevTargets, prevWants, prevVision, visionHint }: {
+export function MapWizard({ mode, previous, prevFocus, prevTargets, prevWants, prevVision, prevValues, visionHint }: {
   mode: 'inicial' | 'mensual';
   previous: AreaScores;
   prevFocus: LifeAreaId[];
   prevTargets: AreaScores;
   prevWants: Partial<Record<LifeAreaId, string>>;
   prevVision: string | null;
+  prevValues: ValueId[];
   /** Lo que SOI ya sabe de su norte (propósito o identidad) para empezar la visión. */
   visionHint: string | null;
 }) {
@@ -37,6 +39,7 @@ export function MapWizard({ mode, previous, prevFocus, prevTargets, prevWants, p
   const [targets, setTargets] = useState<AreaScores>(prevTargets);
   const [wants, setWants] = useState<Partial<Record<LifeAreaId, string>>>(prevWants);
   const [vision, setVision] = useState(prevVision ?? '');
+  const [values, setValues] = useState<ValueId[]>(prevValues);
   const [i, setI] = useState(0);
   const [saving, setSaving] = useState(false);
 
@@ -44,7 +47,7 @@ export function MapWizard({ mode, previous, prevFocus, prevTargets, prevWants, p
   const steps: Step[] = useMemo(() => [
     { kind: 'intro' },
     ...LIFE_AREAS.map((a) => ({ kind: 'score' as const, area: a.id })),
-    ...(mode === 'inicial' ? [{ kind: 'focus' as const }, ...chosen.map((area) => ({ kind: 'target' as const, area })), { kind: 'vision' as const }] : []),
+    ...(mode === 'inicial' ? [{ kind: 'focus' as const }, ...chosen.map((area) => ({ kind: 'target' as const, area })), { kind: 'vision' as const }, { kind: 'values' as const }] : []),
   ], [mode, chosen]);
   const step = steps[Math.min(i, steps.length - 1)]!;
   const last = i >= steps.length - 1;
@@ -55,7 +58,7 @@ export function MapWizard({ mode, previous, prevFocus, prevTargets, prevWants, p
   async function save() {
     setSaving(true);
     const body = mode === 'inicial'
-      ? { kind: mode, scores, focus: chosen, targets: Object.fromEntries(chosen.filter((a) => targets[a]).map((a) => [a, targets[a]])), wants: Object.fromEntries(chosen.map((a) => [a, wants[a] ?? ''])), vision }
+      ? { kind: mode, scores, focus: chosen, targets: Object.fromEntries(chosen.filter((a) => targets[a]).map((a) => [a, targets[a]])), wants: Object.fromEntries(chosen.map((a) => [a, wants[a] ?? ''])), vision, values }
       : { kind: mode, scores };
     const res = await fetch('/api/life-map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
     const ok = res?.ok && (await res.json().catch(() => null))?.ok;
@@ -87,8 +90,8 @@ export function MapWizard({ mode, previous, prevFocus, prevTargets, prevWants, p
             <h1 className="text-balance text-[28px] font-semibold leading-tight tracking-tight">{mode === 'inicial' ? 'Tu mapa, en 5 minutos' : 'Tu chequeo del mes'}</h1>
             <p className="mt-3 text-pretty text-[17px] leading-relaxed text-soi-muted">
               {mode === 'inicial'
-                ? 'Seis áreas de tu vida, del 1 al 10. No hay respuestas correctas: es tu punto de partida. Con esto SOI sabe dónde estás, a dónde quieres ir y cómo guiar tus días.'
-                : 'Vuelve a calificar tus seis áreas. Verás tu calificación anterior para comparar. Con esto SOI mide cuánto has avanzado de verdad.'}
+                ? `${LIFE_AREAS_WORD[0]!.toUpperCase()}${LIFE_AREAS_WORD.slice(1)} áreas de tu vida, del 1 al 10. No hay respuestas correctas: es tu punto de partida. Con esto SOI sabe dónde estás, a dónde quieres ir y cómo guiar tus días.`
+                : `Vuelve a calificar tus ${LIFE_AREAS_WORD} áreas. Verás tu calificación anterior para comparar. Con esto SOI mide cuánto has avanzado de verdad.`}
             </p>
             <ul className="mt-6 grid grid-cols-2 gap-2">
               {LIFE_AREAS.map((a) => (
@@ -165,10 +168,31 @@ export function MapWizard({ mode, previous, prevFocus, prevTargets, prevWants, p
             <p className="mt-2 text-sm text-soi-muted">Puedes cambiarlo cuando quieras.</p>
           </section>
         )}
+
+        {step.kind === 'values' && (
+          <section aria-labelledby="q">
+            <h1 id="q" className="text-balance text-[26px] font-semibold leading-tight tracking-tight">¿Qué es lo que más te importa?</h1>
+            <p className="mt-2 text-[15px] text-soi-muted">Elige de {MIN_VALUES} a {MAX_VALUES}. SOI los usará para avisarte con cariño cuando tu tiempo vaya por otro lado.</p>
+            <div role="group" aria-label="Tus valores" className="mt-6 flex flex-wrap gap-2">
+              {VALUES.map((v) => {
+                const on = values.includes(v.id);
+                const full = !on && values.length >= MAX_VALUES;
+                return (
+                  <button key={v.id} type="button" aria-pressed={on} disabled={full}
+                    onClick={() => setValues(on ? values.filter((x) => x !== v.id) : [...values, v.id])}
+                    className={cn('press tap-target rounded-full px-4 py-2 text-[15px] font-medium', on ? 'bg-soi-ink text-white' : 'bg-white shadow-ring hover:bg-soi-tray', full && 'opacity-40')}>
+                    {v.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="nums mt-3 text-sm text-soi-muted">{values.length} de {MAX_VALUES}</p>
+          </section>
+        )}
       </div>
 
       <div className="sticky bottom-0 bg-soi-canvas pb-4 pt-3">
-        <button type="button" onClick={next} disabled={saving || (step.kind === 'score' && !scores[step.area]) || (step.kind === 'focus' && chosen.length === 0)}
+        <button type="button" onClick={next} disabled={saving || (step.kind === 'score' && !scores[step.area]) || (step.kind === 'focus' && chosen.length === 0) || (step.kind === 'values' && values.length < MIN_VALUES)}
           className={buttonClass('primary', 'lg', 'w-full')}>
           {saving ? 'Guardando…' : step.kind === 'intro' ? 'Empezar' : last ? 'Ver mi mapa' : 'Siguiente'}
         </button>

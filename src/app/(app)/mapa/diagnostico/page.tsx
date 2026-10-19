@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/billing/check-access';
-import { loadLifeMap } from '@/lib/life-map-server';
+import { loadLifeMap, loadValues } from '@/lib/life-map-server';
 import { buildMapView, type AreaScores } from '@/lib/life-map';
 import { loadNorth } from '@/lib/north';
 import { MapWizard } from '@/components/map/map-wizard';
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: 'Tu mapa' };
 export default async function MapDiagnosticPage({ searchParams }: { searchParams: Promise<{ tipo?: string }> }) {
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login?next=/mapa/diagnostico');
-  const [{ tipo }, { map, assessments }, profile] = await Promise.all([searchParams, loadLifeMap(supabase, user.id), getProfile(user.id)]);
+  const [{ tipo }, { map, assessments }, profile, values] = await Promise.all([searchParams, loadLifeMap(supabase, user.id), getProfile(user.id), loadValues(supabase, user.id)]);
   const view = buildMapView(map, assessments);
   const mode = !view.hasMap || tipo === 'inicial' ? 'inicial' : 'mensual';
   const north = await loadNorth(supabase, user.id, profile);
@@ -26,7 +26,7 @@ export default async function MapDiagnosticPage({ searchParams }: { searchParams
   return (
     <div className="mx-auto max-w-xl px-5 pt-4 md:pt-10">
       <MapWizard mode={mode} previous={previous} prevFocus={map?.focus_areas ?? []} prevTargets={targets} prevWants={wants}
-        prevVision={map?.vision ?? null} visionHint={hint} />
+        prevVision={map?.vision ?? null} prevValues={values.map((v) => v.id)} visionHint={hint} />
     </div>
   );
 }

@@ -31,6 +31,11 @@ import { buttonClass } from '@/components/ui/button';
 import { cn, dateInTz } from '@/lib/utils';
 import { IMPULSO_ENABLED } from '@/config/features';
 import { MapTab } from '@/components/map/map-tab';
+import { SITUATIONS } from '@/config/situations';
+import { Icon } from '@/components/ui/icon';
+import { BeliefsSection } from '@/components/identity/beliefs-section';
+import { loadBeliefs } from '@/lib/beliefs-server';
+import { BELIEF_MILESTONE, STAGE_LABEL, beliefStage, practiceDays } from '@/lib/beliefs';
 
 export const metadata: Metadata = { title: 'Mi Vida' };
 
@@ -356,7 +361,24 @@ async function DayTab({ supabase, userId }: { supabase: Sb; userId: string }) {
     seen.add(r);
     return true;
   });
-  return <DayPlanner initial={plan.items} options={options} suggestions={suggestions} />;
+  return (
+    <div className="flex flex-col gap-8">
+      <DayPlanner initial={plan.items} options={options} suggestions={suggestions} />
+      <section aria-labelledby="sit-h">
+        <h2 id="sit-h" className="px-1 pb-1 text-xs font-medium text-soi-muted">¿Necesitas una rutina para…?</h2>
+        <p className="px-1 pb-3 text-sm text-soi-muted">SOI la diseña contigo, con tu tiempo y lo que te funciona.</p>
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {SITUATIONS.map((x) => (
+            <li key={x.id}>
+              <Link href={`/chat?nueva=1&rutina=${x.id}`} className="press tap-target flex items-center gap-2 rounded-[14px] bg-white px-3 py-3 text-[15px] font-medium shadow-ring hover:shadow-soft">
+                <Icon name={x.icon} className="h-4 w-4 text-soi-accent" />{x.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
 }
 
 /**
@@ -382,7 +404,11 @@ function More({ label, children }: { label: string; children: React.ReactNode })
 async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }) {
   const profile = await getProfile(userId);
   const tz = profile?.timezone ?? 'America/Mexico_City';
-  const v = await loadIdentityView(supabase, userId, profile, tz);
+  const [v, beliefList] = await Promise.all([loadIdentityView(supabase, userId, profile, tz), loadBeliefs(supabase, userId).catch(() => [])]);
+  const beliefs = beliefList.map((b) => {
+    const stage = beliefStage(b);
+    return { id: b.id, old: b.old, next: b.next, stage: STAGE_LABEL[stage], days: practiceDays(b), milestone: BELIEF_MILESTONE, owned: stage === 'tuya' };
+  });
   const name = profile?.display_name?.split(/\s+/)[0];
   const main = v.active[0];
   const week = v.evidence.filter((e) => Date.now() - Date.parse(e.at) < 7 * 86_400_000);
@@ -397,6 +423,7 @@ async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }
       <div className="flex flex-col gap-4">
         <p className="text-[15px] text-soi-muted">Elige en quién te quieres convertir. Cada Moment que vivas será una prueba de que ya lo estás siendo.</p>
         <IdentitySetup auto compact={false} />
+        <BeliefsSection beliefs={beliefs} />
       </div>
     );
   }
@@ -432,6 +459,8 @@ async function NewSelfTab({ supabase, userId }: { supabase: Sb; userId: string }
         )}
         <Link href="/hoy" className={buttonClass('primary', 'md', 'mt-3 w-full')}>Sumar una evidencia</Link>
       </div>
+
+      <BeliefsSection beliefs={beliefs} />
 
       <More label="Ver todo">
         <section aria-labelledby="ny-vision">

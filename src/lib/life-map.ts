@@ -1,5 +1,6 @@
 import { z } from 'zod/v3';
 import { LIFE_AREAS, LIFE_AREA_IDS, MAX_FOCUS, type LifeArea, type LifeAreaId } from '@/config/life-areas';
+import { MAX_VALUES, VALUE_IDS } from '@/config/values';
 
 /**
  * Tu mapa (puro y testeado): quién eres hoy (la calificación de cada área), quién quieres ser (visión y metas a
@@ -9,7 +10,7 @@ import { LIFE_AREAS, LIFE_AREA_IDS, MAX_FOCUS, type LifeArea, type LifeAreaId } 
 
 export type AreaScores = Partial<Record<LifeAreaId, number>>;
 export type AreaGoal = { target?: number; want?: string };
-export type AssessmentKind = 'inicial' | 'mensual' | 'semanal';
+export type AssessmentKind = 'inicial' | 'mensual' | 'semanal' | 'trimestral' | 'anual';
 
 export type LifeMap = {
   vision: string | null;
@@ -29,12 +30,13 @@ const AreaKey = z.enum(LIFE_AREA_IDS);
 
 /** Lo que llega del diagnóstico (inicial, mensual o semanal). */
 export const AssessmentBody = z.object({
-  kind: z.enum(['inicial', 'mensual', 'semanal']),
+  kind: z.enum(['inicial', 'mensual', 'semanal', 'trimestral', 'anual']),
   scores: z.record(AreaKey, Score),
   focus: z.array(AreaKey).max(MAX_FOCUS).optional(),
   targets: z.record(AreaKey, Score).optional(),
   wants: z.record(AreaKey, z.string().trim().max(200)).optional(),
   vision: z.string().trim().max(400).optional(),
+  values: z.array(z.enum(VALUE_IDS)).max(MAX_VALUES).optional(),
 }).superRefine((b, ctx) => {
   const n = Object.keys(b.scores).length;
   if (b.kind !== 'semanal' && n !== LIFE_AREAS.length) ctx.addIssue({ code: 'custom', message: 'Califica todas las áreas.' });
@@ -48,6 +50,7 @@ export const MapPatch = z.object({
   focus: z.array(AreaKey).max(MAX_FOCUS).optional(),
   targets: z.record(AreaKey, Score).optional(),
   wants: z.record(AreaKey, z.string().trim().max(200)).optional(),
+  values: z.array(z.enum(VALUE_IDS)).max(MAX_VALUES).optional(),
 });
 
 /** Un chequeo completo cada 30 días: suficiente para notar cambios reales sin volverse una tarea. */

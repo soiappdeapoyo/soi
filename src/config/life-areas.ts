@@ -20,7 +20,7 @@ export const LIFE_AREAS = [
   {
     id: 'relaciones', label: 'Relaciones', short: 'Relaciones', icon: 'Users',
     question: '¿Cómo están tus vínculos: pareja, familia, amistades?',
-    capacities: ['Comunicación', 'Paciencia', 'Gratitud'], agent: 'anti_sycophant',
+    capacities: ['Comunicación', 'Paciencia', 'Gratitud'], agent: 'stephen_covey',
   },
   {
     id: 'trabajo', label: 'Trabajo y estudio', short: 'Trabajo', icon: 'Target',
@@ -36,6 +36,11 @@ export const LIFE_AREAS = [
     id: 'proposito', label: 'Propósito', short: 'Propósito', icon: 'Compass',
     question: '¿Qué tan claro tienes hacia dónde vas?',
     capacities: ['Claridad', 'Persistencia', 'Coraje', 'Creatividad'], agent: 'napoleon_hill',
+  },
+  {
+    id: 'espiritualidad', label: 'Espiritualidad y paz interior', short: 'Espiritualidad', icon: 'Sparkles',
+    question: '¿Qué tan conectada sientes tu vida con algo más grande que tú: tu fe, tu paz, tu sentido?',
+    capacities: ['Gratitud', 'Calma', 'Claridad'], agent: 'manifestacion',
   },
 ] as const satisfies readonly { id: string; label: string; short: string; icon: string; question: string; capacities: readonly Capacity[]; agent: AgentId }[];
 
@@ -61,4 +66,8 @@ export const AREA_DEFAULTS: Record<LifeAreaId, { identity: string; habit: { name
   trabajo: { identity: 'Soy alguien que termina lo importante', habit: { name: 'Mi tarea más importante primero', tiny: 'Abrir la tarea y trabajar 2 minutos', cue: 'Al sentarme a trabajar', time: '09:00' } },
   dinero: { identity: 'Soy alguien que decide con su dinero', habit: { name: 'Mirar mis números', tiny: 'Anotar lo que gasté hoy', cue: 'Después de cenar', time: '21:00' } },
   proposito: { identity: 'Soy alguien que avanza hacia lo que quiere', habit: { name: 'Leer mi declaración', tiny: 'Leer en voz alta mi meta principal', cue: 'Al despertar', time: '07:00' } },
+  espiritualidad: { identity: 'Soy alguien que vive en calma y agradece', habit: { name: 'Un momento de silencio', tiny: 'Un minuto en silencio y tres cosas que agradezco', cue: 'Antes de dormir', time: '22:00' } },
 };
+
+/** "seis", "siete": el número de áreas en palabras, para los textos (no se escribe a mano). */
+export const LIFE_AREAS_WORD = ['cero', 'una', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho'][LIFE_AREAS.length] ?? String(LIFE_AREAS.length);

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { ArrowRight, CalendarCheck, Check, Compass, ListPlus, Map as MapIcon, Play } from 'lucide-react';
+import { ArrowRight, BookOpen, CalendarCheck, Check, Compass, Flag, ListPlus, Map as MapIcon, Play, Repeat } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import { loadToday } from '@/lib/today';
@@ -25,6 +25,9 @@ import { firstStepsProgress, nextStep } from '@/lib/journey';
 import { NextStepCard } from '@/components/today/next-step-card';
 import { ReturnSetup } from '@/components/pwa/return-setup';
 import { loadOsToday } from '@/lib/life-plan-server';
+import { loadChapterDue } from '@/lib/chapters-server';
+import { driftLine } from '@/lib/what-works';
+import { loadWhatWorks } from '@/lib/what-works-server';
 
 export const metadata: Metadata = { title: 'Hoy' };
 
@@ -55,12 +58,20 @@ export default async function HoyPage() {
     loadJourney(supabase, user.id, access.routine_execution),
     loadOsToday(supabase, user.id, tz).catch(() => null),
   ]);
+  const chapter = os?.hasMap ? await loadChapterDue(supabase, user.id, tz).catch(() => null) : null;
   // Hacia dónde va: el foco de esta semana (revisión), la meta a 90 días de su plan, su propósito o meta, o su identidad.
   const aimLabel = north.week ? `Esta semana · ${north.week.label}:` : 'Hoy avanzas hacia:';
   const aim = north.week?.one_thing ?? north.focus.find((f) => f.goal)?.goal ?? north.aim ?? north.identity?.name ?? null;
-  // Una sola tarjeta del sistema a la vez: revisión de la semana > chequeo del mes > dibujar el mapa (loop).
+  // Una sola tarjeta del sistema a la vez: revisión de la semana > el hábito que se cae (nunca dos veces seguidas) >
+  // cerrar el capítulo (90 días o el año) > ¿funcionó lo que aprendiste? > chequeo del mes > dibujar el mapa (loop).
   const osCard = os?.reviewDue
     ? { title: 'Tu revisión de la semana', detail: '3 minutos: qué funcionó, qué aprendiste y tu foco para la semana que empieza.', href: '/mapa/semana', icon: 'review' as const }
+    : north.drift
+    ? { title: `Retoma «${north.drift.name}» en pequeño`, detail: driftLine(north.drift), href: `/m/${north.drift.moment_id}/play`, icon: 'drift' as const }
+    : chapter?.due
+    ? { title: chapter.due.kind === 'anual' ? 'Cierra tu año' : 'Cierra tu capítulo de 90 días', detail: '10 minutos: mira cuánto avanzaste, qué aprendiste y elige tu siguiente capítulo.', href: '/mapa/capitulo', icon: 'chapter' as const }
+    : north.learning
+    ? { title: '¿Funcionó lo que aprendiste?', detail: `De «${north.learning.source}» dijiste: «${north.learning.action}».`, href: '/aprender', icon: 'learn' as const }
     : os?.checkinDue
     ? { title: 'Tu chequeo del mes', detail: '2 minutos para volver a calificar tus áreas y ver cuánto avanzaste.', href: '/mapa/diagnostico', icon: 'map' as const }
     : null;
@@ -84,7 +95,7 @@ export default async function HoyPage() {
     : true;
   const suggestion = next || guided ? null
     : night && !closedToday ? officialMoment('cierre_del_dia')
-    : decision.mode !== 'REFLECT' ? await recommendMoment(supabase, user.id, MODE_KINDS[decision.mode]) : null;
+    : decision.mode !== 'REFLECT' ? await recommendMoment(supabase, user.id, MODE_KINDS[decision.mode], (await loadWhatWorks(supabase, user.id, tz).catch(() => null))?.works) : null;
   const first = (profile?.display_name ?? '').trim().split(/\s+/)[0];
 
   const headline = welcome ? (step.kind === 'follow_up' ? 'Viviste tu primer Moment' : 'Tus primeros pasos en SOI')
@@ -222,7 +233,11 @@ export default async function HoyPage() {
       {(osCard ?? (step.kind === 'map' ? step : null)) && (
         <Link href={(osCard ?? step).href} className="press flex items-center gap-3 rounded-[20px] bg-soi-accent-soft p-4">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-soi-accent">
-            {osCard?.icon === 'review' ? <CalendarCheck className="h-5 w-5" aria-hidden="true" /> : <MapIcon className="h-5 w-5" aria-hidden="true" />}
+            {osCard?.icon === 'review' ? <CalendarCheck className="h-5 w-5" aria-hidden="true" />
+              : osCard?.icon === 'drift' ? <Repeat className="h-5 w-5" aria-hidden="true" />
+              : osCard?.icon === 'chapter' ? <Flag className="h-5 w-5" aria-hidden="true" />
+              : osCard?.icon === 'learn' ? <BookOpen className="h-5 w-5" aria-hidden="true" />
+              : <MapIcon className="h-5 w-5" aria-hidden="true" />}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-medium">{(osCard ?? step).title}</span>

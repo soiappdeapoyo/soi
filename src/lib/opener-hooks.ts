@@ -6,7 +6,7 @@ import type { OpenerReply } from '@/lib/opener';
  */
 export type HookKind =
   | 'thread' | 'declined' | 'return' | 'plan' | 'written' | 'reflection' | 'enemy' | 'insight'
-  | 'helped' | 'identity' | 'goal' | 'momentum' | 'checkin';
+  | 'helped' | 'identity' | 'goal' | 'momentum' | 'checkin' | 'learning' | 'drift' | 'anniversary' | 'belief';
 
 export type Hook = {
   kind: HookKind;
@@ -53,6 +53,10 @@ export function templateFor(h: Hook): string {
     case 'identity': return `Te estás convirtiendo en «${f.identity}». ¿Qué pequeño paso de esa persona te gustaría dar hoy?`;
     case 'goal': return `Hace poco me hablaste de «${f.goal}». ¿Cómo va eso?`;
     case 'momentum': return 'Se nota tu constancia estos días. ¿Qué te está funcionando?';
+    case 'learning': return `Hace unos días aprendiste de «${f.source}» y dijiste que harías «${f.action}». ¿Funcionó?`;
+    case 'drift': return `«${f.habit}» se quedó quieto estos días, y está bien. ¿Qué tal si hoy solo haces la versión más pequeña?`;
+    case 'anniversary': return `Hace un año ${f.what}: «${f.quote}». ¿Cómo lo ves desde aquí?`;
+    case 'belief': return `Estás entrenando creer que «${f.next}». ¿Viste hoy alguna prueba de eso?`;
     default: return '¿Cómo llegas hoy: con energía, neutral o con algo de carga?';
   }
 }
@@ -65,6 +69,10 @@ export function repliesFor(h: Hook): OpenerReply[] {
     case 'goal': case 'identity': return [r('Avancé', 'Avancé un poco.'), r('Me trabé', 'Me trabé, la verdad.'), r('Hoy otra cosa', 'Hoy traigo otra cosa.')];
     case 'enemy': return [r('Hoy no', 'Hoy no apareció.'), r('Sí, un poco', 'Sí, un poco.'), r('Bastante', 'Bastante, la verdad.')];
     case 'written': case 'reflection': case 'insight': return [r('Sigue siendo así', 'Sigue siendo así.'), r('Ya cambió', 'Ya cambió un poco.'), r('Hoy otra cosa', 'Hoy traigo otra cosa.')];
+    case 'learning': return [r('Funcionó', 'Sí, funcionó.'), r('A medias', 'Funcionó a medias.'), r('No lo hice', 'La verdad, no lo hice.')];
+    case 'drift': return [r('Va, en pequeño', 'Va, hoy lo hago en pequeño.'), r('Me cuesta', 'Me está costando retomarlo.'), r('Hoy otra cosa', 'Hoy traigo otra cosa.')];
+    case 'belief': return [r('Sí, una', 'Sí, vi una prueba.'), r('Todavía no', 'Todavía no.'), r('Hoy otra cosa', 'Hoy traigo otra cosa.')];
+    case 'anniversary': return [r('Cambió mucho', 'Ha cambiado mucho.'), r('Sigo en eso', 'Sigo en eso.'), r('Hoy otra cosa', 'Hoy traigo otra cosa.')];
     case 'return': return [r('Bien', 'He estado bien.'), r('Complicado', 'Han sido días complicados.'), r('Con ganas de volver', 'Con ganas de retomar.')];
     default: return [r('Con energía', 'Hoy llego con energía.'), r('Neutral', 'Hoy llego neutral.'), r('Con algo de carga', 'Hoy llego con algo de carga.')];
   }

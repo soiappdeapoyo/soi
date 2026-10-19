@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import { computeOutcomes } from '@/lib/admin/outcomes';
 
 /** Datos del panel (service role). Solo se llaman tras comprobar que quien pide es administrador. */
 const DAY = 86_400_000;
@@ -106,4 +107,28 @@ export async function conversationMessages(userId: string, conversationId: strin
 export async function auditLog(limit = 150) {
   const { data } = await createAdminClient().from('admin_audit').select('id, admin_id, action, target_user, detail, created_at').order('created_at', { ascending: false }).limit(limit);
   return data ?? [];
+}
+
+/** Activación, retención y transformación (últimos 120 días de registros; sin cuentas demo ni contenido). */
+export async function outcomes() {
+  const a = createAdminClient();
+  const from = since(120);
+  const [{ data: auth }, { data: msgs }, { data: runs }, { data: maps }, { data: assess }] = await Promise.all([
+    a.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    a.from('messages').select('user_id, created_at').eq('role', 'user').gte('created_at', from).limit(50_000),
+    a.from('moment_runs').select('user_id, completed_at').not('completed_at', 'is', null).gte('completed_at', from).limit(50_000),
+    a.from('life_maps').select('user_id, focus_areas').limit(5000),
+    a.from('life_assessments').select('user_id, kind, scores, created_at').limit(20_000),
+  ]);
+  const users = (auth?.users ?? []).filter((u) => !isDemoEmail(u.email) && Date.parse(u.created_at) >= Date.parse(from)).map((u) => ({ id: u.id, created_at: u.created_at }));
+  const real = new Set((auth?.users ?? []).filter((u) => !isDemoEmail(u.email)).map((u) => u.id));
+  const activity = [
+    ...(msgs ?? []).map((m) => ({ user_id: m.user_id as string, at: m.created_at as string, kind: 'message' as const })),
+    ...(runs ?? []).map((r) => ({ user_id: r.user_id as string, at: r.completed_at as string, kind: 'moment' as const })),
+  ];
+  const byUser = new Map<string, { kind: string; scores: Record<string, number>; created_at: string }[]>();
+  for (const r of assess ?? []) byUser.set(r.user_id as string, [...(byUser.get(r.user_id as string) ?? []), { kind: r.kind as string, scores: (r.scores ?? {}) as Record<string, number>, created_at: r.created_at as string }]);
+  const mapRows = (maps ?? []).filter((m) => real.has(m.user_id as string))
+    .map((m) => ({ user_id: m.user_id as string, focus: (m.focus_areas as string[] | null) ?? [], assessments: byUser.get(m.user_id as string) ?? [] }));
+  return { ...computeOutcomes(users, activity, mapRows), signups: users.length };
 }

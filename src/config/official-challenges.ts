@@ -137,6 +137,46 @@ const CLEAR: Def = {
   ],
 };
 
+const DISP = 'Joe Dispenza — Becoming Supernatural (2017): coherencia corazón-cerebro';
+const BECK = 'Aaron Beck — Cognitive Therapy of Depression (1979): reestructuración cognitiva';
+
+/**
+ * Manifestación + acción = transformación. No pensamiento mágico: claridad (Hill), sentir el deseo cumplido (Neville),
+ * autosugestión (Hill), gratitud, regular la emoción (Dispenza), cuestionar la duda (Beck), acción diaria (Tracy) y
+ * seguimiento. Cada día: llegar en coherencia → la enseñanza del día → vivir la escena → la acción de hoy.
+ */
+const MANIFEST: Def = {
+  slug: 'reto_manifestar_7', title: 'Manifestación con acción: 7 días', author: 'SOI', eslabon: 'pensamiento', source: `${TGR} · ${FTS} · ${GOALS}`,
+  objective: 'Convertir un deseo en realidad con claridad, emoción, autosugestión y una acción concreta cada día, y medir lo que cambia.',
+  blocks: [
+    { id: 'arrive', type: 'breathing', title: 'Llega en coherencia', minutes: 1, source: DISP, config: { pattern: 'coherencia' } },
+    { id: 'd1_exact', day: 1, type: 'goal', title: 'Día 1 · Claridad: lo que deseas, exacto', minutes: 2, source: TGR,
+      config: { prompt: 'Escribe lo que deseas con exactitud: qué, cuánto y para cuándo. Un deseo vago da resultados vagos.' } },
+    { id: 'd1_why', day: 1, type: 'writing', title: 'Por qué lo deseas', minutes: 2, source: TGR,
+      config: { prompt: '¿Por qué lo deseas de verdad? ¿Quién serás cuando lo tengas? Un deseo con un porqué claro aguanta los días difíciles.' } },
+    { id: 'd2_feel', day: 2, type: 'emotion_log', title: 'Día 2 · Sentir: la emoción del deseo cumplido', minutes: 1, source: FTS,
+      config: { question: 'Si ya fuera tuyo, ¿qué sentirías? Nombra esa emoción y búscala ahora en tu cuerpo.' } },
+    { id: 'd3_statement', day: 3, type: 'writing', title: 'Día 3 · Autosugestión: tu declaración', minutes: 3, source: 'Napoleon Hill — Think and Grow Rich (1937), cap. 4: Autosugestión',
+      config: { prompt: 'Escribe tu declaración en presente: lo que deseas, la fecha, lo que darás a cambio y cómo lo harás. Léela en voz alta al despertar y antes de dormir.' } },
+    { id: 'd4_thanks', day: 4, type: 'gratitude', title: 'Día 4 · Gratitud: como si ya', minutes: 2, source: `${FTS} (sentir el deseo cumplido) y la práctica de gratitud`,
+      config: { count: 3 } },
+    { id: 'd5_doubt', day: 5, type: 'reframe', title: 'Día 5 · La duda que aparece', minutes: 3, source: BECK,
+      config: { thought: 'Esto no va a pasar para mí' } },
+    { id: 'd6_plan', day: 6, type: 'checklist', title: 'Día 6 · Acción: tres pasos', minutes: 2, source: GOALS,
+      config: { items: ['El primer paso que puedo dar esta semana', 'Una persona que puede ayudarme', 'Un obstáculo y cómo lo voy a resolver'] } },
+    { id: 'd7_track', day: 7, type: 'tracking', title: 'Día 7 · Seguimiento: tus acciones', minutes: 1, source: GOALS,
+      config: { metric: 'Días que di mi acción hacia mi deseo', unit: 'días', target: 7 } },
+    { id: 'd7_look', day: 7, type: 'reflection', title: 'Tu evidencia de la semana', minutes: 2, source: FTS,
+      config: { question: '¿Qué señal, por pequeña que sea, te mostró esta semana que vas hacia lo que deseas? ¿Qué cambió en cómo te sientes con tu deseo?' } },
+    { id: 'scene', type: 'visualization', title: 'Vive tu escena', minutes: 3, source: FTS,
+      config: { scene: 'Cierra los ojos y entra en una escena corta que solo pasaría si tu deseo ya se cumplió. Estás ahí, desde dentro. Escucha, mira, siente el alivio y la alegría. Quédate en la sensación de que ya pasó.' } },
+    { id: 'act', type: 'next_step', title: 'Tu acción de hoy', minutes: 1, source: `${GOALS} (acción diaria hacia la meta)`,
+      config: { instruction: 'La manifestación sin acción se queda en sueño. ¿Qué haría hoy alguien que ya lo tiene? Una sola acción concreta, y cuándo.' } },
+    { id: 'd7_done', day: 7, type: 'celebration', title: 'Completaste 7 días', minutes: 1,
+      config: { message: 'Siete días de claridad, emoción y acción. Eso no es suerte: es tu práctica. Sigue dando tu acción de cada día.' } },
+  ],
+};
+
 const DAYS = 7;
 
 /** Minutos de un día del reto (lo que se repite + lo de ese día). */
@@ -158,7 +198,7 @@ function build(d: Def): MomentFlow {
   };
 }
 
-export const OFFICIAL_CHALLENGES: MomentFlow[] = [NEVILLE, TRACY, HILL, CLEAR].map(build);
+export const OFFICIAL_CHALLENGES: MomentFlow[] = [NEVILLE, TRACY, HILL, CLEAR, MANIFEST].map(build);
 
 /** Los retos que ofrece la landing, por autor. */
 export const CHALLENGE_SLUGS = { neville: 'reto_neville_7', tracy: 'reto_tracy_7', hill: 'reto_hill_7' } as const;

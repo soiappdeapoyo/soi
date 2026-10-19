@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { ArrowLeft, BookOpen } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
 import { BookSummary } from '@/components/library/book-summary';
 import { LibraryItemActions } from '@/components/library/library-item-actions';
@@ -34,6 +34,14 @@ export default async function LibroPage({ params }: { params: Promise<{ id: stri
           <div className="mt-4"><LibraryItemActions id={id} kind="book" status={b.status as string} back="/mi-vida?tab=biblioteca" /></div>
         </div>
       </header>
+      <Link href={`/aprender?fuente=${encodeURIComponent(`${b.title as string}${b.author ? `, ${b.author as string}` : ''}`)}`}
+        className="press mt-6 flex items-center gap-3 rounded-[20px] bg-soi-accent-soft p-4">
+        <span className="flex-1">
+          <span className="block font-medium">Convierte este libro en una acción</span>
+          <span className="block text-sm text-soi-muted">Qué aprendiste, qué significa para ti, qué harás hoy. En 3 días SOI te pregunta si funcionó.</span>
+        </span>
+        <ArrowRight className="h-5 w-5 shrink-0 text-soi-accent" aria-hidden="true" />
+      </Link>
       <section aria-labelledby="sum" className="mt-8">
         <h2 id="sum" className="mb-3 text-sm font-medium text-soi-muted">Resumen</h2>
         <BookSummary book={{ key, title: b.title as string, author: (b.author as string | null) ?? null }} initial={(cached?.value as Summary | undefined) ?? null} />

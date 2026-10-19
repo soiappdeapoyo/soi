@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Play, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Label, Textarea } from '@/components/ui/input';
-import { REFLECTION_QUESTION } from '@/lib/momentum';
+import { LearningForm } from '@/components/learning/learning-form';
+import type { LearningInputT } from '@/lib/learning';
 
 export type SoiVideo = { id: string; title: string; channel: string; thumbnail: string };
 
@@ -40,7 +39,8 @@ type Phase = 'facade' | 'playing' | 'reflect' | 'saved';
 
 /**
  * Inspiración dentro de SOI: sin salir de la app, sin videos sugeridos ni Shorts (rel=0).
- * Al terminar, SOI reaparece con UNA pregunta y la respuesta se guarda como conocimiento estructurado.
+ * Al terminar, SOI reaparece con las 4 preguntas del sistema de aprendizaje (qué aprendiste, qué significa para ti,
+ * qué harás hoy, cómo sabremos que funcionó; solo la primera es obligatoria) y en unos días pregunta si funcionó.
  */
 export function SoiPlayer({ video, onReflected, startWithReflection = false, onEnded }: {
   video: SoiVideo; onReflected?: (text: string, video: SoiVideo) => void;
@@ -50,10 +50,8 @@ export function SoiPlayer({ video, onReflected, startWithReflection = false, onE
   onEnded?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>(startWithReflection ? 'reflect' : 'facade');
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
   const [momentId, setMomentId] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [acted, setActed] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const endedRef = useRef(false);
@@ -89,19 +87,18 @@ export function SoiPlayer({ video, onReflected, startWithReflection = false, onE
     });
   }
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true); setMsg(null);
+  async function save(input: LearningInputT): Promise<string | null> {
     const res = await fetch('/api/reflections', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reflection: text, videoId: video.id, title: video.title, channel: video.channel }),
-    });
-    const json = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) { setMsg(json.message ?? 'No se pudo guardar.'); return; }
+      body: JSON.stringify({ reflection: input.learned, meaning: input.meaning, action: input.action, measure: input.measure, videoId: video.id, title: video.title, channel: video.channel }),
+    }).catch(() => null);
+    const json = await res?.json().catch(() => ({}));
+    if (!res?.ok) return json?.message ?? 'No se pudo guardar.';
     setMomentId(json.id);
+    setActed(Boolean(input.action));
     setPhase('saved');
-    onReflected?.(text.trim(), video);
+    onReflected?.(input.learned, video);
+    return null;
   }
 
   if (phase === 'reflect' || phase === 'saved') {
@@ -110,18 +107,13 @@ export function SoiPlayer({ video, onReflected, startWithReflection = false, onE
         <div className="rounded-lg bg-white p-4 shadow-ring">
           <p className="text-xs text-soi-muted">{video.title} · {video.channel}</p>
           {phase === 'reflect' ? (
-            <form onSubmit={save} className="mt-2">
-              <Label htmlFor={`refl-${video.id}`} className="text-[17px] font-medium leading-snug">{REFLECTION_QUESTION}</Label>
-              <Textarea id={`refl-${video.id}`} value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={1000} className="mt-2" autoFocus />
-              <div className="mt-3 flex items-center gap-2">
-                <Button type="submit" size="sm" disabled={busy || text.trim().length < 3}>{busy ? 'Guardando…' : 'Guardar idea'}</Button>
-                {!startWithReflection && <button type="button" onClick={() => setPhase('facade')} className="press h-9 rounded-lg px-3 text-sm text-soi-muted hover:text-soi-ink">Ahora no</button>}
-              </div>
-              {msg && <p role="alert" className="mt-2 text-sm text-soi-danger">{msg}</p>}
-            </form>
+            <div className="mt-3">
+              <LearningForm source={`${video.title} · ${video.channel}`.slice(0, 200)} kind="video" compact autoFocus onSubmit={save} submitLabel="Guardar lo que aprendí" />
+              {!startWithReflection && <button type="button" onClick={() => setPhase('facade')} className="press mt-2 h-9 rounded-lg px-1 text-sm text-soi-muted hover:text-soi-ink">Ahora no</button>}
+            </div>
           ) : (
             <p className="mt-2 flex items-center gap-2 text-[15px]">
-              <Check className="h-4 w-4 text-soi-accent" aria-hidden="true" /> Esa idea quedó guardada.
+              <Check className="h-4 w-4 text-soi-accent" aria-hidden="true" /> {acted ? 'Guardado. En 3 días te pregunto si funcionó.' : 'Esa idea quedó guardada.'}
               {momentId && <Link href={`/ideas/${momentId}`} className="ml-auto text-sm text-soi-accent underline underline-offset-4">Ver</Link>}
             </p>
           )}

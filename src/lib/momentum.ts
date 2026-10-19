@@ -154,7 +154,7 @@ Tu responsabilidad es aumentar la probabilidad de que esta persona siga avanzand
 // ---------------------------------------------------------------------------
 
 /** Reflection Engine: después de inspirar, una sola pregunta poderosa. */
-export const REFLECTION_QUESTION = '¿Qué idea quieres convertir en parte de tu vida?';
+export const REFLECTION_QUESTION = '¿Qué aprendiste?';
 
 export type TodayMode = 'REGULATE' | 'REFLECT' | 'CLARIFY' | 'CONTINUE' | 'EXECUTE' | 'INSPIRE';
 

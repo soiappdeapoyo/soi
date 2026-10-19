@@ -8,6 +8,8 @@ export const AGENTS = {
   napoleon_hill: { id: 'napoleon_hill', label: 'Napoleon Hill', icon: 'Crown', color: '#B8860B', eslabon: 'accion', sources: ['Napoleon Hill'] },
   brian_tracy: { id: 'brian_tracy', label: 'Brian Tracy', icon: 'Target', color: '#E67E22', eslabon: 'accion', sources: ['Brian Tracy'] },
   james_clear: { id: 'james_clear', label: 'James Clear', icon: 'Repeat', color: '#3E8E6E', eslabon: 'accion', sources: ['James Clear'] },
+  stephen_covey: { id: 'stephen_covey', label: 'Stephen Covey', icon: 'Layers', color: '#2E6F95', eslabon: 'accion', sources: ['Stephen Covey'] },
+  jim_rohn: { id: 'jim_rohn', label: 'Jim Rohn', icon: 'Sunrise', color: '#B5651D', eslabon: 'pensamiento', sources: ['Jim Rohn'] },
   evidencias: { id: 'evidencias', label: 'Evidencias', icon: 'Star', color: '#F1C40F', eslabon: 'resultado', sources: [] },
   anti_sycophant: { id: 'anti_sycophant', label: 'Verdad', icon: 'Compass', color: '#8B8B8B', eslabon: 'pensamiento', sources: [] },
   crisis: { id: 'crisis', label: 'Apoyo', icon: 'LifeBuoy', color: '#E85C4A', eslabon: null, sources: [] },
@@ -19,7 +21,7 @@ export const AGENT_IDS = Object.keys(AGENTS) as [AgentId, ...AgentId[]];
 
 /** Agentes visibles en el sidebar (sección PRÁCTICAS). */
 export const PRACTICE_AGENTS: AgentId[] = [
-  'napoleon_hill', 'james_clear', 'manifestacion', 'afirmacion', 'meditacion', 'suenos', 'riqueza', 'rutinas', 'brian_tracy',
+  'napoleon_hill', 'james_clear', 'stephen_covey', 'jim_rohn', 'manifestacion', 'afirmacion', 'meditacion', 'suenos', 'riqueza', 'rutinas', 'brian_tracy',
 ];
 
 /** Eslabón roto → agente que interviene (Consecuencia arquitectónica). */

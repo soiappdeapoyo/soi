@@ -27,6 +27,7 @@ const TESTS: [RegExp, keyof typeof PHRASES][] = [
 const AGENT_POOL: Record<string, keyof typeof PHRASES> = {
   meditacion: 'calma', manifestacion: 'manifestar', afirmacion: 'identidad', napoleon_hill: 'logro', riqueza: 'logro',
   brian_tracy: 'postergar', james_clear: 'habito', rutinas: 'postergar', suenos: 'calma', evidencias: 'identidad', anti_sycophant: 'identidad',
+  stephen_covey: 'identidad', jim_rohn: 'habito',
 };
 
 /** Lista ordenada de frases para esta espera: primero lo que hace SOI, después las del contexto, luego identidad. */

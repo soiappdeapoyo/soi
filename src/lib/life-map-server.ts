@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types/database';
 import { LIFE_AREA_IDS, type LifeAreaId } from '@/config/life-areas';
 import { loadIdentityView } from '@/lib/identity/view';
+import { readValues } from '@/lib/values';
+import type { Value } from '@/config/values';
 import { buildMapView, type Assessment, type AreaScores, type LifeMap, type MapView } from '@/lib/life-map';
 
 const isArea = (v: string): v is LifeAreaId => (LIFE_AREA_IDS as string[]).includes(v);
@@ -42,3 +44,9 @@ export async function loadMapView(supabase: SupabaseClient, userId: string, prof
   ]);
   return buildMapView(map, assessments, identity?.evidence ?? []);
 }
+
+/** Los valores que eligió (consulta aparte: si la columna aún no existe, como si no hubiera). */
+export const loadValues = cache(async (supabase: SupabaseClient, userId: string): Promise<Value[]> => {
+  const { data, error } = await supabase.from('life_maps').select('core_values').eq('user_id', userId).maybeSingle();
+  return error ? [] : readValues(data?.core_values);
+});

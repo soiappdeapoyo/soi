@@ -65,12 +65,18 @@ export function buildKnown(input: {
   habits: Habit[];
   identities: { id: string; name: string }[];
   enemy: { id: string; name: string } | null;
+  values?: { label: string }[];
+  beliefs?: { id: string; old: string; next: string | null }[];
 }): KnownItem[] {
   const items: KnownItem[] = [];
   const p = input.profile;
   if (input.purpose) items.push({ key: `purpose:${input.purpose.id}`, group: 'mueve', label: 'Tu propósito', text: cut(input.purpose.aim), forget: { kind: 'memory', id: input.purpose.id } });
+  if (input.values?.length) items.push({ key: 'values', group: 'mueve', label: 'Tus valores', text: input.values.map((v) => v.label).join(' · '), href: '/mi-vida?tab=mapa#values-h' });
   for (const g of (p?.goals ?? []).filter((x) => x.trim())) items.push({ key: `goal:${g}`, group: 'mueve', label: 'Tu meta', text: cut(g), forget: { kind: 'goal', value: g } });
   for (const b of (p?.blockers ?? []).filter((x) => x.trim())) items.push({ key: `blocker:${b}`, group: 'frena', label: 'Te frena', text: cut(b), forget: { kind: 'blocker', value: b } });
+  for (const b of input.beliefs ?? []) {
+    items.push({ key: `belief:${b.id}`, group: 'frena', label: b.next ? `Creencia que cambias por «${cut(b.next, 80)}»` : 'Una creencia que te frena', text: `«${cut(b.old)}»`, forget: { kind: 'memory', id: b.id } });
+  }
   if (input.enemy) items.push({ key: `enemy:${input.enemy.id}`, group: 'frena', label: 'Últimamente aparece', text: input.enemy.name, href: `/mi-vida/batallas/${input.enemy.id}` });
   if (p?.dominant_emotion?.trim()) items.push({ key: 'emotion', group: 'siente', label: 'Lo que más sientes', text: cut(p.dominant_emotion), forget: { kind: 'emotion' } });
   for (const u of input.understandings.slice(0, 3)) {

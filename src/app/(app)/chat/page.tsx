@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getAccessMap } from '@/lib/billing/check-access';
 import { ChatView } from '@/components/chat/chat-view';
+import { situationById } from '@/config/situations';
 import { isAgentId, type Eslabon } from '@/config/agents';
 import { buildOpener, greetingForHour, momentRunOpener, type Opener } from '@/lib/opener';
 import { prepareOpener, takeOpener } from '@/lib/opener-ai';
@@ -28,8 +29,10 @@ function hourIn(timeZone: string) {
  * Sin fricción: no hay formulario de bienvenida ni bloques. SOI abre la conversación con un saludo
  * agéntico: celebra tu avance, anticipa cómo llegas, te propone un Moment concreto y deja respuestas rápidas.
  */
-export default async function ChatPage({ searchParams }: { searchParams: Promise<{ agent?: string; run?: string }> }) {
-  const { agent: agentParam, run: runParam } = await searchParams;
+export default async function ChatPage({ searchParams }: { searchParams: Promise<{ agent?: string; run?: string; rutina?: string }> }) {
+  const { agent: agentParam, run: runParam, rutina } = await searchParams;
+  // Rutina por situación (Mi día): abre con su agente y un toque para empezar a diseñarla.
+  const situation = situationById(rutina);
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
   const [{ profile, access }, { data: last, error: lastError }, journey] = await Promise.all([
@@ -42,7 +45,7 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
   const followUp = journey && nextStep(journey).kind === 'follow_up' ? journey.firstCompleted?.runId ?? null : null;
   const runId = runParam ?? followUp;
 
-  const agent = isAgentId(agentParam) && agentParam !== 'crisis' ? agentParam : undefined;
+  const agent = situation?.agent ?? (isAgentId(agentParam) && agentParam !== 'crisis' ? agentParam : undefined);
   const tz = profile?.timezone ?? 'America/Mexico_City';
   const base = {
     name: profile?.display_name ?? '',
@@ -79,7 +82,10 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
     : buildOpener({ ...base, ...known, agent, thread, firstTime });
   // Saludo preparado: su texto y respuestas; la tarjeta (reto o plan que toca) y los enlaces siguen viniendo de las reglas.
   const first = base.name.trim().split(/\s+/)[0] ?? '';
-  const opener: Opener = prepared && !firstTime
+  const opener: Opener = situation
+    ? { ...ruled, text: `${situation.opener} Primero te haré una o dos preguntas para que sea tuya. ¿Empezamos?`, practice: null, proposal: null, links: [],
+      replies: [{ label: 'Empezar', text: situation.message }, { label: 'Otra cosa', text: 'Prefiero hablar de otra cosa.' }] }
+    : prepared && !firstTime
     ? { ...ruled, text: `${greetingForHour(base.hour)}${first ? `, ${first}` : ''}. ${prepared.text}`, replies: prepared.replies.length ? prepared.replies : ruled.replies, kind: 'ai' }
     : ruled;
   // El siguiente saludo se prepara ya (después de responder): la próxima vez será otro.
@@ -92,7 +98,7 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
 
   return (
     <ChatView
-      key={ranMoment ? `run-${runId}` : agent ?? 'auto'}
+      key={ranMoment ? `run-${runId}` : situation ? `rutina-${situation.id}` : agent ?? 'auto'}
       agent={agent}
       opener={opener}
       paywalled={!access.chat}

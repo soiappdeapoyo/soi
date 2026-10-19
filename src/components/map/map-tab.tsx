@@ -1,10 +1,16 @@
 import Link from 'next/link';
-import { ArrowRight, CalendarCheck, MessageCircle, Repeat } from 'lucide-react';
+import { ArrowRight, BookOpen, CalendarCheck, Flag, History, MessageCircle, Repeat, Sparkles } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types/database';
 import { Icon } from '@/components/ui/icon';
+import { LIFE_AREAS_WORD } from '@/config/life-areas';
 import { buttonClass } from '@/components/ui/button';
-import { loadMapView } from '@/lib/life-map-server';
+import { loadMapView, loadValues } from '@/lib/life-map-server';
+import { detectConflicts } from '@/lib/values';
+import { loadWhatWorks } from '@/lib/what-works-server';
+import { MIN_SAMPLES, driftLine, whatWorksLines } from '@/lib/what-works';
+import { loadChapterDue } from '@/lib/chapters-server';
+import { ValuesEditor } from './values-editor';
 import { loadKnown } from '@/lib/self-knowledge-server';
 import { areaLine, type AreaView } from '@/lib/life-map';
 import { loadLastReview, loadPlan } from '@/lib/life-plan-server';
@@ -17,12 +23,17 @@ import { VisionEditor } from './vision-editor';
  * (lo que falta y lo que ya cerraste). Sin IA: todo sale de lo que la persona calificó y de su evidencia.
  */
 export async function MapTab({ supabase, userId, profile, timeZone }: { supabase: SupabaseClient; userId: string; profile: UserProfile | null; timeZone: string }) {
-  const [view, known, plan, last] = await Promise.all([
+  const [view, known, plan, last, values, works, chapter] = await Promise.all([
     loadMapView(supabase, userId, profile, timeZone),
     loadKnown(supabase, userId, profile),
     loadPlan(supabase, userId),
     loadLastReview(supabase, userId),
+    loadValues(supabase, userId).catch(() => []),
+    loadWhatWorks(supabase, userId, timeZone).catch(() => null),
+    loadChapterDue(supabase, userId, timeZone).catch(() => null),
   ]);
+  const conflicts = detectConflicts(values, view.areas);
+  const worksLines = works ? whatWorksLines(works.works) : [];
   const week = currentWeek(last.review, timeZone);
   // Mes del plan (1–3) para resaltar el hito que toca.
   const month = plan?.starts_on ? Math.min(3, Math.max(1, Math.floor((Date.now() - Date.parse(`${plan.starts_on}T12:00:00Z`)) / (30 * 86_400_000)) + 1)) : 1;
@@ -34,7 +45,7 @@ export async function MapTab({ supabase, userId, profile, timeZone }: { supabase
           <div className="px-4 pb-4 pt-4">
             <p className="text-xs font-medium text-white/60">5 minutos</p>
             <h2 id="map-start" className="mt-1 text-balance text-[22px] font-semibold leading-snug">Dibuja tu mapa</h2>
-            <p className="mt-1 text-[15px] text-white/75">Dónde estás hoy en seis áreas de tu vida, a dónde quieres llegar y cuánto te falta. Con eso SOI guía tus días y te muestra cómo cierras la distancia.</p>
+            <p className="mt-1 text-[15px] text-white/75">Dónde estás hoy en {LIFE_AREAS_WORD} áreas de tu vida, a dónde quieres llegar y cuánto te falta. Con eso SOI guía tus días y te muestra cómo cierras la distancia.</p>
             <Link href="/mapa/diagnostico" className="press tap-target mt-4 flex w-full items-center justify-center gap-2 rounded-[14px] bg-white py-3.5 text-[17px] font-semibold text-soi-ink">
               Hacer mi mapa <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </Link>
@@ -54,7 +65,16 @@ export async function MapTab({ supabase, userId, profile, timeZone }: { supabase
             </p>
           )}
 
-          {view.checkinDue ? (
+          {chapter?.due ? (
+            <Link href="/mapa/capitulo" className="press flex items-center gap-3 rounded-[20px] bg-soi-ink p-4 text-white">
+              <Flag className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1">
+                <span className="block font-medium">{chapter.due.kind === 'anual' ? 'Cierra tu año · 10 min' : 'Cierra tu capítulo de 90 días · 10 min'}</span>
+                <span className="block text-sm text-white/70">Mira cuánto avanzaste, qué aprendiste de ti y elige tu siguiente capítulo.</span>
+              </span>
+              <ArrowRight className="h-5 w-5" aria-hidden="true" />
+            </Link>
+          ) : view.checkinDue ? (
             <Link href="/mapa/diagnostico" className="press flex items-center gap-3 rounded-[20px] bg-soi-accent-soft p-4">
               <span className="flex-1">
                 <span className="block font-medium text-soi-ink">Tu chequeo del mes · 2 min</span>
@@ -101,6 +121,22 @@ export async function MapTab({ supabase, userId, profile, timeZone }: { supabase
             </section>
           )}
 
+          <section aria-labelledby="values-h">
+            <h2 id="values-h" className="px-1 pb-2 text-xs font-medium text-soi-muted">Lo que más te importa</h2>
+            <div className="rounded-[20px] bg-white p-4 shadow-ring">
+              <ValuesEditor values={values.map((v) => v.id)} />
+              {conflicts.map((c) => (
+                <div key={`${c.kind}:${c.value?.id ?? 'focus'}`} className="mt-4 border-t border-black/5 pt-3">
+                  <p className="text-xs font-medium text-soi-accent">Algo no cuadra</p>
+                  <p className="mt-1 text-[15px] leading-snug">{c.text}</p>
+                  <Link href={`/chat?nueva=1&agent=${c.agent}`} className="press mt-2 inline-flex items-center gap-1.5 text-sm text-soi-accent">
+                    <MessageCircle className="h-4 w-4" aria-hidden="true" /> Hablarlo con SOI
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <Link href="/mapa/plan" className="press flex items-center gap-3 rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
             <span className="flex-1">
               <span className="block font-medium">{plan ? 'Ajustar mi plan de 90 días' : 'Arma tu plan de 90 días'}</span>
@@ -133,6 +169,50 @@ export async function MapTab({ supabase, userId, profile, timeZone }: { supabase
           </section>
         </>
       )}
+
+      <section aria-labelledby="works-h">
+        <h2 id="works-h" className="text-lg font-semibold tracking-tight">Lo que te funciona</h2>
+        <p className="mb-3 mt-1 text-sm text-soi-muted">SOI lo aprende de lo que ya viviste y lo usa para elegir lo que te propone.</p>
+        {works?.drift[0] && (
+          <Link href={`/m/${works.drift[0].moment_id}/play`} className="press mb-3 flex items-start gap-3 rounded-[20px] bg-soi-accent-soft p-4">
+            <Repeat className="mt-0.5 h-5 w-5 shrink-0 text-soi-accent" aria-hidden="true" />
+            <span className="flex-1">
+              <span className="block font-medium">Retoma «{works.drift[0].name}» en pequeño</span>
+              <span className="block text-sm text-soi-muted">{driftLine(works.drift[0])}</span>
+            </span>
+          </Link>
+        )}
+        {worksLines.length ? (
+          <ul className="flex flex-col gap-1.5 rounded-[20px] bg-soi-sidebar p-1.5">
+            {worksLines.map((l) => (
+              <li key={l} className="flex items-start gap-2.5 rounded-[14px] bg-white px-3 py-3 text-[15px] leading-snug shadow-ring">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-soi-accent" aria-hidden="true" />{l}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-[20px] bg-soi-sidebar p-4 text-[15px] text-soi-muted">
+            SOI todavía te está conociendo. Después de {MIN_SAMPLES} Moments te dirá a qué hora, de cuánto tiempo y con qué prácticas te va mejor.
+          </p>
+        )}
+      </section>
+
+      <nav aria-label="Tu historia y tu aprendizaje" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Link href="/mapa/historia" className="press flex items-center gap-3 rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
+          <History className="h-5 w-5 shrink-0 text-soi-accent" aria-hidden="true" />
+          <span className="flex-1">
+            <span className="block font-medium">Tu historia</span>
+            <span className="block text-sm text-soi-muted">Tus capítulos, decisiones, regresos y lo que ya es tuyo.</span>
+          </span>
+        </Link>
+        <Link href="/aprender" className="press flex items-center gap-3 rounded-[20px] bg-white p-4 shadow-ring hover:shadow-soft">
+          <BookOpen className="h-5 w-5 shrink-0 text-soi-accent" aria-hidden="true" />
+          <span className="flex-1">
+            <span className="block font-medium">Lo que aprendes</span>
+            <span className="block text-sm text-soi-muted">Convierte un libro o un video en una acción, y mira si funcionó.</span>
+          </span>
+        </Link>
+      </nav>
 
       <section aria-labelledby="known-h">
         <h2 id="known-h" className="text-lg font-semibold tracking-tight">Lo que SOI sabe de ti</h2>

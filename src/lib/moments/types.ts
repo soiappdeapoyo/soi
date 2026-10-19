@@ -62,7 +62,7 @@ export function coverUrl(path: string | null | undefined): string | null {
 }
 
 /** Retos oficiales que comparten la foto de la práctica en la que se basan. */
-const COVER_ALIAS: Record<string, string> = { reto_neville_7: 'neville_sats', reto_tracy_7: 'brian_tracy_5min' };
+const COVER_ALIAS: Record<string, string> = { reto_neville_7: 'neville_sats', reto_tracy_7: 'brian_tracy_5min', reto_manifestar_7: 'dispenza_protocol' };
 
 /** Portada de un Moment oficial (public/moments/<slug con guiones>.webp). */
 export function officialCover(slug: string) {

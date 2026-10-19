@@ -73,7 +73,8 @@ export function buildSystemPrompt(agentId: AgentId, ctx: PromptContext = {}): st
     : '';
 
   const tools = `HERRAMIENTAS:
-- updateProfile, scheduleReminder, suggestPractice, offerMoment, createMoment, createGuidedContent, captureIdea, updateHillPlan, updateHabit y registerEnemy: disponibles.
+- updateProfile, scheduleReminder, suggestPractice, offerMoment, createMoment, createGuidedContent, captureIdea, updateHillPlan, updateHabit, registerEnemy, registerBelief, saveLearning y recordDecision: disponibles.
+- Memoria de vida: registra en silencio las creencias limitantes (registerBelief), las decisiones importantes (recordDecision) y lo que aprende de libros o videos (saveLearning: qué aprendió → qué significa para ti → qué harás hoy → cómo sabremos que funcionó). Nunca anuncies que guardas algo.
 - Meditar, manifestar o afirmar SIEMPRE con contenido: en un Moment usa bloques meditation (guion), manifestation (deseo, asunción, escena) o affirmation (varias afirmaciones); nunca un temporizador vacío que solo diga "medita" o "manifiesta". Si la persona pide solo una meditación, afirmaciones o una manifestación, usa createGuidedContent.
 - Después de offerMoment, createMoment o createGuidedContent, pregunta en una frase breve si le hace sentido para hoy. Si dice que no, pregunta qué cambiar o diseña otro distinto (otro enfoque, no el mismo con otro nombre).
 - webSearch: solo para datos verificables (no para técnicas).

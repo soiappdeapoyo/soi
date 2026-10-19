@@ -4,7 +4,7 @@ import { AssessmentBody, MapPatch, mergeAreaGoals } from '@/lib/life-map';
 
 /**
  * Tu mapa. POST = una medición (inicial, mensual o semanal) y, si llegan, visión, enfoque y metas.
- * PATCH = cambiar visión, enfoque o metas sin medir. Cada quien solo escribe lo suyo (RLS).
+ * PATCH = cambiar visión, enfoque, metas o valores sin medir. Cada quien solo escribe lo suyo (RLS).
  */
 export async function POST(req: Request) {
   const { supabase, user } = await getSessionUser();
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const { error } = await supabase.from('life_assessments').insert({ user_id: user.id, kind: b.kind, scores: b.scores });
   if (error) return Response.json({ ok: false, message: 'No se pudo guardar tu mapa.' }, { status: 500 });
 
-  const saved = await saveMap(supabase, user.id, { vision: b.vision, focus: b.focus, targets: b.targets, wants: b.wants });
+  const saved = await saveMap(supabase, user.id, { vision: b.vision, focus: b.focus, targets: b.targets, wants: b.wants, values: b.values });
   return Response.json({ ok: saved });
 }
 
@@ -30,8 +30,8 @@ export async function PATCH(req: Request) {
 
 type Sb = Awaited<ReturnType<typeof getSessionUser>>['supabase'];
 
-async function saveMap(supabase: Sb, userId: string, p: { vision?: string | null; focus?: string[]; targets?: Record<string, number>; wants?: Record<string, string> }) {
-  if (p.vision === undefined && !p.focus && !p.targets && !p.wants) return true;
+async function saveMap(supabase: Sb, userId: string, p: { vision?: string | null; focus?: string[]; targets?: Record<string, number>; wants?: Record<string, string>; values?: string[] }) {
+  if (p.vision === undefined && !p.focus && !p.targets && !p.wants && !p.values) return true;
   const { map } = await loadLifeMap(supabase, userId);
   const row = {
     user_id: userId,
@@ -41,5 +41,11 @@ async function saveMap(supabase: Sb, userId: string, p: { vision?: string | null
     updated_at: new Date().toISOString(),
   };
   const { error } = await supabase.from('life_maps').upsert(row);
-  return !error;
+  if (error) return false;
+  // Los valores van aparte: si la columna aún no existe (migración 0037 sin aplicar), el mapa se guarda igual.
+  if (p.values) {
+    const { error: vErr } = await supabase.from('life_maps').update({ core_values: [...new Set(p.values)] }).eq('user_id', userId);
+    if (vErr && !p.vision && !p.focus && !p.targets && !p.wants) return false;
+  }
+  return true;
 }

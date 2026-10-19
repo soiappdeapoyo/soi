@@ -11,6 +11,11 @@ import { loadDeclines, lastDecline } from '@/lib/declines';
 import { dateInTz, hourInTz, todayISO } from '@/lib/utils';
 import { pickHook, repliesFor, templateFor, validOpener, whenPhrase, type Hook } from '@/lib/opener-hooks';
 import type { OpenerReply } from '@/lib/opener';
+import { loadLearnings } from '@/lib/learning-server';
+import { dueLearnings } from '@/lib/learning';
+import { loadWhatWorks } from '@/lib/what-works-server';
+import { loadBeliefs } from '@/lib/beliefs-server';
+import { activeBelief, beliefStage } from '@/lib/beliefs';
 
 /**
  * El saludo del chat, preparado de antemano: SOI elige un gancho (lo que sabe y vale la pena hoy), la IA lo escribe
@@ -98,6 +103,29 @@ export async function collectHooks(admin: SupabaseClient, userId: string, timeZo
 
   const weekDays = new Set(runs.filter((r) => now.getTime() - Date.parse(r.completed_at) < 7 * DAY).map((r) => dateInTz(r.completed_at, timeZone))).size;
   if (weekDays >= 3) hooks.push({ kind: 'momentum', key: `momentum:${todayISO(timeZone)}`, weight: 45, timeBound: false, facts: { weekDays: String(weekDays) } });
+
+  // El sistema operativo: ¿funcionó lo aprendido? (92), el hábito que se cae (88), hace un año (70), la creencia que entrena (56).
+  const [learnings, works, beliefs, { data: yearAgo }] = await Promise.all([
+    loadLearnings(admin, userId, 10).catch(() => []),
+    loadWhatWorks(admin, userId, timeZone).catch(() => null),
+    loadBeliefs(admin, userId).catch(() => []),
+    admin.from('agent_knowledge').select('title, content, tags, created_at').eq('user_id', userId).in('category', ['pensamiento', 'resultado'])
+      .overlaps('tags', ['decision', 'capitulo', 'aprendizaje']).gte('created_at', new Date(now.getTime() - 380 * DAY).toISOString())
+      .lte('created_at', new Date(now.getTime() - 350 * DAY).toISOString()).order('created_at', { ascending: false }).limit(3),
+  ]);
+  const due = dueLearnings(learnings, todayISO(timeZone))[0];
+  if (due?.action) hooks.push({ kind: 'learning', key: `learning:${due.id}`, weight: 92, timeBound: false, facts: { source: clean(due.source, 70), action: clean(due.action, 100), ...(due.measure ? { measure: clean(due.measure, 100) } : {}) } });
+  const drift = works?.drift[0];
+  if (drift) hooks.push({ kind: 'drift', key: `drift:${drift.moment_id}:${todayISO(timeZone)}`, weight: 88, timeBound: false, facts: { habit: clean(drift.name, 60), ...(drift.tiny ? { tiny: clean(drift.tiny, 100) } : {}) } });
+  const old = (yearAgo ?? []).find((r) => safe(String(r.title)));
+  if (old) {
+    const tags = (old.tags as string[]) ?? [];
+    const what = tags.includes('decision') ? 'decidiste' : tags.includes('capitulo') ? 'cerraste un capítulo y escribiste' : 'aprendiste';
+    const quote = tags.includes('capitulo') ? String(old.content).split('\n')[0]!.replace(/^[^:]+:\s*/, '') : String(old.title).replace(/^De «|»$/g, '');
+    hooks.push({ kind: 'anniversary', key: `anniversary:${old.created_at}`, weight: 70, timeBound: false, facts: { what, quote: clean(quote, 110) } });
+  }
+  const belief = activeBelief(beliefs);
+  if (belief?.next && beliefStage(belief) !== 'detectada') hooks.push({ kind: 'belief', key: `belief:${belief.id}`, weight: 56, timeBound: false, facts: { next: clean(belief.next, 100), old: clean(belief.old, 100) } });
 
   hooks.push({ kind: 'checkin', key: 'checkin', weight: 1, timeBound: false, facts: {} });
   return { hooks, sourceAt: (lastConv?.last_message_at as string | null) ?? null, name: String(profile?.display_name ?? '').trim().split(/\s+/)[0] ?? '' };

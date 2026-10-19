@@ -1,3 +1,4 @@
+import { fitScore, type WhatWorks } from '@/lib/what-works';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActionBlock, MomentKind } from '@/config/actions';
 import { OFFICIAL_MOMENTS, officialMoment } from '@/config/official-moments';
@@ -67,11 +68,15 @@ export async function resolveVideoBlocks(supabase: SupabaseClient, userId: strin
 }
 
 /** Recomendación por tipo: primero Moments propios de ese tipo, luego oficiales, luego publicados populares. */
-export async function recommendMoment(supabase: SupabaseClient, userId: string, kinds: MomentKind[]): Promise<MomentFlow | null> {
+export async function recommendMoment(supabase: SupabaseClient, userId: string, kinds: MomentKind[], works?: WhatWorks | null): Promise<MomentFlow | null> {
+  // Con lo que le funciona: entre sus Moments recientes (y si no tiene, los oficiales), el que mejor encaja; a igualdad, el más reciente.
+  const pick = (list: MomentFlow[]) => [...list].map((m, i) => ({ m, i, s: fitScore({ types: m.blocks.map((b) => b.type), minutes: m.required_minutes }, works) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)[0]?.m ?? null;
   const { data: own } = await supabase.from('soi_blueprints').select(MOMENT_FIELDS)
-    .eq('creator_id', userId).in('kind', kinds).neq('status', 'archived').order('updated_at', { ascending: false }).limit(1).maybeSingle();
-  if (own) return toMomentFlow(own);
-  const official = OFFICIAL_MOMENTS.find((m) => kinds.includes(m.kind));
+    .eq('creator_id', userId).in('kind', kinds).neq('status', 'archived').order('updated_at', { ascending: false }).limit(works?.enough ? 12 : 1);
+  if (own?.length) return pick(own.map(toMomentFlow));
+  const official = pick(OFFICIAL_MOMENTS.filter((m) => kinds.includes(m.kind) && m.kind !== 'challenge'))
+    ?? OFFICIAL_MOMENTS.find((m) => kinds.includes(m.kind));
   if (official) return official;
   const { data: pub } = await supabase.from('soi_blueprints').select(MOMENT_FIELDS)
     .eq('status', 'published').in('kind', kinds).order('executions_count', { ascending: false }).limit(1).maybeSingle();
