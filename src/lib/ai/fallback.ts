@@ -215,3 +215,28 @@ export async function objectWithFallback<T extends z.ZodTypeAny>(opts: {
   }
   throw new AllProvidersFailedError(attempts);
 }
+
+/** Texto largo sin streaming y con cascada (análisis del panel). Un texto vacío cuenta como fallo. */
+export async function textWithFallback(opts: {
+  instructions: string; prompt: string; timeoutMs?: number; order?: ProviderName[];
+}): Promise<{ text: string; provider: ProviderName }> {
+  const attempts: { provider: ProviderName; error: string }[] = [];
+  for (const provider of await orderedProviders(opts.order ?? TASK_ORDER)) {
+    try {
+      const { text } = await generateText({
+        model: provider.model(),
+        instructions: opts.instructions,
+        prompt: opts.prompt,
+        providerOptions: PROVIDER_OPTIONS,
+        ...(opts.timeoutMs ? { maxRetries: 0, abortSignal: AbortSignal.timeout(opts.timeoutMs) } : {}),
+      });
+      if (!text.trim()) throw new Error('respuesta vacía');
+      return { text, provider: provider.name };
+    } catch (error) {
+      logFailure(provider.name, error);
+      forget(provider.name);
+      attempts.push({ provider: provider.name, error: describeError(error) });
+    }
+  }
+  throw new AllProvidersFailedError(attempts);
+}
