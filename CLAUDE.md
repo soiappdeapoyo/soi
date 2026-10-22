@@ -238,7 +238,10 @@ Nada de esto es una pantalla nueva en Hoy: son datos que alimentan la única acc
 ## 🔐 Autenticación (Google)
 
 - `/login`: **Continuar con Google** (`signInWithOAuth`) + enlace mágico.
-- `/auth/callback`: intercambia el código → `next`, o `/chat?nueva=1` si es nuevo de verdad, o `/hoy` (ver Loop principal). **Sin onboarding obligatorio**: el agente descubre el perfil conversando (bloque DESCUBRIMIENTO del prompt) y marca `onboarding_completed` con `updateProfile`. `/onboarding` (8 espejos) queda como opcional.
+- `/auth/callback` (Google): intercambia el código → `next`, o `/chat?nueva=1` si es nuevo de verdad, o `/hoy` (ver Loop principal). **Sin onboarding obligatorio**: el agente descubre el perfil conversando (bloque DESCUBRIMIENTO del prompt) y marca `onboarding_completed` con `updateProfile`. `/onboarding` (8 espejos) queda como opcional.
+- **Desde TikTok, Instagram o Facebook** (`src/lib/in-app-browser.ts`, puro y testeado): Google bloquea su inicio en esos navegadores (`disallowed_useragent`), así que `/login` no lo ofrece ahí: muestra «Estás dentro de TikTok», **Abrir en mi navegador** (Android: `intent://`), Copiar enlace y los pasos del menú ⋯, y deja el correo como camino.
+- **Enlace del correo en cualquier navegador:** se pide con flujo implícito (`emailClient` en `login-form.tsx`; PKCE exigía abrirlo en el mismo navegador y desde TikTok el correo abre Safari/Chrome → «se interrumpió»). Va a `/auth/callback?via=correo` (ya permitida en Supabase), que pasa a `/auth/confirm` conservando el fragmento `#access_token`; `ConfirmSession` guarda la sesión y sigue a `/auth/finish` → `completeSignIn` (`src/lib/auth-complete.ts`, el mismo final que Google: embudo, aviso de registro, consentimiento y destino).
+- **Medición:** `auth_start` = `<google|correo>:<tiktok|instagram|facebook|otra|navegador>`; el `vid` del visitante viaja en el enlace y une el registro aunque se abra en otro navegador (`signup` con `:otro_navegador`, y se le da la cookie); `login_view` con `tras_error:<motivo>:<navegador>`. Panel → Analytics → «Entrar, por método y navegador» (`authMethods`, `authErrors`, `crossBrowser`), también en Analytics IA.
 - `/auth/signout` (POST).
 - `src/lib/supabase/middleware.ts` protege `PROTECTED_PREFIXES` y redirige a `/login?next=`.
 - El trigger `handle_new_user` toma `full_name`/`name` y `avatar_url` de Google.

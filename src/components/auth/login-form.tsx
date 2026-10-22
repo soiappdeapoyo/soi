@@ -2,11 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { createClient as createSupabase } from '@supabase/supabase-js';
+import { ExternalLink, Copy } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { browserTag, IN_APP_NAME, inAppBrowser, isAndroid, isIOS, openInBrowserHref, openInBrowserSteps, type InApp } from '@/lib/in-app-browser';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { authFailureMessage } from '@/lib/auth-errors';
-import { trackFunnel } from '@/lib/analytics/funnel-client';
+import { trackFunnel, visitorId } from '@/lib/analytics/funnel-client';
+
+/**
+ * Enlace del correo con flujo implícito (sin PKCE): PKCE exige abrir el enlace en el mismo navegador donde se
+ * pidió, y desde TikTok o Instagram el correo lo abre en Safari o Chrome ("El inicio se interrumpió").
+ * Este cliente solo envía el correo; la sesión la guarda /auth/confirm en el navegador donde se abra.
+ */
+function emailClient() {
+  return createSupabase(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    auth: { flowType: 'implicit', persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
 
 function GoogleLogo() {
   return (
@@ -19,6 +33,37 @@ function GoogleLogo() {
   );
 }
 
+/**
+ * Dentro de TikTok, Instagram o Facebook: Google no deja entrar desde su navegador. Se ofrece abrir SOI en el
+ * navegador del teléfono (Android: un toque; iPhone: el menú ⋯) y, aquí mismo, el enlace por correo.
+ */
+function InAppNotice({ app, ua }: { app: InApp; ua: string }) {
+  const [copied, setCopied] = useState(false);
+  const here = typeof window !== 'undefined' ? window.location.href : '';
+  const android = isAndroid(ua);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(here); setCopied(true); trackFunnel('cta_click', `abrir_navegador:copiar:${app}`); } catch { /* sin portapapeles */ }
+  };
+  return (
+    <div className="rounded-[16px] bg-soi-sidebar p-4 text-sm">
+      <p className="font-medium">Estás dentro de {IN_APP_NAME[app]}.</p>
+      <p className="mt-1 text-soi-muted">Google no deja entrar desde aquí. Abre SOI en tu navegador para entrar con Google, o recibe un enlace en tu correo aquí abajo.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {android && (
+          <a href={here ? openInBrowserHref(here) : '#'} onClick={() => trackFunnel('cta_click', `abrir_navegador:android:${app}`)}
+            className="press inline-flex h-10 items-center gap-2 rounded-[12px] bg-soi-ink px-4 font-medium text-white">
+            <ExternalLink className="h-4 w-4" aria-hidden="true" /> Abrir en mi navegador
+          </a>
+        )}
+        <Button size="sm" variant="outline" onClick={copy} className="h-10">
+          <Copy className="h-4 w-4" aria-hidden="true" /> {copied ? 'Enlace copiado' : 'Copiar enlace'}
+        </Button>
+      </div>
+      <p className="mt-3 text-xs text-soi-muted">{android ? 'Si no se abre: ' : ''}{openInBrowserSteps(app, isIOS(ua))}</p>
+    </div>
+  );
+}
+
 export function LoginForm() {
   const params = useSearchParams();
   const next = params.get('next') ?? '';
@@ -26,18 +71,37 @@ export function LoginForm() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState<'google' | 'email' | null>(null);
   const [error, setError] = useState<string | null>(authFailureMessage(params.get('error')));
+  const [inApp, setInApp] = useState<InApp | null>(null);
+  const [ua, setUa] = useState('');
+  const [tag, setTag] = useState('navegador');
 
-  // Embudo: llegó a la pantalla de entrar (desde la landing o directo).
-  useEffect(() => { trackFunnel('login_view', params.get('error') ? 'tras_error' : undefined); }, [params]);
+  // Embudo: llegó a la pantalla de entrar (desde la landing o directo), en qué navegador y con qué error.
+  useEffect(() => {
+    const agent = navigator.userAgent;
+    setUa(agent);
+    setInApp(inAppBrowser(agent));
+    setTag(browserTag(agent));
+    const err = params.get('error');
+    trackFunnel('login_view', err ? `tras_error:${err}:${browserTag(agent)}` : browserTag(agent));
+  }, [params]);
 
-  const redirectTo = () => `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`;
+  // El visitante viaja en el enlace: si se abre en otro navegador, el registro se une a este intento.
+  const redirectTo = (via?: 'correo') => {
+    const q = new URLSearchParams();
+    if (next) q.set('next', next);
+    const vid = visitorId();
+    if (vid) q.set('vid', vid);
+    if (via) q.set('via', via);
+    const qs = q.toString();
+    return `${window.location.origin}/auth/callback${qs ? `?${qs}` : ''}`;
+  };
 
   async function google() {
     // Un solo inicio a la vez: un segundo toque reemplazaría la verificación del primero y fallaría.
     if (loading) return;
     setLoading('google');
     setError(null);
-    trackFunnel('auth_start', 'google');
+    trackFunnel('auth_start', `google:${tag}`);
     const { error: e } = await createClient().auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: redirectTo(), queryParams: { prompt: 'select_account' } },
@@ -48,20 +112,26 @@ export function LoginForm() {
   async function magic(e: React.FormEvent) {
     e.preventDefault();
     setLoading('email');
-    trackFunnel('auth_start', 'correo');
-    const { error: err } = await createClient().auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo() } });
+    trackFunnel('auth_start', `correo:${tag}`);
+    const { error: err } = await emailClient().auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo('correo') } });
     setLoading(null);
     if (err) setError(err.message); else setSent(true);
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <Button onClick={google} variant="outline" size="lg" disabled={loading !== null} className="w-full">
-        <GoogleLogo /> {loading === 'google' ? 'Conectando…' : 'Continuar con Google'}
-      </Button>
-      <div className="flex items-center gap-3 text-xs text-soi-muted"><span className="h-px flex-1 bg-black/10" />o con tu correo<span className="h-px flex-1 bg-black/10" /></div>
+      {inApp ? (
+        <InAppNotice app={inApp} ua={ua} />
+      ) : (
+        <>
+          <Button onClick={google} variant="outline" size="lg" disabled={loading !== null} className="w-full">
+            <GoogleLogo /> {loading === 'google' ? 'Conectando…' : 'Continuar con Google'}
+          </Button>
+          <div className="flex items-center gap-3 text-xs text-soi-muted"><span className="h-px flex-1 bg-black/10" />o con tu correo<span className="h-px flex-1 bg-black/10" /></div>
+        </>
+      )}
       {sent ? (
-        <p role="status" className="rounded-[14px] bg-soi-gold/10 p-4 text-center">Te enviamos un enlace a <strong>{email}</strong>. Revisa tu bandeja ✨</p>
+        <p role="status" className="rounded-[14px] bg-soi-gold/10 p-4 text-center">Te enviamos un enlace a <strong>{email}</strong>. Revisa tu bandeja ✨{inApp && <><br /><span className="text-sm text-soi-muted">Ábrelo desde tu correo: funciona en cualquier navegador.</span></>}</p>
       ) : (
         <form onSubmit={magic} className="flex flex-col gap-3">
           <div>

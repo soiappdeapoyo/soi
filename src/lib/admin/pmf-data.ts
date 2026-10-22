@@ -126,6 +126,7 @@ export async function pmfSnapshot(days: number): Promise<PmfSnapshot> {
     funnel: funnel ? {
       visitors: funnel.visitors, landing: step('landing_view'), wanted: step('wanted'), authStart: step('auth_start'), signup: step('signup'),
       abandonedAfterAuth: funnel.abandonedAfterAuth, referrers: funnel.referrers,
+      authMethods: funnel.authMethods, authErrors: funnel.authErrors, crossBrowser: funnel.crossBrowser,
     } : null,
     landingChat: chat ? {
       wrote: cstep('wrote'), designed: cstep('designed'), started: cstep('started'), claimed: cstep('claimed'),

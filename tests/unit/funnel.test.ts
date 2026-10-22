@@ -96,3 +96,24 @@ describe('chat de la landing', () => {
     expect(analyzeFunnel(rows).visitors).toBe(3);
   });
 });
+
+describe('entrar por método y navegador', () => {
+  it('separa por método y navegador, une el registro aunque el enlace se abra en otro navegador y cuenta los errores', () => {
+    const rows: FunnelRow[] = [
+      row('v1', 'auth_start', { detail: 'google:tiktok' }),
+      row('v2', 'auth_start', { detail: 'correo:tiktok' }),
+      row('v2', 'signup', { detail: 'email:otro_navegador', user_id: 'u2' }),
+      row('v3', 'auth_start', { detail: 'google' }),
+      row('v3', 'login', { detail: 'google' }),
+      row('v4', 'login_view', { detail: 'tras_error:interrupted:navegador' }),
+    ];
+    const f = analyzeFunnel(rows);
+    expect(f.authMethods).toEqual(expect.arrayContaining([
+      { method: 'google', browser: 'tiktok', started: 1, finished: 0 },
+      { method: 'correo', browser: 'tiktok', started: 1, finished: 1 },
+      { method: 'google', browser: 'sin medir', started: 1, finished: 1 },
+    ]));
+    expect(f.crossBrowser).toBe(1);
+    expect(f.authErrors).toEqual([{ reason: 'interrupted', n: 1 }]);
+  });
+});
