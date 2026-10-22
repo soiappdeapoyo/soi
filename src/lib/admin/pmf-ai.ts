@@ -28,7 +28,7 @@ Principios que no se rompen: sin culpa ni castigo, la crisis siempre tiene prior
 Mapa de la app:${APP_MAP}
 
 Reglas:
-- No inventes datos. Usa solo las cifras dadas. Si una muestra es pequeña, dilo y baja la confianza.
+- No inventes datos. Usa solo las cifras y ejemplos dados. Nunca cites un ejemplo completo: resume el patrón. Si una muestra es pequeña, dilo y baja la confianza.
 - Puedes discrepar de las reglas: di en qué y por qué.
 - Español neutro, directo, sin relleno. Formato Markdown.
 
@@ -36,6 +36,7 @@ Estructura obligatoria:
 # Lectura de PMF de SOI (IA)
 ## Diagnóstico — tu veredicto (Pre-PMF / En camino / PMF) y confianza (alta, media, baja), en 3–5 frases.
 ## Lo que las reglas no ven — cruces entre métricas, contradicciones y lo que falta medir.
+## Conversaciones — qué patrón hay en lo que no les sirvió (lee los ejemplos: qué dijo SOI antes y qué respondió la persona), qué agente o comportamiento lo causa y qué cambiar en el prompt o en el flujo. Descarta falsos positivos (p. ej. «no me sirve» hablando de otra cosa de su vida).
 ## Cuello de botella e hipótesis — el eslabón que más frena y 2–3 hipótesis de por qué, cada una con el supuesto a validar.
 ## Recomendaciones priorizadas — tabla: # | Cambio en la app | Dónde (archivos del mapa) | Métrica que debe moverse | ICE (1–10 cada uno).
 ## Experimentos — 2–3 experimentos de 1–2 semanas con éxito definido.
@@ -43,6 +44,10 @@ Estructura obligatoria:
 ## Tareas para Claude Code — lista numerada de tareas concretas y acotadas, cada una con archivos a tocar y criterio de terminado, lista para pegar en Claude Code en el repo de SOI.`;
 
 export async function aiPmfReading(rulesText: string, snapshot: PmfSnapshot | null): Promise<{ text: string; provider: ProviderName }> {
-  const prompt = `Análisis por reglas:\n\n${rulesText}\n\nFoto de los datos (JSON, solo cifras agregadas):\n${JSON.stringify(snapshot ?? {}, null, 1)}`;
+  // Sin referencias a cuentas o conversaciones: la IA solo ve cifras y los ejemplos recortados.
+  const safe = snapshot?.conversations
+    ? { ...snapshot, conversations: { ...snapshot.conversations, examples: snapshot.conversations.examples.map((e) => ({ ...e, ref: undefined })) } }
+    : snapshot;
+  const prompt = `Análisis por reglas:\n\n${rulesText}\n\nFoto de los datos (JSON, cifras agregadas y ejemplos recortados de conversaciones):\n${JSON.stringify(safe ?? {}, null, 1)}`;
   return textWithFallback({ instructions: INSTRUCTIONS, prompt, timeoutMs: 100_000 });
 }

@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/admin/auth';
 import { analysisHistory, currentRulesAnalysis, savedAnalysis } from '@/lib/admin/pmf-data';
 import { analyzePmf, STAGE_LABEL, type Level, type PmfAnalysis } from '@/lib/admin/pmf';
 import { AiReadings, AnalysisBox } from '@/components/admin/pmf-panel';
+import { COMPLAINTS, type ConversationInsights } from '@/lib/admin/conversation-signals';
 import { cn } from '@/lib/utils';
 
 export const maxDuration = 60;
@@ -43,6 +44,62 @@ function Signals({ a }: { a: PmfAnalysis }) {
   );
 }
 
+function Conversations({ c }: { c: ConversationInsights }) {
+  if (!c.conversations) return <p className="text-sm text-soi-muted">Sin conversaciones en el periodo.</p>;
+  const label = (id: string) => COMPLAINTS.find((k) => k.id === id)?.label ?? id;
+  return (
+    <div className="flex flex-col gap-5">
+      <dl className="nums grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { k: 'Conversaciones', v: c.conversations },
+          { k: 'Con alguna queja', v: c.withComplaint },
+          { k: 'Se fueron tras quejarse', v: c.leftAfter },
+          { k: 'Un solo mensaje suyo', v: c.oneMessage },
+        ].map((t) => (
+          <div key={t.k} className="rounded-[14px] bg-soi-sidebar p-3">
+            <dt className="text-xs text-soi-muted">{t.k}</dt>
+            <dd className="mt-1 text-xl font-semibold">{t.v}</dd>
+          </div>
+        ))}
+      </dl>
+      {c.byCategory.length > 0 && (
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <h3 className="mb-2 text-sm font-medium text-soi-muted">Quejas por tipo</h3>
+            <ul className="flex flex-col gap-1 text-sm">
+              {c.byCategory.map((x) => <li key={x.id} className="flex justify-between gap-3"><span>{x.label}</span><span className="nums font-medium">{x.count}</span></li>)}
+            </ul>
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-medium text-soi-muted">Por agente (con queja / total)</h3>
+            <ul className="flex flex-col gap-1 text-sm">
+              {c.byAgent.slice(0, 10).map((a) => <li key={a.agent} className="flex justify-between gap-3"><span>{a.agent}</span><span className="nums font-medium">{a.withComplaint}/{a.conversations}</span></li>)}
+            </ul>
+          </div>
+        </div>
+      )}
+      {c.examples.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-medium text-soi-muted">Ejemplos (recortados; abrir la conversación queda en la auditoría)</h3>
+          <ul className="flex flex-col divide-y divide-black/[0.06]">
+            {c.examples.map((e, i) => (
+              <li key={i} className="flex flex-col gap-1 py-3 text-sm">
+                <p className="text-xs text-soi-muted">
+                  {label(e.category)} · {e.agent ?? '—'}{e.provider ? ` · ${e.provider}` : ''} · mensaje {e.position}{e.leftAfter ? ' · se fue después' : ''}
+                  {' · '}<Link href={`/panel/usuarios/${e.ref.user}/c/${e.ref.conversation}`} className="underline">Abrir conversación</Link>
+                </p>
+                {e.before && <p className="text-soi-muted"><span className="font-medium text-soi-ink">SOI{e.tools.length ? ` (${e.tools.join(', ')})` : ''}:</span> {e.before}</p>}
+                <p><span className="font-medium">La persona:</span> {e.said}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {c.crisisExcluded > 0 && <p className="text-xs text-soi-muted">{c.crisisExcluded} conversaciones con señales de crisis no se analizan.</p>}
+    </div>
+  );
+}
+
 /**
  * Analytics IA: ¿SOI tiene product-market fit? Primero el análisis por reglas con los datos de todo el panel
  * (se guarda solo si cambió) y, con un botón, la lectura de la IA. Todo queda en el historial y se copia para Claude Code.
@@ -60,6 +117,7 @@ export default async function PanelAnalyticsAI({ searchParams }: { searchParams:
   const analysis = saved?.rules.snapshot ? analyzePmf(saved.rules.snapshot) : live?.analysis ?? null;
   const text = saved?.rules.content ?? live?.saved?.content ?? live?.analysis.text ?? '';
   const shownDays = saved?.rules.period_days ?? days;
+  const conversations = (saved?.rules.snapshot ?? live?.snapshot)?.conversations ?? null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -114,6 +172,10 @@ export default async function PanelAnalyticsAI({ searchParams }: { searchParams:
       <Card title="1. Análisis por reglas" hint="Señales de PMF con referencias de apps de suscripción de bienestar (orientativas). Se guarda automáticamente cuando los datos cambian.">
         {analysis && <Signals a={analysis} />}
         <div className="mt-5"><AnalysisBox id="pmf-rules" label="Resultado por reglas" text={text} /></div>
+      </Card>
+
+      <Card title="Conversaciones: lo que no les sirvió" hint="Mensajes de la persona que dicen que SOI no le ayudó, no la entendió, fue repetitiva, larga o genérica, y lo que SOI dijo justo antes. Entra en el análisis por reglas y en el de la IA.">
+        {conversations ? <Conversations c={conversations} /> : <p className="text-sm text-soi-muted">Este análisis guardado es anterior al análisis de conversaciones.</p>}
       </Card>
 
       <Card title="2. Análisis con IA" hint="La IA lee el resultado de las reglas y la foto de los datos, discrepa si hace falta y propone tareas concretas para Claude Code.">

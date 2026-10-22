@@ -6,6 +6,7 @@ import { adminEmails } from '@/lib/admin/notify';
 import { analyzeChat, analyzeFunnel } from '@/lib/analytics/funnel';
 import { analyzeFlows, buildSessions } from '@/lib/analytics/nav';
 import { analyzePmf, pmfFingerprint, type PmfAnalysis, type PmfSnapshot } from '@/lib/admin/pmf';
+import { analyzeConversations, complaintHits, type PrevReply, type UserMsg } from '@/lib/admin/conversation-signals';
 
 /** Datos de /panel/analyticsAI (service role). Solo se llaman tras comprobar que quien pide es administrador. */
 const DAY = 86_400_000;
@@ -22,6 +23,31 @@ async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ dat
     if (!data || data.length < 1000) break;
   }
   return rows;
+}
+
+/** Nombres de las herramientas que usó una respuesta (tool_calls del AI SDK). */
+const toolNames = (calls: unknown): string[] =>
+  Array.isArray(calls) ? [...new Set(calls.map((c) => (c as { toolName?: string; name?: string })?.toolName ?? (c as { name?: string })?.name).filter((n): n is string => Boolean(n)))] : [];
+
+/**
+ * Lo que no les sirvió en el chat: los mensajes de la persona del periodo y, para cada queja, la respuesta de SOI
+ * justo antes (hasta 150 quejas, las más recientes).
+ */
+async function loadConversationInsights(days: number, excluded: Set<string>) {
+  const a = createAdminClient();
+  const msgs = (await fetchAll<UserMsg>((f, t) => a.from('messages').select('id, conversation_id, user_id, content, created_at, agent_category')
+    .eq('role', 'user').gte('created_at', since(days)).order('created_at').range(f, t), 30_000)).filter((m) => !excluded.has(m.user_id));
+  const hits = complaintHits(msgs).slice(-150);
+  const prev = new Map<string, PrevReply>();
+  for (let i = 0; i < hits.length; i += 15) {
+    await Promise.all(hits.slice(i, i + 15).map(async ({ msg }) => {
+      const { data } = await a.from('messages').select('content, agent_category, provider, tool_calls')
+        .eq('conversation_id', msg.conversation_id).eq('role', 'assistant').lt('created_at', msg.created_at)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (data) prev.set(msg.id, { content: String(data.content ?? ''), agent: (data.agent_category as string | null) ?? null, provider: (data.provider as string | null) ?? null, tools: toolNames(data.tool_calls) });
+    }));
+  }
+  return analyzeConversations(msgs, prev);
 }
 
 /** La foto de los datos de todo el panel para el periodo: cuentas, resultados, embudo, chat de la landing, navegación, Moments y uso. */
@@ -86,6 +112,7 @@ export async function pmfSnapshot(days: number): Promise<PmfSnapshot> {
   const step = (id: string) => funnel?.steps.find((x) => x.id === id)?.count ?? 0;
   const cstep = (id: string) => chat?.steps.find((x) => x.id === id)?.count ?? 0;
   const flows = nav.error ? null : analyzeFlows(buildSessions(nav.events.filter((e) => !e.user_id || !excluded.has(e.user_id))));
+  const conversations = await loadConversationInsights(days, excluded).catch(() => undefined);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -118,6 +145,7 @@ export async function pmfSnapshot(days: number): Promise<PmfSnapshot> {
     },
     engagement: { mau, avgDau, activeInPeriod: activeInPeriod.size, messages: userMsgs.filter((x) => Date.parse(x.created_at) >= periodStart).length },
     ai: { tokens: inPeriod.reduce((s, x) => s + (x.tokens_used ?? 0), 0), crisis: crisis.count ?? 0, providers: [...providers.entries()].sort((x, y) => y[1] - x[1]) },
+    conversations,
   };
 }
 
@@ -132,20 +160,20 @@ const COLS = 'id, kind, parent_id, period_days, verdict, score, content, provide
  * Análisis por reglas del periodo con los datos de ahora. Se guarda solo si cambió respecto al último guardado
  * del mismo periodo (misma huella = mismo análisis): así cada visita no llena el historial.
  */
-export async function currentRulesAnalysis(days: number, adminId: string): Promise<{ saved: SavedAnalysis | null; analysis: PmfAnalysis; error: string | null }> {
+export async function currentRulesAnalysis(days: number, adminId: string): Promise<{ saved: SavedAnalysis | null; analysis: PmfAnalysis; snapshot: PmfSnapshot; error: string | null }> {
   const snapshot = await pmfSnapshot(days);
   const analysis = analyzePmf(snapshot);
   const fingerprint = pmfFingerprint(analysis, days);
   const a = createAdminClient();
   const { data: last, error: readError } = await a.from('admin_analyses').select(`${COLS}, fingerprint`)
     .eq('kind', 'rules').eq('period_days', days).order('created_at', { ascending: false }).limit(1).maybeSingle();
-  if (readError) return { saved: null, analysis, error: readError.message };
-  if (last && last.fingerprint === fingerprint) return { saved: last as SavedAnalysis, analysis, error: null };
+  if (readError) return { saved: null, analysis, snapshot, error: readError.message };
+  if (last && last.fingerprint === fingerprint) return { saved: last as SavedAnalysis, analysis, snapshot, error: null };
   const { data, error } = await a.from('admin_analyses').insert({
     kind: 'rules', period_days: days, verdict: analysis.verdict, score: analysis.score, fingerprint,
     snapshot, content: analysis.text, created_by: adminId,
   }).select(COLS).single();
-  return { saved: (data as SavedAnalysis | null) ?? null, analysis, error: error?.message ?? null };
+  return { saved: (data as SavedAnalysis | null) ?? null, analysis, snapshot, error: error?.message ?? null };
 }
 
 /** Un análisis guardado (con su foto de datos) y las lecturas de la IA que tiene. */

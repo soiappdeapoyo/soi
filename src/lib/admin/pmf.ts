@@ -11,6 +11,8 @@
  * Referencias de apps de consumo por suscripción (salud y bienestar). Son orientativas, no metas.
  */
 
+import { COMPLAINTS, type ConversationInsights } from '@/lib/admin/conversation-signals';
+
 export type Level = 'fuerte' | 'medio' | 'debil' | 'sin_datos';
 export type Stage = 'valor' | 'activacion' | 'retencion' | 'habito' | 'adquisicion' | 'monetizacion' | 'experiencia';
 
@@ -48,6 +50,8 @@ export type PmfSnapshot = {
   moments: { started: number; completed: number; answered: number; helped: number; moodPairs: number; moodDelta: number | null; completers: number; repeatCompleters: number };
   engagement: { mau: number; avgDau: number; activeInPeriod: number; messages: number };
   ai: { tokens: number; crisis: number; providers: [string, number][] };
+  /** Lo que no les sirvió en el chat (los análisis guardados antes de esto no lo tienen). */
+  conversations?: ConversationInsights;
 };
 
 export type PmfAnalysis = { verdict: string; score: number | null; bottleneck: Stage | null; signals: Signal[]; text: string };
@@ -97,6 +101,28 @@ export function pmfSignals(s: PmfSnapshot): Signal[] {
     'Moments más cortos o ajustados a su tiempo (polishMoment), retomar donde lo dejó (src/lib/moments/progress.ts) y revisar el reproductor (src/components/moments/moment-player.tsx).'));
   out.push(rateSignal('transformation', 'valor', 'Mejoró 1+ punto en un área de enfoque (mapa de 30+ días)', o.transformation.improved, 50, 30,
     'Llevar más personas al chequeo mensual y a la revisión semanal (src/lib/life-map.ts, /mapa/semana) y conectar su plan de 90 días con Mi día (src/lib/life-plan.ts).', 5));
+
+  // Valor en el chat: conversaciones donde la persona dijo que no le sirvió, que no la entendió, etc.
+  const cv = s.conversations;
+  if (cv) {
+    const clean = cv.conversations ? ((cv.conversations - cv.withComplaint) / cv.conversations) * 100 : null;
+    const top = cv.byCategory[0];
+    out.push({
+      id: 'chat_ok', stage: 'valor', label: 'Conversaciones sin queja («no me sirve», «no me entiendes», «muy largo»…)',
+      value: cv.conversations ? `${fmtPct(clean)} (${cv.withComplaint} de ${cv.conversations} con queja)` : '—',
+      level: levelFor(clean, 95, 88, cv.conversations), benchmark: 'fuerte ≥ 95 %, medio ≥ 88 %',
+      sample: cv.conversations, lowConfidence: cv.conversations < LOW_CONFIDENCE,
+      fix: top ? `La queja más común es «${top.label.toLowerCase()}»: ${COMPLAINTS.find((c) => c.id === top.id)!.fix}` : 'Seguir midiendo.',
+    });
+    const answered = cv.conversations ? ((cv.conversations - cv.oneMessage) / cv.conversations) * 100 : null;
+    out.push({
+      id: 'chat_depth', stage: 'activacion', label: 'Conversaciones en las que la persona siguió después de la primera respuesta',
+      value: cv.conversations ? `${fmtPct(answered)} (promedio ${cv.avgUserMessages} mensajes suyos)` : '—',
+      level: levelFor(answered, 60, 40, cv.conversations), benchmark: 'fuerte ≥ 60 %, medio ≥ 40 %',
+      sample: cv.conversations, lowConfidence: cv.conversations < LOW_CONFIDENCE,
+      fix: 'La primera respuesta decide si sigue: validar y hacer una sola pregunta (src/lib/ai/proposal-gate.ts modo listen, src/lib/ai/prompts/template.ts).',
+    });
+  }
 
   // Activación: el momento ajá es vivir su primer Moment.
   out.push(rateSignal('wrote_first', 'activacion', 'Escribió en el chat en sus primeros 7 días', o.wroteFirst, 60, 40,
@@ -217,6 +243,7 @@ function renderText(s: PmfSnapshot, a: Omit<PmfAnalysis, 'text'>): string {
   if (s.nav) L.push(`- Navegación: ${s.nav.sessions} sesiones, ${s.nav.pagesPerSession.toFixed(1)} pantallas por sesión, rebote ${Math.round(s.nav.bounceRate * 100)} %.${s.nav.frictions.length ? ` Fricciones: ${s.nav.frictions.slice(0, 5).map((f) => `${f.path} (${f.detail})`).join('; ')}.` : ''}`);
   L.push(`- IA: ${s.ai.tokens} tokens en el periodo; señales de crisis: ${s.ai.crisis}.`);
   L.push('');
+  if (s.conversations) L.push(...conversationSection(s.conversations));
 
   const todo = a.signals.filter((x) => x.level === 'debil' || x.level === 'medio')
     .sort((x, y) => BOTTLENECK_ORDER.indexOf(x.stage) - BOTTLENECK_ORDER.indexOf(y.stage) || (x.level === 'debil' ? -1 : 1) - (y.level === 'debil' ? -1 : 1));
@@ -229,6 +256,33 @@ function renderText(s: PmfSnapshot, a: Omit<PmfAnalysis, 'text'>): string {
     L.push(`Sin datos suficientes (menos de ${MIN_SAMPLE} casos): ${missing.map((x) => x.label.toLowerCase()).join('; ')}.`);
   }
   return L.join('\n');
+}
+
+/** Lo que no les sirvió en el chat: categorías, agentes, si se fueron y ejemplos (sin identificar a nadie). */
+function conversationSection(c: ConversationInsights): string[] {
+  const L: string[] = ['## Conversaciones: lo que no les sirvió'];
+  if (!c.conversations) return [...L, '- Sin conversaciones en el periodo.', ''];
+  L.push(`- ${c.conversations} conversaciones analizadas (${c.crisisExcluded} con señales de crisis quedaron fuera); ${c.withComplaint} con al menos una queja (${c.complaints} quejas en total); en ${c.leftAfter} la persona se fue justo después de quejarse.`);
+  L.push(`- ${c.oneMessage} conversaciones con un solo mensaje de la persona; promedio ${c.avgUserMessages} mensajes suyos por conversación.`);
+  if (c.byCategory.length) L.push(`- Quejas por tipo: ${c.byCategory.map((x) => `${x.label} (${x.count})`).join('; ')}.`);
+  const agents = c.byAgent.filter((a) => a.withComplaint);
+  if (agents.length) L.push(`- Por agente (con queja / total): ${agents.map((a) => `${a.agent} ${a.withComplaint}/${a.conversations}`).join(', ')}.`);
+  if (c.byProvider.length) L.push(`- Proveedor de la respuesta anterior a la queja: ${c.byProvider.map((p) => `${p.provider} (${p.complaints})`).join(', ')}.`);
+  if (c.byCategory.length) {
+    L.push('- Qué ajustar por tipo de queja:');
+    for (const x of c.byCategory) L.push(`  - ${x.label}: ${COMPLAINTS.find((k) => k.id === x.id)!.fix}`);
+  }
+  if (c.examples.length) {
+    L.push('', '### Ejemplos (recortados, sin datos de contacto)');
+    c.examples.forEach((e, i) => {
+      const label = COMPLAINTS.find((k) => k.id === e.category)!.label;
+      L.push(`${i + 1}. [${label} · agente ${e.agent ?? '—'}${e.provider ? ` · ${e.provider}` : ''} · mensaje ${e.position}${e.leftAfter ? ' · se fue después' : ''}]`);
+      if (e.before) L.push(`   SOI antes${e.tools.length ? ` (usó ${e.tools.join(', ')})` : ''}: «${e.before}»`);
+      L.push(`   La persona: «${e.said}»`);
+    });
+  }
+  L.push('');
+  return L;
 }
 
 /** Huella del análisis (sin la fecha): si los datos no cambiaron, no se guarda otra vez. */

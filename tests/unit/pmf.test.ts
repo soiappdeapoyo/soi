@@ -70,6 +70,24 @@ describe('análisis de PMF por reglas', () => {
     expect(a.verdict).toMatch(/\(provisional\)$/);
   });
 
+  it('las quejas del chat entran como señal de valor y con su sección y ejemplos', () => {
+    const a = analyzePmf(snap({
+      conversations: {
+        conversations: 100, withComplaint: 20, complaints: 25, leftAfter: 9, oneMessage: 30, avgUserMessages: 4.1, crisisExcluded: 2,
+        byCategory: [{ id: 'largo', label: 'Respuestas demasiado largas', count: 15 }],
+        byAgent: [{ agent: 'calma', conversations: 40, withComplaint: 12 }], byProvider: [{ provider: 'deepseek', complaints: 20 }],
+        examples: [{ category: 'largo', said: 'muy largo', before: 'Texto larguísimo…', agent: 'calma', provider: 'deepseek', tools: [], position: 2, leftAfter: true, ref: { user: 'u-secreto', conversation: 'c-secreto' } }],
+      },
+    }));
+    const chat = a.signals.find((s) => s.id === 'chat_ok')!;
+    expect(chat.level).toBe('debil');
+    expect(chat.fix).toContain('respuestas demasiado largas');
+    expect(a.bottleneck).toBe('valor');
+    expect(a.text).toContain('## Conversaciones: lo que no les sirvió');
+    expect(a.text).toContain('La persona: «muy largo»');
+    expect(a.text).not.toContain('u-secreto');
+  });
+
   it('la huella no depende de la fecha pero sí de los datos', () => {
     const a = analyzePmf(snap());
     const b = analyzePmf(snap({ generatedAt: '2026-10-23T09:00:00Z' }));
