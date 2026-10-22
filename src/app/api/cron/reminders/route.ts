@@ -5,6 +5,7 @@ import { nextStep } from '@/lib/journey';
 import { evaluateAccess, type AccessProfile } from '@/lib/billing/access-rules';
 import { DEFAULT_REMINDER_TIME, dueReminders, inWindow, localMinutesIn, scheduledDue, toMinutes } from '@/lib/reminders';
 import { sendPushResult } from '@/lib/push/send';
+import { firstName, reminderSpeech } from '@/lib/voice/greeting';
 import { startOfTodayISO, todayISO } from '@/lib/utils';
 import type { PushSubscription } from 'web-push';
 import { reviewWeek } from '@/lib/life-plan';
@@ -13,7 +14,7 @@ import { loadOsToday } from '@/lib/life-plan-server';
 export const maxDuration = 60;
 
 type Row = AccessProfile & {
-  user_id: string; timezone: string | null; reminder_time: string | null; streak_current: number | null;
+  user_id: string; display_name: string | null; timezone: string | null; reminder_time: string | null; streak_current: number | null;
   push_subscription: PushSubscription;
 };
 
@@ -28,7 +29,7 @@ export async function GET(req: Request) {
   const db = createAdminClient();
   const now = new Date();
   const { data: profiles, error } = await db.from('user_profiles')
-    .select('user_id, timezone, reminder_time, streak_current, push_subscription, plan, trial_ends_at, free_queries_remaining, is_paywalled')
+    .select('user_id, display_name, timezone, reminder_time, streak_current, push_subscription, plan, trial_ends_at, free_queries_remaining, is_paywalled')
     .eq('reminders_enabled', true).not('push_subscription', 'is', null).limit(2000);
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
@@ -80,7 +81,8 @@ export async function GET(req: Request) {
           .select('id');
         if (!claimed?.length) continue;
         const url = `${n.url}${n.url.includes('?') ? '&' : '?'}from=push`;
-        const result = await sendPushResult(p.push_subscription, { title: n.title, body: n.body, url, tag: `soi-${n.kind}-${n.ref}`, alarm: n.alarm });
+        const speech = reminderSpeech({ name: firstName(p.display_name), kind: n.kind, title: n.title, body: n.body, localMinutes: local });
+        const result = await sendPushResult(p.push_subscription, { title: n.title, body: n.body, url, tag: `soi-${n.kind}-${n.ref}`, alarm: n.alarm, speech });
         if (result === 'sent') sent++;
         if (result === 'gone') {
           // El teléfono ya no acepta avisos (desinstaló o revocó el permiso): se deja de intentar.

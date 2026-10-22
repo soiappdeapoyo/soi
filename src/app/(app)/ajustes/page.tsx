@@ -28,7 +28,7 @@ export default async function AjustesPage() {
         <TimezoneField country={profile?.country ?? null} timezone={profile?.timezone ?? null} auto={profile?.timezone_auto ?? true} />
       </section>
       <section className="mb-6 rounded-[20px] bg-white p-5 shadow-soft">
-        <ReturnSetup variant="settings" pushOn={Boolean(profile?.push_subscription) && (profile?.reminders_enabled ?? true)} reminderTime={profile?.reminder_time ?? null} where="ajustes" />
+        <ReturnSetup variant="settings" pushOn={Boolean(profile?.push_subscription) && (profile?.reminders_enabled ?? true)} reminderTime={profile?.reminder_time ?? null} where="ajustes" name={profile?.display_name ?? null} />
       </section>
       <SettingsForm
         ttsEnabled={profile?.tts_enabled ?? true}

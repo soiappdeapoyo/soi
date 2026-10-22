@@ -17,6 +17,8 @@ export type PushPayload = {
   tag?: string;
   /** Alarma: vibra más y se queda en pantalla hasta que la persona la toca. */
   alarm?: boolean;
+  /** Lo que SOI dice en voz alta en lugar de una alarma (src/lib/voice/greeting.ts). */
+  speech?: string;
 };
 
 /** 'sent' | 'gone' (la suscripción ya no existe: hay que borrarla) | 'failed' (reintentar otro día) | 'disabled' (sin claves). */

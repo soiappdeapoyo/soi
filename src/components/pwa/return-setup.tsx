@@ -8,7 +8,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { track } from '@/components/providers/analytics';
 import { canPromptInstall, isIOS, isStandalone, promptInstall, subscribeInstall } from '@/lib/pwa/platform';
 import { ENABLE_MESSAGE, disablePush, enablePush, pushAvailability, saveReminderTime } from '@/lib/push/client';
-import { playChime, setSoundEnabled, soundEnabled } from '@/lib/push/chime';
+import { setSoundEnabled, soundEnabled } from '@/lib/push/chime';
+import { playWake, primeWakeAudio } from '@/lib/voice/wake';
+import { firstName, reminderSpeech } from '@/lib/voice/greeting';
 import { DEFAULT_REMINDER_TIME } from '@/lib/reminders';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +24,8 @@ type Props = {
   /** card: invitación que se oculta sola cuando ya está todo listo (Hoy, final del Moment). settings: Ajustes. */
   variant?: 'card' | 'settings';
   where: string;
+  /** Su nombre, para que «Probar voz» la llame como en los avisos. */
+  name?: string | null;
 };
 
 /**
@@ -29,7 +33,13 @@ type Props = {
  * automática (los navegadores no lo permiten): Android la ofrece con un toque y en iPhone se explica cómo. En iPhone
  * los avisos solo existen con SOI instalada, por eso el orden.
  */
-export function ReturnSetup({ pushOn, reminderTime, variant = 'card', where }: Props) {
+export function ReturnSetup({ pushOn, reminderTime, variant = 'card', where, name = null }: Props) {
+  /** Ejemplo del saludo de la mañana con su nombre (síncrono en el toque: desbloquea el audio en iOS). */
+  const tryVoice = () => {
+    primeWakeAudio();
+    const now = new Date();
+    void playWake(reminderSpeech({ name: firstName(name), kind: 'nudge', title: 'Un momento para ti', body: '¿Cómo llegas hoy? Cuéntaselo a SOI.', localMinutes: now.getHours() * 60 + now.getMinutes() }));
+  };
   const [ready, setReady] = useState(false);
   const [standalone, setStandalone] = useState(false);
   const [ios, setIos] = useState(false);
@@ -150,11 +160,11 @@ export function ReturnSetup({ pushOn, reminderTime, variant = 'card', where }: P
         </ol>
         {variant === 'settings' && (
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-black/5 pt-4">
-            <Button size="sm" variant="outline" onClick={() => { const v = !sound; setSound(v); setSoundEnabled(v); if (v) void playChime(1); }} aria-pressed={sound}>
-              {sound ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />} Sonido de alarma: {sound ? 'activado' : 'apagado'}
+            <Button size="sm" variant="outline" onClick={() => { const v = !sound; setSound(v); setSoundEnabled(v); if (v) tryVoice(); }} aria-pressed={sound}>
+              {sound ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />} Voz de SOI en tus avisos: {sound ? 'activada' : 'apagada'}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => void playChime()}>Probar sonido</Button>
-            <p className="w-full text-xs text-soi-muted">El sonido suena con SOI abierta. Con SOI cerrada, el aviso usa el sonido y la vibración de tu teléfono; los de tus Moments se quedan en pantalla hasta que los tocas.</p>
+            <Button size="sm" variant="ghost" onClick={tryVoice}>Probar voz</Button>
+            <p className="w-full text-xs text-soi-muted">En lugar de una alarma, SOI te llama por tu nombre con su voz, suave y de menos a más. Suena con SOI abierta o al tocar el aviso; con SOI cerrada, el aviso usa la vibración y el sonido de tu teléfono.</p>
           </div>
         )}
         {variant === 'card' && <button type="button" onClick={dismiss} className="press mt-3 text-sm text-soi-muted">Ahora no</button>}

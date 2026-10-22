@@ -23,6 +23,7 @@ export const VOICE_STYLES = {
   calm: 'Eres una guía de meditación en español latinoamericano neutro. Habla despacio, en voz baja y suave, con un flujo continuo y pausas breves y naturales en los puntos, sin silencios largos. Transmite calma y seguridad.',
   breath: 'Guía de respiración en español latinoamericano. Di solo la palabra, alargando las vocales, muy suave, acompañando el ritmo de la respiración, sin silencio antes ni después.',
   energy: 'Eres una entrenadora amable que habla español latinoamericano neutro. Voz clara, con energía positiva y motivadora, ritmo ágil pero sin gritar. Celebra el esfuerzo.',
+  wake: 'Eres SOI y despiertas con cariño a alguien que quieres, en español latinoamericano neutro. Empieza casi en un susurro al decir su nombre, despacio y con ternura; luego, al saludar, tu voz se vuelve cálida, luminosa y tranquila. Nunca suenes a alarma, a anuncio ni con prisa.',
   chat: 'Eres SOI, una compañera que habla español latinoamericano neutro. Tono conversacional, cálido y natural, como una amiga que acompaña.',
 } as const;
 export type VoiceStyle = keyof typeof VOICE_STYLES;
