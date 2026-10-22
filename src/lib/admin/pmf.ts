@@ -44,13 +44,7 @@ export type PmfSnapshot = {
     activation: RateIn; wroteFirst: RateIn; d1: RateIn; d7: RateIn; d30: RateIn;
     transformation: { measured: number; improved: RateIn; avgChange: number | null };
   };
-  funnel: {
-    visitors: number; landing: number; wanted: number; authStart: number; signup: number; abandonedAfterAuth: number; referrers: { host: string; n: number }[];
-    /** Por método y navegador (los análisis guardados antes no lo tienen). */
-    authMethods?: { method: string; browser: string; started: number; finished: number }[];
-    authErrors?: { reason: string; n: number }[];
-    crossBrowser?: number;
-  } | null;
+  funnel: { visitors: number; landing: number; wanted: number; authStart: number; signup: number; abandonedAfterAuth: number; referrers: { host: string; n: number }[] } | null;
   landingChat: { wrote: number; designed: number; started: number; claimed: number; lived: number; errors: { kind: string; count: number }[] } | null;
   nav: { sessions: number; users: number; pagesPerSession: number; medianSessionMs: number | null; bounceRate: number; frictions: { kind: string; path: string; detail: string }[] } | null;
   moments: { started: number; completed: number; answered: number; helped: number; moodPairs: number; moodDelta: number | null; completers: number; repeatCompleters: number };
@@ -245,7 +239,6 @@ function renderText(s: PmfSnapshot, a: Omit<PmfAnalysis, 'text'>): string {
   const nsm = s.engagement.activeInPeriod ? (s.moments.helped / s.engagement.activeInPeriod) / (s.days / 7) : null;
   L.push(`- North Star propuesta (Moments que ayudaron por persona activa a la semana): ${nsm === null ? '—' : nsm.toFixed(2)}.`);
   if (s.funnel) L.push(`- Landing: ${s.funnel.landing} visitantes → ${s.funnel.wanted} quisieron entrar → ${s.funnel.authStart} empezaron → ${s.funnel.signup} se registraron. Fuentes: ${s.funnel.referrers.slice(0, 5).map((r) => `${r.host} (${r.n})`).join(', ') || '—'}.`);
-  if (s.funnel?.authMethods?.length) L.push(`- Entrar por método y navegador (empezaron → entraron): ${s.funnel.authMethods.map((m) => `${m.method}/${m.browser} ${m.started}→${m.finished}`).join(', ')}.${s.funnel.crossBrowser ? ` Entradas con el enlace abierto en otro navegador: ${s.funnel.crossBrowser}.` : ''}${s.funnel.authErrors?.length ? ` Errores al volver a /login: ${s.funnel.authErrors.map((e) => `${e.reason} (${e.n})`).join(', ')}.` : ''}`);
   if (s.landingChat) L.push(`- Chat de la landing: ${s.landingChat.wrote} escribieron → ${s.landingChat.designed} Moments diseñados → ${s.landingChat.started} Comenzar → ${s.landingChat.claimed} guardados → ${s.landingChat.lived} vividos.${s.landingChat.errors.length ? ` Errores: ${s.landingChat.errors.map((e) => `${e.kind} ${e.count}`).join(', ')}.` : ''}`);
   if (s.nav) L.push(`- Navegación: ${s.nav.sessions} sesiones, ${s.nav.pagesPerSession.toFixed(1)} pantallas por sesión, rebote ${Math.round(s.nav.bounceRate * 100)} %.${s.nav.frictions.length ? ` Fricciones: ${s.nav.frictions.slice(0, 5).map((f) => `${f.path} (${f.detail})`).join('; ')}.` : ''}`);
   L.push(`- IA: ${s.ai.tokens} tokens en el periodo; señales de crisis: ${s.ai.crisis}.`);

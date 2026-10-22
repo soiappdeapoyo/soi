@@ -36,7 +36,7 @@ export function AuthorPicker({ offers, where, tone = 'dark' }: { offers: Landing
     <ul className="flex flex-col gap-2.5">
       {list.map((o) => (
         <li key={o.key}>
-          <Cta href={o.href} where={`${where}:${o.key}`} ariaLabel={`${o.title}: ${o.promise} Empezar gratis`}
+          <Cta href={o.href} where={`${where}:${o.key}`} ariaLabel={`${o.title}: ${o.promise} Empezar`}
             className={cn('press group flex items-center gap-3.5 rounded-[20px] p-2 pr-4',
               tone === 'dark' ? 'bg-white/[0.07] ring-1 ring-white/15 hover:bg-white/[0.11]' : 'bg-white shadow-ring hover:bg-soi-tray',
               mine === o.key && (tone === 'dark' ? 'ring-2 ring-soi-gold' : 'shadow-[0_0_0_2px_var(--color-soi-gold)]'))}>

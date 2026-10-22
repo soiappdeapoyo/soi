@@ -12,12 +12,11 @@ import { LandingChat } from '@/components/landing/landing-chat';
 import { HeroQuestions } from '@/components/landing/hero-questions';
 import { CHALLENGE_SLUGS } from '@/config/official-challenges';
 import { officialMoment } from '@/config/official-moments';
-import { getSettings } from '@/lib/settings';
 import type { MomentFlow } from '@/lib/moments/types';
 
 export const metadata: Metadata = {
   title: 'SOI · Cuéntale qué te pasa. Te diseña tu práctica ahora.',
-  description: 'Cuéntale a SOI qué te pasa y te diseña una práctica de minutos, guiada por voz y en español, con las técnicas de Neville Goddard, Brian Tracy y Napoleon Hill. Gratis y sin tarjeta.',
+  description: 'Cuéntale a SOI qué te pasa y te diseña una práctica de minutos, guiada por voz y en español, con las técnicas de Neville Goddard, Brian Tracy y Napoleon Hill.',
 };
 
 const signup = (next?: string) => `/login${next ? `?next=${encodeURIComponent(next)}` : ''}`;
@@ -108,22 +107,16 @@ const OPEN_FIRST: LandingOffer['key'] = 'neville';
 
 /**
  * Landing para quien llega desde TikTok con un autor en la cabeza (Neville, Brian Tracy, Napoleon Hill).
- * Oferta: el reto de 7 días de ESE autor, con resultado concreto, el día 1 hoy y la prueba que dura lo mismo que el
- * reto. Persuasión ética: identificación, una elección de un toque, el valor completo a la vista, autoridad con fuentes,
- * respuesta a las dudas y prueba sin riesgo. Sin cifras ni testimonios inventados, sin imágenes de los autores.
+ * Oferta: el reto de 7 días de ESE autor, con resultado concreto y el día 1 hoy. Sin precios ni planes: el pago
+ * aparece en la app al terminar la prueba. Persuasión ética: identificación, una elección de un toque, el valor
+ * completo a la vista, autoridad con fuentes y respuesta a las dudas. Sin cifras ni testimonios inventados, sin imágenes de los autores.
  */
-/** Tarifas y días de prueba del panel; la página se regenera cada 5 minutos. */
-export const revalidate = 300;
-
 export default async function LandingPage() {
-  const { trialDays: TRIAL_DAYS, plans } = await getSettings();
-  const trialCoversChallenge = TRIAL_DAYS >= 7;
   const FAQ = [
     { q: '¿Tengo que saber meditar?', a: 'No. SOI te guía por voz paso a paso, como si alguien te acompañara. Si prefieres, también puedes leerlo.' },
     { q: '¿Cuánto tiempo necesito al día?', a: CHALLENGES.map(({ m }) => `${m.title}: unos ${m.required_minutes} min`).join(' · ') + '.' },
     { q: '¿Y si un día no puedo?', a: 'No pasa nada. El reto no se reinicia ni te castiga: al volver, sigues en el día donde ibas.' },
-    { q: '¿Necesito tarjeta?', a: `No. Tienes ${TRIAL_DAYS} días con todo incluido${trialCoversChallenge ? ', lo que dura tu reto' : ''}. Después decides.` },
-    { q: '¿Qué pasa al terminar?', a: `Puedes seguir con otro reto o con las prácticas de Joe Dispenza, Hal Elrod y Robin Sharma con SOI+ (${plans.monthly.price} USD al mes). Si no te suscribes, pasas al plan gratuito: sigues conversando con SOI, pero las prácticas guiadas son de SOI+.` },
+    { q: '¿Qué pasa al terminar?', a: 'Puedes seguir con otro reto o con las prácticas de Joe Dispenza, Hal Elrod y Robin Sharma, y seguir conversando con SOI.' },
     { q: '¿SOI es de Neville, Brian Tracy o Napoleon Hill?', a: 'No. SOI no está afiliado a los autores: usa sus libros como fuente de las prácticas y cita cada una.' },
     { q: '¿Funciona en mi teléfono?', a: 'Sí, en iPhone y Android, directo desde el navegador. Si quieres, la agregas a tu pantalla de inicio como una app.' },
   ];
@@ -156,8 +149,6 @@ export default async function LandingPage() {
           <p className="mt-2 text-pretty text-white/70">Vive su reto de 7 días. Desde {MIN_MINUTES} minutos al día; tu día 1 empieza hoy.</p>
           <div className="mt-5"><AuthorPicker offers={OFFERS} where="hero" /></div>
           <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/60">
-            <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />Gratis {TRIAL_DAYS} días</span>
-            <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />Sin tarjeta</span>
             <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />En español</span>
           </p>
         </div>
@@ -207,7 +198,7 @@ export default async function LandingPage() {
                     </ol>
                     <p className="mt-2 text-xs text-soi-muted">Fuente: {m.source}</p>
                     <Cta href={signup(`/m/${m.slug}/play`)} where={`reto:${key}`} className={buttonClass('primary', 'lg', 'mt-4 w-full sm:w-auto')}>
-                      Empezar mi día 1 gratis
+                      Empezar mi día 1
                     </Cta>
                   </div>
                 </details>
@@ -295,18 +286,6 @@ export default async function LandingPage() {
             {SOURCES.map((s) => <li key={s} className="rounded-full bg-white px-3.5 py-2 text-sm shadow-ring">{s}</li>)}
           </ul>
         </div>
-      </section>
-
-      {/* ---------- Sin riesgo: la prueba dura lo mismo que el reto ---------- */}
-      <section className="mx-auto max-w-3xl px-5 py-16 text-center sm:py-20" aria-labelledby="precio">
-        <h2 id="precio" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-          {TRIAL_DAYS === 7 ? 'Tu reto dura 7 días. Tu prueba gratis, también.' : trialCoversChallenge ? 'Tu prueba gratis cubre tu reto completo.' : `Pruébalo ${TRIAL_DAYS} días, todo incluido`}
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-pretty text-lg text-soi-muted">
-          {trialCoversChallenge ? 'Haces la semana completa sin pagar y sin tarjeta. ' : 'Sin tarjeta. '}
-          Si te sirve, SOI+ cuesta ${plans.monthly.price} USD al mes o ${plans.yearly.price} USD al año. Si no, no pagas nada.
-        </p>
-        <a href="#elige" className={buttonClass('gold', 'lg', 'mt-8 w-full sm:w-auto')}>Elegir mi reto</a>
       </section>
 
       {/* ---------- Dudas ---------- */}

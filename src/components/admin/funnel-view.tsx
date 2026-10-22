@@ -53,34 +53,6 @@ export function FunnelView({ f }: { f: Funnel }) {
         </div>
       </div>
 
-      <div>
-        <h3 className="mb-2 text-sm font-medium text-soi-muted">Entrar, por método y navegador</h3>
-        {f.authMethods.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] text-left text-sm">
-              <thead className="text-xs text-soi-muted">
-                <tr><th className="py-1.5 pr-3 font-medium">Método</th><th className="py-1.5 pr-3 font-medium">Navegador</th><th className="py-1.5 pr-3 text-right font-medium">Empezaron</th><th className="py-1.5 pr-3 text-right font-medium">Entraron</th><th className="py-1.5 text-right font-medium">%</th></tr>
-              </thead>
-              <tbody className="nums">
-                {f.authMethods.map((m) => (
-                  <tr key={`${m.method}-${m.browser}`} className="border-t border-black/[0.06]">
-                    <td className="py-1.5 pr-3">{m.method === 'correo' ? 'Correo' : m.method === 'google' ? 'Google' : m.method}</td>
-                    <td className="py-1.5 pr-3">{m.browser}</td>
-                    <td className="py-1.5 pr-3 text-right">{m.started}</td>
-                    <td className="py-1.5 pr-3 text-right">{m.finished}</td>
-                    <td className="py-1.5 text-right">{m.started ? pct(m.finished / m.started) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <p className="text-sm text-soi-muted">Sin datos.</p>}
-        <p className="mt-2 text-xs text-soi-muted">
-          «Sin medir» = antes de medir el navegador. Entradas desde otro navegador (el enlace del correo abierto en Safari o Chrome): {f.crossBrowser}.
-          {f.authErrors.length ? ` Volvieron a /login con error: ${f.authErrors.map((e) => `${e.reason} (${e.n})`).join(', ')}.` : ''}
-        </p>
-      </div>
-
       <div className="grid gap-6 lg:grid-cols-2">
         <GeoTable title="Por país" rows={f.countries.map((r) => ({ ...r, label: countryName(r.country) }))} />
         <GeoTable title="Por ciudad" rows={f.cities.map((r) => ({ ...r, label: `${r.city ?? 'Ciudad desconocida'}${r.country ? `, ${countryName(r.country)}` : ''}` }))} />

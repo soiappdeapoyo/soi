@@ -98,34 +98,9 @@ export function analyzeFunnel(rows: FunnelRow[]) {
     return [...m.values()].sort((a, b) => b.visitors - a.visitors || b.signups - a.signups);
   };
 
-  // Entrar, por método y navegador ("google:tiktok"): cuántos empezaron y cuántos entraron (registro o inicio).
-  // Lo anterior a medir el navegador llega solo como "google" o "correo".
-  const startsBy = new Map<string, Set<string>>();
-  const authErrors = new Map<string, number>();
-  let crossBrowser = 0;
-  rows.forEach((r, i) => {
-    if (r.event === 'auth_start') {
-      const [method = 'otro', browser = 'sin medir'] = (r.detail ?? 'otro').split(':');
-      const k = `${method}|${browser}`;
-      startsBy.set(k, (startsBy.get(k) ?? new Set()).add(key(r, i)));
-    } else if (r.event === 'login_view' && r.detail?.startsWith('tras_error')) {
-      const reason = r.detail.split(':')[1] || 'sin motivo';
-      authErrors.set(reason, (authErrors.get(reason) ?? 0) + 1);
-    } else if ((r.event === 'signup' || r.event === 'login') && r.detail?.includes(':otro_navegador')) crossBrowser++;
-  });
-  const authMethods = [...startsBy].map(([k, ids]) => {
-    const [method, browser] = k.split('|') as [string, string];
-    return { method, browser, started: ids.size, finished: [...ids].filter((id) => { const s = by.get(id); return s ? entered(s) : false; }).length };
-  }).sort((a, b) => b.started - a.started);
-
   return {
     visitors: visitors.length,
     steps,
-    authMethods,
-    /** Volvieron a /login con un error (motivo: interrupted, expired, cancelled, auth). */
-    authErrors: [...authErrors].sort((a, b) => b[1] - a[1]).map(([reason, n]) => ({ reason, n })),
-    /** Entradas cuyo enlace se abrió en otro navegador que donde se pidió (antes contaban como abandono). */
-    crossBrowser,
     abandoned,
     abandonedAfterAuth,
     logins: count((s) => has(s, 'login') && !has(s, 'signup')),
