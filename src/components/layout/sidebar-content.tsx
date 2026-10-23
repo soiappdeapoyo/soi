@@ -50,7 +50,7 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
           {!hidePrimary && (
             <ul className="flex flex-col gap-0.5 pb-1">
               {PRIMARY_TABS.map((t) => (
-                <li key={t.id}>
+                <li key={t.id} data-tour={t.id}>
                   <NavLink href={t.href} match={t.match} className={item} activeClassName={active} title={t.label}>
                     <Icon name={t.icon} className="h-4 w-4 shrink-0" />
                     <span className={hide}>{t.label}</span>

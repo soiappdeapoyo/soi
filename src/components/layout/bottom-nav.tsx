@@ -36,6 +36,7 @@ export function BottomNav({ avatarUrl, name }: { avatarUrl: string | null; name:
             <li key={tab.id} className="flex items-center justify-center">
               <Link
                 href={tab.href}
+                data-tour={tab.id}
                 aria-current={active ? 'page' : undefined}
                 onClick={(e) => { if (isPlainClick(e)) setPendingNav(tab.href); }}
                 className={cn(
