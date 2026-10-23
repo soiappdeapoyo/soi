@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireAdmin, audit } from '@/lib/admin/auth';
 import { userDetail } from '@/lib/admin/data';
-import { UserActions } from '@/components/admin/user-actions';
+import { UserActions, AccountDataActions } from '@/components/admin/user-actions';
 import { outputText, type RunOutput } from '@/lib/moments/outputs';
 import { listAcceptances } from '@/lib/legal';
 import { AcceptancesList } from '@/components/admin/acceptances-list';
@@ -144,6 +144,11 @@ export default async function PanelUser({ params }: { params: Promise<{ id: stri
           <ul className="mt-3 flex flex-col gap-2 text-sm">{u.crisis.map((c) => <li key={c.id as string}><span className="text-xs text-soi-muted">{d(c.created_at as string)}</span><p>{String(c.content)}</p></li>)}</ul>
         </details>
       )}
+
+      <Section title="Datos de la cuenta">
+        <p className="mb-3 text-sm text-soi-muted">Para solicitudes de acceso o de cancelación. Exportar descarga todo en JSON; borrar cancela su suscripción, borra sus archivos y todo lo suyo, y no se puede deshacer. Ambas quedan en la auditoría.</p>
+        <AccountDataActions userId={id} email={u.auth.email ?? null} />
+      </Section>
     </div>
   );
 }

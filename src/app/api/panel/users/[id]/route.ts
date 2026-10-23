@@ -1,7 +1,10 @@
 import { z } from 'zod/v3';
 import { createAdminClient } from '@/lib/supabase/server';
-import { adminFromRequest, audit } from '@/lib/admin/auth';
+import { adminFromRequest, audit, isAdminEmail } from '@/lib/admin/auth';
+import { deleteUserAccount } from '@/lib/account/server';
 import { getSettings } from '@/lib/settings';
+
+export const maxDuration = 60;
 
 const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('extend_trial'), days: z.number().int().min(1).max(90) }),
@@ -32,5 +35,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { error } = await a.from('user_profiles').update({ ...update, updated_at: new Date().toISOString() }).eq('user_id', id);
   if (error) return Response.json({ ok: false, message: 'No se pudo aplicar.' }, { status: 500 });
   await audit(admin.id, b.action, id, { antes: profile, ahora: update });
+  return Response.json({ ok: true });
+}
+
+/**
+ * Borrar una cuenta desde el panel (p. ej. una solicitud de cancelación por correo). Se confirma con el correo de la
+ * cuenta; no se puede borrar la propia ni la de otra persona administradora. Queda en la auditoría con el correo.
+ */
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await adminFromRequest();
+  if (!admin) return new Response('No encontrado', { status: 404 });
+  const { id } = await params;
+  const body = (await req.json().catch(() => null)) as { confirm?: unknown } | null;
+  const { data: auth } = await createAdminClient().auth.admin.getUserById(id);
+  const email = auth?.user?.email ?? null;
+  if (!auth?.user) return Response.json({ ok: false, message: 'Cuenta no encontrada.' }, { status: 404 });
+  if (id === admin.id || isAdminEmail(email)) return Response.json({ ok: false, message: 'No se puede borrar una cuenta de administración.' }, { status: 400 });
+  if (typeof body?.confirm !== 'string' || body.confirm.trim().toLowerCase() !== (email ?? id).toLowerCase()) {
+    return Response.json({ ok: false, message: 'Escribe el correo de la cuenta para confirmar.' }, { status: 400 });
+  }
+  const r = await deleteUserAccount(id);
+  if (!r.ok) return Response.json(r, { status: 409 });
+  await audit(admin.id, 'borrar_cuenta', id, { correo: email });
   return Response.json({ ok: true });
 }

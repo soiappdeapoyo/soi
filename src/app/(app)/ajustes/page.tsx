@@ -6,6 +6,7 @@ import { SettingsForm } from '@/components/settings/settings-form';
 import { TimezoneField } from '@/components/settings/timezone-field';
 import { ReturnSetup } from '@/components/pwa/return-setup';
 import { SubscriptionSection } from '@/components/settings/subscription-section';
+import { AccountData } from '@/components/settings/account-data';
 import { loadSubscription, subscriptionView } from '@/lib/billing/subscription';
 
 export const metadata: Metadata = { title: 'Ajustes' };
@@ -36,6 +37,7 @@ export default async function AjustesPage() {
         ttsAllowed={access.tts}
         subscription={<SubscriptionSection subscription={sub ? subscriptionView(sub) : null} hasCustomer={Boolean(profile?.stripe_customer_id)} timezone={profile?.timezone ?? 'America/Mexico_City'} />}
       />
+      <div className="mt-6"><AccountData /></div>
     </div>
   );
 }
