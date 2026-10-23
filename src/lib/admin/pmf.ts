@@ -43,6 +43,8 @@ export type PmfSnapshot = {
     signups: number;
     activation: RateIn; wroteFirst: RateIn; d1: RateIn; d7: RateIn; d30: RateIn;
     transformation: { measured: number; improved: RateIn; avgChange: number | null };
+    /** WHO-5 estimado (los análisis guardados antes de esto no lo tienen). */
+    wellbeing?: { measured: number; improved: RateIn; avgChange: number | null };
   };
   funnel: { visitors: number; landing: number; wanted: number; authStart: number; signup: number; abandonedAfterAuth: number; referrers: { host: string; n: number }[] } | null;
   landingChat: { wrote: number; designed: number; started: number; claimed: number; lived: number; errors: { kind: string; count: number }[] } | null;
@@ -101,6 +103,12 @@ export function pmfSignals(s: PmfSnapshot): Signal[] {
     'Moments más cortos o ajustados a su tiempo (polishMoment), retomar donde lo dejó (src/lib/moments/progress.ts) y revisar el reproductor (src/components/moments/moment-player.tsx).'));
   out.push(rateSignal('transformation', 'valor', 'Mejoró 1+ punto en un área de enfoque (mapa de 30+ días)', o.transformation.improved, 50, 30,
     'Llevar más personas al chequeo mensual y a la revisión semanal (src/lib/life-map.ts, /mapa/semana) y conectar su plan de 90 días con Mi día (src/lib/life-plan.ts).', 5));
+  if (o.wellbeing) {
+    const avg = o.wellbeing.avgChange === null ? '' : ` · promedio ${o.wellbeing.avgChange > 0 ? '+' : ''}${o.wellbeing.avgChange}`;
+    const sig = rateSignal('wellbeing', 'valor', `Bienestar (WHO-5 estimado) subió 10+ puntos en 4+ semanas${avg}`, o.wellbeing.improved, 40, 25,
+      'Revisar qué Moments y conversaciones preceden a las mejoras y a las caídas (src/lib/wellbeing.ts, src/lib/wellbeing-server.ts) y llevar a quien baja a regular primero (src/lib/momentum.ts).', 5);
+    out.push(sig);
+  }
 
   // Valor en el chat: conversaciones donde la persona dijo que no le sirvió, que no la entendió, etc.
   const cv = s.conversations;

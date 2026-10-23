@@ -122,6 +122,7 @@ export async function pmfSnapshot(days: number): Promise<PmfSnapshot> {
       signups: out.signups,
       activation: out.activation, wroteFirst: out.wroteFirst, d1: out.d1, d7: out.d7, d30: out.d30,
       transformation: { measured: out.transformation.measured, improved: out.transformation.improved, avgChange: out.transformation.avgChange },
+      wellbeing: { measured: out.wellbeing.measured, improved: out.wellbeing.improved, avgChange: out.wellbeing.avgChange },
     },
     funnel: funnel ? {
       visitors: funnel.visitors, landing: step('landing_view'), wanted: step('wanted'), authStart: step('auth_start'), signup: step('signup'),

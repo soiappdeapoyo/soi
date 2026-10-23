@@ -17,13 +17,15 @@ import { loadLastReview, loadPlan } from '@/lib/life-plan-server';
 import { currentWeek } from '@/lib/life-plan';
 import { KnownList } from './known-list';
 import { VisionEditor } from './vision-editor';
+import { WellbeingCard } from './wellbeing-card';
+import { loadWellbeing } from '@/lib/wellbeing-server';
 
 /**
  * Mi mapa: quién eres hoy (tus áreas y lo que SOI sabe de ti), quién quieres ser (visión y metas) y la distancia
  * (lo que falta y lo que ya cerraste). Sin IA: todo sale de lo que la persona calificó y de su evidencia.
  */
 export async function MapTab({ supabase, userId, profile, timeZone }: { supabase: SupabaseClient; userId: string; profile: UserProfile | null; timeZone: string }) {
-  const [view, known, plan, last, values, works, chapter] = await Promise.all([
+  const [view, known, plan, last, values, works, chapter, wellbeing] = await Promise.all([
     loadMapView(supabase, userId, profile, timeZone),
     loadKnown(supabase, userId, profile),
     loadPlan(supabase, userId),
@@ -31,6 +33,7 @@ export async function MapTab({ supabase, userId, profile, timeZone }: { supabase
     loadValues(supabase, userId).catch(() => []),
     loadWhatWorks(supabase, userId, timeZone).catch(() => null),
     loadChapterDue(supabase, userId, timeZone).catch(() => null),
+    loadWellbeing(supabase, userId, timeZone).catch(() => null),
   ]);
   const conflicts = detectConflicts(values, view.areas);
   const worksLines = works ? whatWorksLines(works.works) : [];
@@ -169,6 +172,8 @@ export async function MapTab({ supabase, userId, profile, timeZone }: { supabase
           </section>
         </>
       )}
+
+      {wellbeing && <WellbeingCard view={wellbeing} />}
 
       <section aria-labelledby="works-h">
         <h2 id="works-h" className="text-lg font-semibold tracking-tight">Lo que te funciona</h2>

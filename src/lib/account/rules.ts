@@ -30,6 +30,8 @@ export const USER_TABLES: Record<string, readonly string[]> = {
   life_assessments: ['user_id'],
   life_reviews: ['user_id'],
   life_chapters: ['user_id'],
+  wellbeing_observations: ['user_id'],
+  wellbeing_estimates: ['user_id'],
   creator_profiles: ['user_id'],
   soi_posts: ['author_id'],
   post_likes: ['user_id'],

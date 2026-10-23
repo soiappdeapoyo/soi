@@ -12,6 +12,7 @@ import { buildTools } from '@/lib/ai/tools';
 import { isCreatorAccount } from '@/lib/creators/profile';
 import { PROPOSAL_RULE, proposalMode } from '@/lib/ai/proposal-gate';
 import { shouldSummarize, summarizeConversation } from '@/lib/ai/understanding';
+import { observeConversation, shouldObserve } from '@/lib/wellbeing-server';
 import { continuityPrompt, loadContinuity } from '@/lib/ai/continuity';
 import { libraryPrompt, loadLibrary } from '@/lib/moments/reuse';
 
@@ -227,6 +228,12 @@ export async function POST(req: Request) {
           const texts = messages.filter((m) => m.role === 'user').map(textOf);
           const cid = conversationId;
           try { after(() => summarizeConversation(user.id, cid, texts)); } catch { void summarizeConversation(user.id, cid, texts); }
+        }
+        // Bienestar (WHO-5 estimado) sin preguntar: lo que deja ver la conversación, después de responder.
+        if (shouldObserve(userTurns, isCrisis)) {
+          const texts = messages.filter((m) => m.role === 'user').map(textOf);
+          const cid = conversationId;
+          try { after(() => observeConversation(user.id, cid, texts)); } catch { void observeConversation(user.id, cid, texts); }
         }
         if (out && out.length > 120) {
           await remember(supabase, {

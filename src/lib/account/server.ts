@@ -9,7 +9,7 @@ const PAGE = 1000;
 const SIGNED_SECONDS = 7 * 86_400;
 
 /** Tablas sin columna `id` (pocas filas por persona): se leen sin orden. */
-const NO_ID = new Set(['community_reactions', 'creator_profiles', 'day_plans', 'dm_reads', 'dm_reports', 'follows', 'identity_links', 'identity_stories', 'life_maps', 'moment_interactions', 'post_likes', 'post_reports', 'post_saves', 'soi_openers', 'tts_usage', 'user_blocks', 'user_profiles']);
+const NO_ID = new Set(['community_reactions', 'creator_profiles', 'day_plans', 'dm_reads', 'dm_reports', 'follows', 'identity_links', 'identity_stories', 'life_maps', 'moment_interactions', 'post_likes', 'post_reports', 'post_saves', 'soi_openers', 'tts_usage', 'user_blocks', 'user_profiles', 'wellbeing_estimates']);
 
 async function rowsOf(db: Admin, table: string, col: string, userId: string) {
   const out: Record<string, unknown>[] = [];

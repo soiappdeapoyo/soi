@@ -3,9 +3,10 @@ import { outcomes } from '@/lib/admin/data';
 import type { Rate } from '@/lib/admin/outcomes';
 
 const pct = (r: Rate) => (r.pct === null ? '—' : `${r.pct} %`);
+const rateOf = (r: { num: number; den: number }): Rate => ({ ...r, pct: r.den ? Math.round((r.num / r.den) * 100) : null });
 const of = (r: Rate) => (r.den ? `${r.num} de ${r.den}` : 'aún sin cohorte con edad suficiente');
 
-/** ¿SOI de verdad ayuda? Activación, retención y transformación (sin cuentas demo ni contenido de nadie). */
+/** ¿SOI de verdad ayuda? Activación, retención, transformación y bienestar (sin cuentas demo ni contenido de nadie). */
 export default async function OutcomesPage() {
   await requireAdmin();
   const o = await outcomes();
@@ -21,6 +22,10 @@ export default async function OutcomesPage() {
     ] },
     { title: 'Transformación', note: `Mapa de hace 30+ días y una medición después, en sus áreas de enfoque. Cambio promedio: ${o.transformation.avgChange === null ? '—' : `${o.transformation.avgChange > 0 ? '+' : ''}${o.transformation.avgChange} puntos`}.`, tiles: [
       { k: 'Mejoró 1+ punto en un área de enfoque', r: o.transformation.improved },
+    ] },
+    { title: 'Bienestar (WHO-5 estimado)', note: `Estimado sin preguntas con el chat y los Moments (0–100). Personas con 4+ semanas entre su primera semana medida y la última: ${o.wellbeing.measured}. Cambio promedio: ${o.wellbeing.avgChange === null ? '—' : `${o.wellbeing.avgChange > 0 ? '+' : ''}${o.wellbeing.avgChange} puntos`}. Bajaron 10+: ${o.wellbeing.worsened}.`, tiles: [
+      { k: 'Subió 10+ puntos (cambio que cuenta)', r: rateOf(o.wellbeing.improved) },
+      { k: 'Empezó en bienestar bajo (≤ 50) y pasó de 50', r: rateOf(o.wellbeing.recovered) },
     ] },
   ];
   return (
