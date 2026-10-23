@@ -30,6 +30,8 @@ export type UserProfile = {
   push_subscription?: unknown;
   reminder_time?: string | null;
   reminders_enabled?: boolean;
+  /** Cuándo vio o saltó la introducción de bienvenida (null = mostrarla). */
+  tour_seen_at?: string | null;
   country: string;
   available_minutes: number | null;
   weakest_link: Eslabon | null;
