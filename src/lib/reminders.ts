@@ -6,6 +6,7 @@ import type { NextStep } from '@/lib/journey';
  * - scheduled: un recordatorio que pidió en el chat (scheduleReminder).
  * - nudge: una invitación al día a su hora, con el SIGUIENTE PASO del loop (journey). Solo si hoy no ha venido,
  *   nunca de madrugada (salvo que esa hora la eligió ella) y sin culpa: invita, no reclama.
+ *   El día 2 (vivió su primer Moment ayer) la invitación llega 24 h después, a la hora en que lo vivió, y lo nombra.
  */
 
 export const DEFAULT_REMINDER_TIME = '09:00';
@@ -42,7 +43,11 @@ export type ReminderInput = {
   scheduled: { id: string; title: string }[];
   /** Toca su revisión de la semana (domingo o lunes temprano, con mapa y sin revisión). */
   reviewDue?: boolean;
+  /** Su primer Moment fue ayer (fecha local): título, minutos locales en que lo terminó y cómo volver a vivirlo. */
+  dayTwo?: DayTwo | null;
 };
+
+export type DayTwo = { title: string; at: number; href: string };
 
 export const toMinutes = (hhmm: string | null | undefined): number | null => {
   const m = hhmm?.match(/^(\d{1,2}):(\d{2})/);
@@ -78,6 +83,24 @@ export function nudgeFor(step: NextStep, i: Pick<ReminderInput, 'streak' | 'pend
   }
 }
 
+/**
+ * A qué hora va la invitación de hoy. El día 2, a la misma hora en que vivió su primer Moment (era su momento),
+ * salvo de madrugada: entonces a su hora de siempre.
+ */
+export function nudgeAt(reminderTime: string | null, dayTwo?: DayTwo | null): { at: number; dayTwo: DayTwo | null; chosen: boolean } {
+  if (dayTwo && !quiet(dayTwo.at)) return { at: dayTwo.at, dayTwo, chosen: true };
+  const chosen = toMinutes(reminderTime);
+  return { at: chosen ?? toMinutes(DEFAULT_REMINDER_TIME)!, dayTwo: null, chosen: chosen != null };
+}
+
+/** La invitación del día 2: nombra el Moment de ayer y lleva al siguiente paso (contarle cómo le fue o vivirlo otra vez). */
+export function dayTwoNudge(step: NextStep, d: DayTwo): Omit<Notice, 'kind' | 'ref' | 'alarm'> {
+  const title = `Ayer viviste «${d.title}»`;
+  if (step.kind === 'resume') return nudgeFor(step, { streak: 0, pendingToday: 0 });
+  if (step.kind === 'follow_up') return { title, body: '¿Cómo te quedó? Cuéntaselo a SOI: con eso prepara tu siguiente Moment.', url: step.href };
+  return { title, body: 'A esta hora te hizo espacio. ¿Lo vives de nuevo hoy? SOI te guía.', url: d.href };
+}
+
 export function dueReminders(i: ReminderInput): Notice[] {
   const out: Notice[] = [];
   const fresh = (kind: Notice['kind'], ref: string) => !i.sent.has(`${kind}:${ref}`);
@@ -96,11 +119,12 @@ export function dueReminders(i: ReminderInput): Notice[] {
   }
 
   // 3) La invitación del día: una vez, a su hora, solo si hoy no vino y no le acabamos de avisar de un Moment.
-  const chosen = toMinutes(i.reminderTime);
-  const at = chosen ?? toMinutes(DEFAULT_REMINDER_TIME)!;
-  const allowed = chosen != null || !quiet(i.localMinutes);
-  if (allowed && !i.activeToday && inWindow(i.localMinutes, at) && fresh('nudge', 'daily') && !out.some((n) => n.kind === 'moment')) {
-    out.push({ kind: 'nudge', ref: 'daily', alarm: false, ...nudgeFor(i.step, i) });
+  // El día 2 reemplaza a la de su hora (una sola invitación al día).
+  const { at, dayTwo, chosen } = nudgeAt(i.reminderTime, i.dayTwo);
+  const ref = dayTwo ? 'day2' : 'daily';
+  const allowed = chosen || !quiet(i.localMinutes);
+  if (allowed && !i.activeToday && inWindow(i.localMinutes, at) && fresh('nudge', ref) && !out.some((n) => n.kind === 'moment')) {
+    out.push({ kind: 'nudge', ref, alarm: false, ...(dayTwo ? dayTwoNudge(i.step, dayTwo) : nudgeFor(i.step, i)) });
   }
   return out;
 }

@@ -1,12 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { loadDayPlan, playHref } from '@/lib/day-plan';
+import { loadDayPlan, playHref, resolveRefs } from '@/lib/day-plan';
 import { loadJourney } from '@/lib/journey-server';
 import { nextStep } from '@/lib/journey';
 import { evaluateAccess, type AccessProfile } from '@/lib/billing/access-rules';
-import { DEFAULT_REMINDER_TIME, dueReminders, inWindow, localMinutesIn, scheduledDue, toMinutes } from '@/lib/reminders';
+import { dueReminders, inWindow, localMinutesIn, nudgeAt, scheduledDue, toMinutes, type DayTwo } from '@/lib/reminders';
 import { sendPushResult } from '@/lib/push/send';
 import { firstName, reminderSpeech } from '@/lib/voice/greeting';
-import { startOfTodayISO, todayISO } from '@/lib/utils';
+import { dateInTz, startOfTodayISO, todayISO } from '@/lib/utils';
 import type { PushSubscription } from 'web-push';
 import { reviewWeek } from '@/lib/life-plan';
 import { loadOsToday } from '@/lib/life-plan-server';
@@ -38,16 +38,22 @@ export async function GET(req: Request) {
     .eq('category', 'accion').contains('tags', ['recordatorio']).eq('status', 'en_progreso')
     .gte('created_at', new Date(now.getTime() - 30 * 86_400_000).toISOString()).limit(2000);
 
+  const firsts = await firstMomentsYesterday(db, now);
+
   let sent = 0;
   let gone = 0;
   for (const p of (profiles ?? []) as Row[]) {
     try {
       const tz = p.timezone ?? 'America/Mexico_City';
       const local = localMinutesIn(tz, now);
+      // Día 2: su primer Moment fue ayer (en su zona) → la invitación llega a la hora en que lo vivió.
+      const first = firsts.get(p.user_id);
+      const dayTwo: DayTwo | null = first && dateInTz(first.completedAt, tz) === dateInTz(now.getTime() - 86_400_000, tz)
+        ? { title: first.title, href: first.href, at: localMinutesIn(tz, new Date(first.completedAt)) } : null;
       const scheduled = (asked ?? []).filter((a) => a.user_id === p.user_id && scheduledDue(String((a.metadata as { remind_at?: string } | null)?.remind_at ?? ''), tz, now))
         .map((a) => ({ id: a.id as string, title: String(a.content).slice(0, 160) }));
       const plan = await loadDayPlan(db, p.user_id, tz);
-      const nudgeNow = inWindow(local, toMinutes(p.reminder_time) ?? toMinutes(DEFAULT_REMINDER_TIME)!);
+      const nudgeNow = inWindow(local, nudgeAt(p.reminder_time, dayTwo).at);
       const momentNow = plan.items.some((i) => !i.done && toMinutes(i.time) != null && inWindow(local, toMinutes(i.time)!));
       if (!nudgeNow && !momentNow && !scheduled.length) continue;
 
@@ -72,6 +78,7 @@ export async function GET(req: Request) {
         pendingToday: plan.items.filter((i) => !i.done).length,
         scheduled,
         reviewDue: Boolean(os?.reviewDue),
+        dayTwo,
       });
 
       for (const n of notices) {
@@ -96,4 +103,31 @@ export async function GET(req: Request) {
     }
   }
   return Response.json({ ok: true, users: profiles?.length ?? 0, sent, gone });
+}
+
+/**
+ * Quién vivió su PRIMER Moment entre hace 49 h y hace 1 h (cubre "ayer" en cualquier zona): de todos a la vez, para
+ * no consultar por persona. Devuelve cuándo lo terminó y su título.
+ */
+async function firstMomentsYesterday(db: ReturnType<typeof createAdminClient>, now: Date) {
+  const out = new Map<string, { completedAt: string; title: string; href: string }>();
+  const from = new Date(now.getTime() - 49 * 3_600_000).toISOString();
+  const { data: recent } = await db.from('moment_runs').select('user_id, moment_id, moment_slug, completed_at')
+    .not('completed_at', 'is', null).gte('completed_at', from).lte('completed_at', new Date(now.getTime() - 3_600_000).toISOString())
+    .order('completed_at', { ascending: true }).limit(2000);
+  const earliest = new Map<string, { completedAt: string; ref: string }>();
+  for (const r of recent ?? []) {
+    if (!earliest.has(r.user_id)) earliest.set(r.user_id, { completedAt: r.completed_at as string, ref: r.moment_id ? `m:${r.moment_id}` : `s:${r.moment_slug}` });
+  }
+  if (!earliest.size) return out;
+  // Quien ya había terminado otro antes no está en su día 2.
+  const { data: older } = await db.from('moment_runs').select('user_id')
+    .in('user_id', [...earliest.keys()]).not('completed_at', 'is', null).lt('completed_at', from).limit(5000);
+  for (const r of older ?? []) earliest.delete(r.user_id);
+  const moments = await resolveRefs(db, [...new Set([...earliest.values()].map((e) => e.ref))]);
+  for (const [userId, e] of earliest) {
+    const m = moments.get(e.ref);
+    if (m) out.set(userId, { completedAt: e.completedAt, title: m.title, href: `/m/${m.official ? m.slug : m.id}/play` });
+  }
+  return out;
 }

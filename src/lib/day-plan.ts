@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MomentKind } from '@/config/actions';
 import { officialMoment, OFFICIAL_MOMENTS } from '@/config/official-moments';
 import { MOMENT_FIELDS, toMomentFlow, type MomentFlow } from '@/lib/moments/types';
-import { hourInTz, startOfTodayISO } from '@/lib/utils';
+import { dateInTz, hourInTz, todayISO } from '@/lib/utils';
 
 export type DayPart = 'manana' | 'tarde' | 'noche';
 export const PART_LABEL: Record<DayPart, string> = { manana: 'mañana', tarde: 'tarde', noche: 'noche' };
@@ -16,8 +16,23 @@ export const DayItemSchema = z.object({
 });
 export const DayItemsSchema = z.array(DayItemSchema).max(20);
 export type DayItem = z.infer<typeof DayItemSchema>;
-/** partial: % si hoy lo dejó a medias (se retoma donde quedó). */
-export type DayItemView = DayItem & { moment: MomentFlow | null; done: boolean; partial?: number };
+/** partial: % si hoy lo dejó a medias (se retoma donde quedó). streak: días seguidos que lo vive. */
+export type DayItemView = DayItem & { moment: MomentFlow | null; done: boolean; partial?: number; streak?: number };
+
+/** Hasta dónde se miran los días seguidos de cada Moment de Mi día. */
+export const STREAK_LOOKBACK_DAYS = 60;
+
+/**
+ * Días seguidos que vivió un Moment (fechas locales YYYY-MM-DD). Si hoy todavía no lo vive, la racha sigue viva
+ * hasta ayer: no se castiga antes de que termine el día.
+ */
+export function consecutiveDays(dates: Set<string>, today: string): number {
+  const day = (iso: string, back: number) => new Date(Date.parse(`${iso}T12:00:00Z`) - back * 86_400_000).toISOString().slice(0, 10);
+  let back = dates.has(today) ? 0 : 1;
+  let n = 0;
+  while (dates.has(day(today, back))) { n++; back++; }
+  return n;
+}
 
 /** Mañana 5–12 · tarde 12–19 · noche 19–5 (hora local de la persona). */
 export function partOfDay(hour: number): DayPart {
@@ -81,16 +96,26 @@ export async function resolveRefs(supabase: SupabaseClient, refs: string[]): Pro
 export async function loadDayPlan(supabase: SupabaseClient, userId: string, timeZone: string) {
   const [{ data: plan }, { data: runs }, unfinished] = await Promise.all([
     supabase.from('day_plans').select('items').eq('user_id', userId).maybeSingle(),
-    supabase.from('moment_runs').select('moment_id, moment_slug').eq('user_id', userId)
-      .not('completed_at', 'is', null).gte('completed_at', startOfTodayISO(timeZone)),
+    supabase.from('moment_runs').select('moment_id, moment_slug, completed_at').eq('user_id', userId)
+      .not('completed_at', 'is', null).gte('completed_at', new Date(Date.now() - (STREAK_LOOKBACK_DAYS + 1) * 86_400_000).toISOString()),
     loadUnfinished(supabase, userId),
   ]);
   const parsed = DayItemsSchema.safeParse(plan?.items ?? []);
   const items = parsed.success ? parsed.data : [];
-  const done = new Set((runs ?? []).map((r) => (r.moment_id ? `m:${r.moment_id}` : `s:${r.moment_slug}`)));
+  const today = todayISO(timeZone);
+  // Días (locales) en que vivió cada Moment: sale "hecho hoy" y los días seguidos.
+  const daysByRef = new Map<string, Set<string>>();
+  for (const r of runs ?? []) {
+    const ref = r.moment_id ? `m:${r.moment_id}` : `s:${r.moment_slug}`;
+    if (!daysByRef.has(ref)) daysByRef.set(ref, new Set());
+    daysByRef.get(ref)!.add(dateInTz(r.completed_at as string, timeZone));
+  }
   const byRef = await resolveRefs(supabase, items.map((i) => i.ref));
-  const views: DayItemView[] = items.map((i) => ({ ...i, moment: byRef.get(i.ref) ?? null, done: done.has(i.ref), partial: done.has(i.ref) ? undefined : unfinished.get(i.ref)?.progress }))
-    .filter((i) => i.moment);
+  const views: DayItemView[] = items.map((i) => {
+    const days = daysByRef.get(i.ref) ?? new Set<string>();
+    const done = days.has(today);
+    return { ...i, moment: byRef.get(i.ref) ?? null, done, partial: done ? undefined : unfinished.get(i.ref)?.progress, streak: consecutiveDays(days, today) };
+  }).filter((i) => i.moment);
   const hour = hourInTz(timeZone);
   return { items: views, part: partOfDay(hour), hour, next: nextPending(views, hour, new Date().getMinutes()) };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dueReminders, inWindow, localMinutesIn, nudgeFor, scheduledDue, toMinutes, type ReminderInput } from '@/lib/reminders';
+import { dueReminders, inWindow, localMinutesIn, nudgeAt, nudgeFor, scheduledDue, toMinutes, type ReminderInput } from '@/lib/reminders';
 import type { NextStep } from '@/lib/journey';
 
 const routine: NextStep = { kind: 'routine', title: '', detail: '', cta: 'Ir a Hoy', href: '/hoy' };
@@ -73,5 +73,27 @@ describe('recordatorios pedidos en el chat', () => {
     expect(scheduledDue('2026-10-10T09:00:00-06:00', 'America/Mexico_City', now)).toBe(true);
     expect(scheduledDue('2026-10-10T16:00:00Z', 'America/Mexico_City', now)).toBe(false);
     expect(scheduledDue('mañana', 'America/Mexico_City', now)).toBe(false);
+  });
+});
+
+describe('día 2: 24 h después del primer Moment', () => {
+  const dayTwo = { title: 'Respirar antes de dormir', at: 20 * 60 + 10, href: '/m/abc/play' };
+  const followUp: NextStep = { kind: 'follow_up', title: '', detail: '', cta: '', href: '/chat?nueva=1&run=r1' };
+  const at = { ...base, localMinutes: 20 * 60 + 12, dayTwo };
+
+  it('llega a la hora en que lo vivió, lo nombra y reemplaza la invitación de su hora', () => {
+    expect(dueReminders(at)).toEqual([expect.objectContaining({ kind: 'nudge', ref: 'day2', title: 'Ayer viviste «Respirar antes de dormir»', url: dayTwo.href })]);
+    expect(dueReminders({ ...base, dayTwo })).toEqual([]);
+    expect(dueReminders({ ...at, sent: new Set(['nudge:day2']) })).toEqual([]);
+    expect(dueReminders({ ...at, activeToday: true })).toEqual([]);
+  });
+
+  it('si aún no le contó cómo le fue, lleva al seguimiento', () => {
+    expect(dueReminders({ ...at, step: followUp })[0]).toMatchObject({ url: followUp.href });
+  });
+
+  it('de madrugada no: vuelve a su hora de siempre', () => {
+    expect(nudgeAt(null, { ...dayTwo, at: 23 * 60 + 30 })).toEqual({ at: 9 * 60, dayTwo: null, chosen: false });
+    expect(dueReminders({ ...base, dayTwo: { ...dayTwo, at: 23 * 60 + 30 } })).toEqual([expect.objectContaining({ ref: 'daily' })]);
   });
 });

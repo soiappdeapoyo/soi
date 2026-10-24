@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { dateInTz, startOfTodayISO, hourInTz } from '@/lib/utils';
-import { nextPending, partOfDay, DayItemsSchema } from '@/lib/day-plan';
+import { consecutiveDays, nextPending, partOfDay, DayItemsSchema } from '@/lib/day-plan';
 import { buildOpener } from '@/lib/opener';
 import type { Exercise } from '@/lib/library/exercises';
 
@@ -58,5 +58,20 @@ describe('guías de estiramiento', () => {
     expect(stretchFor('Hombros: círculos hacia atrás', list)?.[0]).toContain('Shoulder_Stretch');
     expect(stretchFor('Toca la punta de tus pies', list)?.[0]).toContain('Hamstring_Stretch');
     expect(stretchFor('Sonríe y respira', list)).toBeNull();
+  });
+});
+
+describe('días seguidos de un Moment de Mi día', () => {
+  const d = (...xs: string[]) => new Set(xs);
+  it('cuenta hacia atrás desde hoy', () => {
+    expect(consecutiveDays(d('2026-10-21', '2026-10-22', '2026-10-23'), '2026-10-23')).toBe(3);
+  });
+  it('si hoy todavía no, sigue viva hasta ayer', () => {
+    expect(consecutiveDays(d('2026-10-21', '2026-10-22'), '2026-10-23')).toBe(2);
+  });
+  it('un día sin vivirlo la corta; cruza meses', () => {
+    expect(consecutiveDays(d('2026-10-20', '2026-10-22'), '2026-10-23')).toBe(1);
+    expect(consecutiveDays(d('2026-09-30', '2026-10-01'), '2026-10-01')).toBe(2);
+    expect(consecutiveDays(d(), '2026-10-23')).toBe(0);
   });
 });

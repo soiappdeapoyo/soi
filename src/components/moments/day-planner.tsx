@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Check, GripVertical, Play, Plus, Search, X } from 'lucide-react';
+import { Check, Flame, GripVertical, Play, Plus, Search, X } from 'lucide-react';
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -183,6 +183,11 @@ function Row({ item, isNext, onTime, onRemove }: { item: DayItemView; isNext: bo
           {item.done ? <span className="inline-flex items-center gap-0.5 font-medium text-soi-accent"><Check className="h-3.5 w-3.5" aria-hidden="true" /> Hecho hoy</span>
             : item.partial != null ? <span className="font-medium text-soi-accent">A medias · {item.partial} %</span>
             : isNext ? <span className="font-medium text-soi-accent">Ahora</span> : null}
+          {(item.streak ?? 0) >= 2 && (
+            <span className="inline-flex items-center gap-0.5 font-medium text-soi-ink" aria-label={`${item.streak} días seguidos`}>
+              <Flame className="h-3.5 w-3.5 text-soi-gold" aria-hidden="true" />{item.streak} días
+            </span>
+          )}
           <span>{m.required_minutes} min</span>
         </p>
       </div>
