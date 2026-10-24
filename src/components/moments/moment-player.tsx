@@ -359,12 +359,15 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     router.push(`/m/${json.id}`);
   }
 
+  // La bocina está en todas las pantallas del reproductor: la voz puede seguir sonando al terminar el último paso.
+  const voiceToggle = ttsAllowed ? { on: voiceOn, toggle: () => setVoiceOn((v) => !v) } : undefined;
+
   const caption = <p className="mt-1 text-sm italic text-soi-muted">{moment.title}{moment.author ? ` · ${moment.author}` : ''}<span className="sr-only"> — fuente: {moment.source}</span></p>;
 
   /* ---------- Antes ---------- */
   if (phase === 'before') {
     return (
-      <Shell title={moment.title} onExit={playlist ? '/hoy' : `/m/${moment.id}`}>
+      <Shell title={moment.title} onExit={playlist ? '/hoy' : `/m/${moment.id}`} voice={voiceToggle}>
         <div className="flex flex-col items-center gap-5 py-6 text-center">
           {/* Encabezado tipo artículo: la portada es la protagonista solo aquí, antes de empezar. */}
           {moment.cover ? (
@@ -427,7 +430,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     const timeUp = remaining <= 0 && !AUTO_ADVANCE.has(block.type);
     return (
       <Shell title={moment.title} onExit={playlist ? '/hoy' : `/m/${moment.id}`} progress={{ index, total: blocks.length, pct: runProgress(blocks, index, remaining) }}
-        voice={ttsAllowed ? { on: voiceOn, toggle: () => setVoiceOn((v) => !v) } : undefined}>
+        voice={voiceToggle}>
         <div className="flex flex-1 flex-col">
           <div className="mt-2 flex items-center gap-3">
             <div className="h-1 flex-1 overflow-hidden rounded-full bg-soi-tray" aria-hidden="true">
@@ -480,7 +483,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
   /* ---------- Después: resultados y aprendizaje ---------- */
   if (phase === 'after') {
     return (
-      <Shell title={moment.title} onExit={`/m/${moment.id}`}>
+      <Shell title={moment.title} onExit={`/m/${moment.id}`} voice={voiceToggle}>
         <div className="flex animate-enter flex-col gap-5 py-6">
           <fieldset className="text-center">
             <legend className="text-lg font-medium">¿Cómo te sientes ahora?</legend>
@@ -518,7 +521,7 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
 
   /* ---------- Hecho: celebración + mejor versión ---------- */
   return (
-    <Shell title={moment.title} onExit="/hoy">
+    <Shell title={moment.title} onExit="/hoy" voice={voiceToggle}>
       <div className="relative isolate flex flex-col items-center gap-4 py-6 text-center" aria-live="polite">
         {/* La portada como fondo suave que se desvanece: cierra el Moment con su misma atmósfera. */}
         {moment.cover && (
