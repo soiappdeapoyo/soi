@@ -171,15 +171,16 @@ function Row({ item, isNext, onTime, onRemove }: { item: DayItemView; isNext: bo
   });
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn('relative flex items-center gap-2 rounded-[14px] bg-white p-2 pr-2.5 shadow-ring', isDragging && 'z-10 shadow-raised', isNext && !item.done && 'shadow-[0_0_0_2px_var(--color-soi-accent)]')}>
+      className={cn('relative flex items-center gap-2 rounded-[14px] bg-white p-2 pr-1.5 shadow-ring', isDragging && 'z-10 shadow-raised', isNext && !item.done && 'shadow-[0_0_0_2px_var(--color-soi-accent)]')}>
       <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners} aria-label={`Mover ${m.title}`}
         className="flex h-11 w-6 shrink-0 cursor-grab touch-none items-center justify-center text-soi-subtle hover:text-soi-ink active:cursor-grabbing">
         <GripVertical className="h-4 w-4" aria-hidden="true" />
       </button>
       <Thumb m={m} className={cn('h-12 w-12 shrink-0 rounded-lg', item.done && 'opacity-60')} />
-      <div className="min-w-0 flex-1">
-        <p className={cn('truncate text-[15px] font-medium', item.done && 'text-soi-muted line-through decoration-soi-subtle')}>{m.title}</p>
-        <p className="nums flex items-center gap-1.5 text-xs text-soi-muted">
+      {/* En teléfonos angostos (Android de 360 px) la hora al lado no dejaba espacio al título: va debajo, con el resto. */}
+      <div className="min-w-0 flex-1 py-0.5">
+        <p className={cn('line-clamp-2 break-words text-[15px] font-medium leading-snug', item.done && 'text-soi-muted line-through decoration-soi-subtle')}>{m.title}</p>
+        <div className="nums mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-soi-muted">
           {item.done ? <span className="inline-flex items-center gap-0.5 font-medium text-soi-accent"><Check className="h-3.5 w-3.5" aria-hidden="true" /> Hecho hoy</span>
             : item.partial != null ? <span className="font-medium text-soi-accent">A medias · {item.partial} %</span>
             : isNext ? <span className="font-medium text-soi-accent">Ahora</span> : null}
@@ -189,11 +190,11 @@ function Row({ item, isNext, onTime, onRemove }: { item: DayItemView; isNext: bo
             </span>
           )}
           <span>{m.required_minutes} min</span>
-        </p>
+          <label className="sr-only" htmlFor={`t-${item.id}`}>Hora para {m.title}</label>
+          <input id={`t-${item.id}`} type="time" value={item.time ?? ''} onChange={(e) => onTime(e.target.value)}
+            className="nums h-8 w-[6.75rem] min-w-0 rounded-lg bg-soi-sidebar px-2 text-sm text-soi-ink" />
+        </div>
       </div>
-      <label className="sr-only" htmlFor={`t-${item.id}`}>Hora para {m.title}</label>
-      <input id={`t-${item.id}`} type="time" value={item.time ?? ''} onChange={(e) => onTime(e.target.value)}
-        className="nums h-9 w-[5.5rem] shrink-0 rounded-lg bg-soi-sidebar px-1.5 text-sm text-soi-ink" />
       {!item.done && (
         <Link href={`/m/${m.id}/play`} aria-label={`Comenzar ${m.title}`} className={buttonClass(isNext ? 'primary' : 'ghost', 'icon', 'h-9 w-9 shrink-0 rounded-lg')}>
           <Play className="h-4 w-4" aria-hidden="true" />
