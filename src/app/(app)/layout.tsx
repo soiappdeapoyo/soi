@@ -10,6 +10,7 @@ import { NavTracker } from '@/components/analytics/nav-tracker';
 import { Suspense } from 'react';
 import { ReminderListener } from '@/components/pwa/reminder-listener';
 import { WelcomeTour } from '@/components/onboarding/welcome-tour';
+import { FeedbackBubble } from '@/components/feedback/feedback-bubble';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, user } = await getSessionUser();
@@ -44,6 +45,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <ReminderListener />
       {/* Introducción de bienvenida: la primera vez y desde Ajustes (?tour=1). */}
       <Suspense fallback={null}><WelcomeTour seenAt={profile?.tour_seen_at ?? null} /></Suspense>
+      {/* Tu opinión: burbuja discreta; se abre sola una vez, cuando ya tiene opinión (después de la bienvenida). */}
+      <Suspense fallback={null}><FeedbackBubble canAutoPrompt={!profile?.feedback_prompted_at && Boolean(profile?.tour_seen_at)} /></Suspense>
       <TimezoneSync stored={profile?.timezone ?? null} auto={profile?.timezone_auto ?? true} />
       {children}
     </AppShell>

@@ -12,6 +12,7 @@
  */
 
 import { COMPLAINTS, type ConversationInsights } from '@/lib/admin/conversation-signals';
+import type { feedbackForPmf } from '@/lib/admin/feedback';
 
 export type Level = 'fuerte' | 'medio' | 'debil' | 'sin_datos';
 export type Stage = 'valor' | 'activacion' | 'retencion' | 'habito' | 'adquisicion' | 'monetizacion' | 'experiencia';
@@ -54,6 +55,8 @@ export type PmfSnapshot = {
   ai: { tokens: number; crisis: number; providers: [string, number][] };
   /** Lo que no les sirvió en el chat (los análisis guardados antes de esto no lo tienen). */
   conversations?: ConversationInsights;
+  /** La burbuja de opinión (los análisis guardados antes de esto no lo tienen). */
+  feedback?: ReturnType<typeof feedbackForPmf>;
 };
 
 export type PmfAnalysis = { verdict: string; score: number | null; bottleneck: Stage | null; signals: Signal[]; text: string };
@@ -130,6 +133,13 @@ export function pmfSignals(s: PmfSnapshot): Signal[] {
       sample: cv.conversations, lowConfidence: cv.conversations < LOW_CONFIDENCE,
       fix: 'La primera respuesta decide si sigue: validar y hacer una sola pregunta (src/lib/ai/proposal-gate.ts modo listen, src/lib/ai/prompts/template.ts).',
     });
+  }
+
+  // Lo que dicen en la burbuja de opinión (caritas 3–4 = les gusta o encanta).
+  if (s.feedback) {
+    const avg = s.feedback.avg === null ? '' : ` · promedio ${s.feedback.avg} / 4`;
+    out.push(rateSignal('feedback', 'valor', `Les gusta o encanta SOI (burbuja de opinión)${avg}`, { num: s.feedback.positive, den: s.feedback.rated }, 80, 60,
+      'Leer «Lo que cambiarían» en /panel/analytics#opinion (por pantalla y dispositivo) y arreglar lo que más se repite; la burbuja vive en src/components/feedback/feedback-bubble.tsx.', 5));
   }
 
   // Activación: el momento ajá es vivir su primer Moment.
@@ -252,6 +262,7 @@ function renderText(s: PmfSnapshot, a: Omit<PmfAnalysis, 'text'>): string {
   L.push(`- IA: ${s.ai.tokens} tokens en el periodo; señales de crisis: ${s.ai.crisis}.`);
   L.push('');
   if (s.conversations) L.push(...conversationSection(s.conversations));
+  if (s.feedback?.count) L.push(...feedbackSection(s.feedback));
 
   const todo = a.signals.filter((x) => x.level === 'debil' || x.level === 'medio')
     .sort((x, y) => BOTTLENECK_ORDER.indexOf(x.stage) - BOTTLENECK_ORDER.indexOf(y.stage) || (x.level === 'debil' ? -1 : 1) - (y.level === 'debil' ? -1 : 1));
@@ -289,6 +300,19 @@ function conversationSection(c: ConversationInsights): string[] {
       L.push(`   La persona: «${e.said}»`);
     });
   }
+  L.push('');
+  return L;
+}
+
+/** Lo que dicen en la burbuja de opinión: cifras y lo que cambiarían (recortado, sin datos de contacto). */
+function feedbackSection(f: NonNullable<PmfSnapshot['feedback']>): string[] {
+  const L: string[] = ['## Lo que dicen (burbuja de opinión)'];
+  L.push(`- ${f.count} opiniones de ${f.people} personas; ${f.rated} con carita, promedio ${f.avg ?? '—'} / 4; les gusta o encanta: ${f.positive} de ${f.rated}.`);
+  if (f.quotes.length) {
+    L.push('- Lo que cambiarían (más recientes):');
+    for (const q of f.quotes) L.push(`  - «${q.said}» (${q.path ?? 'sin pantalla'} · ${q.device ?? '—'}${q.rating ? ` · carita ${q.rating}/4` : ''})`);
+  }
+  if (f.liked.length) L.push(`- Lo que les gusta: ${f.liked.map((x) => `«${x}»`).join('; ')}.`);
   L.push('');
   return L;
 }

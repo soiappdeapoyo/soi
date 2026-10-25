@@ -3,6 +3,7 @@ import { computeOutcomes } from '@/lib/admin/outcomes';
 import { wellbeingOutcomes, type UserHistory, type WeeklyEstimate } from '@/lib/wellbeing';
 import { analyzeHablame, type HAccount, type HDebrief, type HFunnel, type HMessage, type HReferral } from '@/lib/admin/hablame';
 import { isAdminEmail } from '@/lib/admin/auth';
+import type { FeedbackRow } from '@/lib/admin/feedback';
 import type { EmotionSnapshot } from '@/lib/persons/emotion';
 
 /** Datos del panel (service role). Solo se llaman tras comprobar que quien pide es administrador. */
@@ -190,4 +191,20 @@ export async function hablame() {
     reactors: new Set(reactors.map((r) => r.user_id)).size,
     voiceHeard, crisis, blockedDescriptions, blockedTurns,
   });
+}
+
+/**
+ * Lo que dicen (burbuja de opinión de SOI): los últimos `days` días, sin demo ni administración. Ver `analyzeFeedback`.
+ */
+export async function feedback(days = 90) {
+  const a = createAdminClient();
+  const [{ data: auth }, { data, error }] = await Promise.all([
+    a.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    a.from('app_feedback').select('id, user_id, rating, liked, disliked, path, device, plan, account_days, source, crisis, created_at')
+      .gte('created_at', since(days)).order('created_at', { ascending: false }).limit(5000),
+  ]);
+  const skip = new Set((auth?.users ?? []).filter((u) => isDemoEmail(u.email) || isAdminEmail(u.email)).map((u) => u.id));
+  const emails = new Map((auth?.users ?? []).map((u) => [u.id, u.email ?? null]));
+  const rows = ((data ?? []) as FeedbackRow[]).filter((r) => !r.user_id || !skip.has(r.user_id));
+  return { rows, emails, error: error?.message ?? null };
 }

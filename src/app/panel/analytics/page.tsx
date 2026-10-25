@@ -9,6 +9,11 @@ import { ChatView } from '@/components/admin/chat-view';
 import { analyzeFlows, buildSessions, neighbors, pageLabel, type Friction } from '@/lib/analytics/nav';
 import { Bars, SessionPath, dur, pct, routeLabel } from '@/components/admin/nav-viz';
 import { cn } from '@/lib/utils';
+import { feedback } from '@/lib/admin/data';
+import { FeedbackView } from '@/components/admin/feedback-view';
+import type { FeedbackFilter } from '@/lib/admin/feedback';
+
+const OPINION: FeedbackFilter[] = ['todas', 'gusta', 'cambia', 'baja'];
 
 const RANGES = [1, 7, 30, 90] as const;
 const FRICTION: Record<Friction['kind'], string> = {
@@ -41,11 +46,12 @@ function Stat({ label, value }: { label: string; value: string }) {
  * Analytics: cómo navegan las personas por la app, para encontrar fricciones en el flujo.
  * Con qué pantalla empiezan, a dónde van después, dónde se van, cuánto se quedan y dónde se confunden.
  */
-export default async function PanelAnalytics({ searchParams }: { searchParams: Promise<{ dias?: string; pantalla?: string }> }) {
+export default async function PanelAnalytics({ searchParams }: { searchParams: Promise<{ dias?: string; pantalla?: string; opinion?: string; opinion_pantalla?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
   const days = RANGES.find((r) => String(r) === sp.dias) ?? 7;
-  const [{ events, truncated, error }, funnelData, chatOutcomes] = await Promise.all([loadNavEvents({ days }), loadFunnel(days), loadChatOutcomes(days)]);
+  const [{ events, truncated, error }, funnelData, chatOutcomes, opinions] = await Promise.all([loadNavEvents({ days }), loadFunnel(days), loadChatOutcomes(days), feedback(90)]);
+  const opinion = OPINION.find((o) => o === sp.opinion) ?? 'todas';
   const funnel = analyzeFunnel(funnelData.rows);
   const film = analyzeFilm(funnelData.rows);
   const chat = analyzeChat(funnelData.rows);
@@ -76,6 +82,12 @@ export default async function PanelAnalytics({ searchParams }: { searchParams: P
 
       {error && <p className="rounded-[14px] bg-white p-4 text-sm shadow-ring">No se pudo leer la navegación ({error}). ¿Ya se aplicó la migración 0028?</p>}
       {truncated && <p className="text-sm text-soi-muted">Se analizaron los primeros 50 000 eventos del periodo; elige un periodo más corto para ver todo.</p>}
+
+      <Card id="opinion" title="Lo que dicen" hint="La burbuja de opinión de la app (últimos 90 días, sin demo ni administración): caritas de 1 a 4, qué les gusta y qué cambiarían, con la pantalla y el dispositivo desde donde la mandaron.">
+        {opinions.error
+          ? <p className="text-sm text-soi-muted">No se pudo leer ({opinions.error}). ¿Ya se aplicó la migración 0046?</p>
+          : <FeedbackView rows={opinions.rows} emails={opinions.emails} filter={opinion} path={sp.opinion_pantalla ?? null} baseHref={`/panel/analytics?dias=${days}`} />}
+      </Card>
 
       <Card title="De la landing a la app" hint="Visitantes únicos (mismo navegador) en el periodo. País y ciudad aproximados por la conexión; no se guarda la IP.">
         {funnelData.error

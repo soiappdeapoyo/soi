@@ -7,6 +7,7 @@ import { analyzeChat, analyzeFunnel } from '@/lib/analytics/funnel';
 import { analyzeFlows, buildSessions } from '@/lib/analytics/nav';
 import { analyzePmf, pmfFingerprint, type PmfAnalysis, type PmfSnapshot } from '@/lib/admin/pmf';
 import { analyzeConversations, complaintHits, type PrevReply, type UserMsg } from '@/lib/admin/conversation-signals';
+import { feedbackForPmf, type FeedbackRow } from '@/lib/admin/feedback';
 
 /** Datos de /panel/analyticsAI (service role). Solo se llaman tras comprobar que quien pide es administrador. */
 const DAY = 86_400_000;
@@ -113,6 +114,10 @@ export async function pmfSnapshot(days: number): Promise<PmfSnapshot> {
   const cstep = (id: string) => chat?.steps.find((x) => x.id === id)?.count ?? 0;
   const flows = nav.error ? null : analyzeFlows(buildSessions(nav.events.filter((e) => !e.user_id || !excluded.has(e.user_id))));
   const conversations = await loadConversationInsights(days, excluded).catch(() => undefined);
+  const { data: fb, error: fbError } = await a.from('app_feedback')
+    .select('id, user_id, rating, liked, disliked, path, device, plan, account_days, source, crisis, created_at')
+    .gte('created_at', since(days)).limit(5000);
+  const feedback = fbError ? undefined : feedbackForPmf(keep((fb ?? []) as FeedbackRow[]));
 
   return {
     generatedAt: new Date().toISOString(),
@@ -147,6 +152,7 @@ export async function pmfSnapshot(days: number): Promise<PmfSnapshot> {
     engagement: { mau, avgDau, activeInPeriod: activeInPeriod.size, messages: userMsgs.filter((x) => Date.parse(x.created_at) >= periodStart).length },
     ai: { tokens: inPeriod.reduce((s, x) => s + (x.tokens_used ?? 0), 0), crisis: crisis.count ?? 0, providers: [...providers.entries()].sort((x, y) => y[1] - x[1]) },
     conversations,
+    feedback,
   };
 }
 
