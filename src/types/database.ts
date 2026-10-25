@@ -35,6 +35,8 @@ export type UserProfile = {
   /** Tipo de cuenta (0041): 'soi' o 'persons' (el gimnasio de conversación de /persons). */
   app_role?: 'soi' | 'persons';
   country: string;
+  /** 0043: país detectado por la IP la primera vez que entró (solo servidor). */
+  geo_country?: string | null;
   available_minutes: number | null;
   weakest_link: Eslabon | null;
   plan: Plan;

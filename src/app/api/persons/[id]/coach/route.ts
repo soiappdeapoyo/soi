@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if ('action' in parsed.data) {
     // Al abrir el chat del coach con algo nuevo que comentar, aunque no lleguen a TIP_EVERY.
-    return Response.json({ messages: await maybeTip(persona, blind, true) });
+    return Response.json({ messages: await maybeTip(persona, blind, s.region, true) });
   }
   const r = await askCoach(s, persona, parsed.data.text, blind);
   if (r.ok) return Response.json({ messages: r.messages });

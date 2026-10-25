@@ -51,6 +51,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const spec = buildSpec(described, parsed.data.sourceDescription || persona.spec.sourceDescription, persona.id);
   spec.derived.voice = persona.spec.derived.voice;
   spec.derived.hue = persona.spec.derived.hue;
+  spec.country = persona.spec.country;
   const emotion = parseEmotion(persona.emotion, persona.spec.derived.temperament);
   if (diff.reset === 'openness') { emotion.openness = 0.5; emotion.trust = Math.max(0, emotion.trust - 0.2); }
   if (diff.reset === 'trust') { emotion.trust = 0.2; emotion.trustCeiling = 1; emotion.risk = false; }

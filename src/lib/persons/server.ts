@@ -4,7 +4,8 @@ import { getProfile } from '@/lib/billing/check-access';
 import { effectivePlan, type EffectivePlan } from '@/lib/billing/access-rules';
 import { isAdminEmail } from '@/lib/admin/auth';
 import type { UserProfile } from '@/types/database';
-import { buildSpec, type Described, type PersonSpec } from './spec';
+import { buildSpec, hash, type Described, type PersonSpec } from './spec';
+import { cityCountry, localCity, REGIONS } from '@/config/regionalisms';
 import { initialEmotion, labelFor, parseEmotion, type EmotionLabel, type EmotionSnapshot } from './emotion';
 import { lastSeenAt, presenceAt, presenceLabel } from './presence';
 import { personsLimits, type PersonsLimits } from './entitlements';
@@ -63,6 +64,8 @@ export type PersonsSession = {
   plan: EffectivePlan;
   limits: PersonsLimits;
   timezone: string;
+  /** País de origen (IP al registrarse; si no, el del perfil): de dónde son los arquetipos y cómo habla el coach. */
+  region: string;
 };
 
 /** Una cuenta entra a /persons si es de este tipo (o si administra SOI, para revisarlo). */
@@ -77,7 +80,7 @@ export const getPersonsSession = cache(async (): Promise<PersonsSession | 'signe
   const profile = (await getProfile(user.id)) as (UserProfile & { app_role?: string }) | null;
   if (!profile || !isPersonsAccount(profile, user.email)) return 'other_account';
   const plan = effectivePlan(profile);
-  return { userId: user.id, email: user.email, profile, plan, limits: personsLimits(plan), timezone: profile.timezone ?? 'America/Mexico_City' };
+  return { userId: user.id, email: user.email, profile, plan, limits: personsLimits(plan), timezone: profile.timezone ?? 'America/Mexico_City', region: (profile.geo_country ?? profile.country ?? 'MX').toUpperCase() };
 });
 
 /** Para las rutas API: la sesión o una respuesta de error lista. */
@@ -100,10 +103,18 @@ export async function activeCount(userId: string) {
 }
 
 /** Inserta una persona nueva a partir de su ficha. */
-export async function insertPersona(s: PersonsSession, described: Described, source: string, presetId: string | null) {
+export async function insertPersona(s: PersonsSession, described: Described, source: string, presetId: string | null, opts: { localize?: boolean } = {}) {
   const db = createAdminClient();
   const seed = `${s.userId}:${described.name}:${Date.now()}`;
-  const spec = buildSpec(described, source, seed);
+  // Un arquetipo listo se muda a una ciudad de tu país; uno descrito es de su ciudad (o, si no se reconoce, de tu país).
+  const region = REGIONS[s.region];
+  const own = cityCountry(described.city);
+  let country = own ?? s.region;
+  if (opts.localize && presetId && region && own !== s.region) {
+    described = { ...described, city: localCity(region, hash(presetId)) };
+    country = s.region;
+  }
+  const spec: PersonSpec = { ...buildSpec(described, source, seed), country };
   const { data, error } = await db.from('personas').insert({
     user_id: s.userId, preset_id: presetId, name: spec.name, age: spec.age, gender: spec.gender,
     profession: spec.profession, city: spec.city, bio: spec.bio, difficulty: spec.difficulty,

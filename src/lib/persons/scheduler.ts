@@ -46,9 +46,9 @@ const ACK: Record<string, string[]> = {
 };
 
 /** El aviso de "te escribo al rato" (sin IA). Con algo vulnerable, siempre cálido. */
-export function ackMessage(activity: string | undefined, warm: boolean, rand: () => number) {
+export function ackMessage(activity: string | undefined, warm: boolean, rand: () => number, regional?: { warm: string[]; plain: string[] }) {
   const a = (activity ?? 'con pendientes').trim();
-  const list = warm ? ACK.warm! : ACK.plain!;
+  const list = regional ? (warm ? regional.warm : regional.plain) : warm ? ACK.warm! : ACK.plain!;
   return list[Math.floor(rand() * list.length) % list.length]!.replace('{a}', a);
 }
 
@@ -85,6 +85,8 @@ export function planDelivery(o: {
   vulnerable?: boolean;
   /** Ritmo de la charla (por defecto, el de su día). */
   pace?: Pace;
+  /** Cómo dice "te escribo al rato" alguien de su país. */
+  ack?: { warm: string[]; plain: string[] };
   rand: () => number;
 }): Plan {
   const { now, presence, emotion, rand } = o;
@@ -117,7 +119,7 @@ export function planDelivery(o: {
         firstAt = Math.min(t0 + untilEnd + between(rand, 2, 20) * 60_000, t0 + MAX_WAIT_MS);
         firstAt = Math.max(firstAt, t0 + 3 * 60_000);
         if (important && !o.boundary && untilEnd > 20 * 60_000) {
-          ack = { content: ackMessage(presence.activity, Boolean(o.vulnerable) || emotion.valence > 0.2, rand), kind: 'text', deliverAt: new Date(t0 + between(rand, 1, 5) * 60_000), meta: { ack: true } };
+          ack = { content: ackMessage(presence.activity, Boolean(o.vulnerable) || emotion.valence > 0.2, rand, o.ack), kind: 'text', deliverAt: new Date(t0 + between(rand, 1, 5) * 60_000), meta: { ack: true } };
         }
       }
       break;

@@ -5,6 +5,7 @@ import { getConsentState } from '@/lib/consent';
 import { isBrandNew } from '@/lib/journey';
 import { authFailureReason } from '@/lib/auth-errors';
 import { createAdminClient } from '@/lib/supabase/server';
+import { ipCountry, rememberGeoCountry } from '@/lib/geo-country';
 import { countryName, geoFromHeaders, VISITOR_COOKIE, visitorFrom } from '@/lib/analytics/funnel';
 import { isAdminEmail } from '@/lib/admin/auth';
 import { notifyAdmins } from '@/lib/admin/notify';
@@ -51,6 +52,12 @@ export async function GET(request: Request) {
     }
     const { data: p } = await db.from('user_profiles').select('app_role').eq('user_id', u.id).maybeSingle();
     role = (p?.app_role as string | undefined) ?? null;
+  }
+  // País de origen por la IP (una sola vez). En /persons también es el país del perfil (sin ajuste para elegirlo).
+  {
+    const code = ipCountry(request.headers);
+    const fresh = Date.now() - Date.parse(u.created_at) < 10 * 60_000;
+    after(() => rememberGeoCountry(u.id, code, { setCountry: role === 'persons' && fresh }));
   }
 
   // Embudo y aviso de registro, después de responder (no retrasa la entrada).

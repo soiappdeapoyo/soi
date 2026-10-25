@@ -4,6 +4,7 @@ import { consumeChatQuery, refundChatQuery } from '@/lib/billing/check-access';
 import { detectCrisis } from '@/lib/ai/crisis';
 import { getCrisisResources } from '@/config/crisis-resources';
 import { coachAnswer, coachTip } from './ai';
+import { regionFor } from '@/config/regionalisms';
 import { newUserTurns, ruleTip, tipDue, type PracticeLine } from './coach';
 import type { DebriefReport } from './debrief';
 import type { PersonaMessageRow, PersonaRow, PersonsSession } from './server';
@@ -73,7 +74,7 @@ function insertCoach(persona: PersonaRow, rows: Partial<CoachRow>[]) {
  * Una idea por su cuenta si hubo `TIP_EVERY` mensajes tuyos desde la anterior (con IA; si no responde, por reglas).
  * Nunca descuenta del plan. Devuelve lo insertado.
  */
-export async function maybeTip(persona: PersonaRow, blind: boolean, force = false): Promise<CoachMessage[]> {
+export async function maybeTip(persona: PersonaRow, blind: boolean, userRegion: string, force = false): Promise<CoachMessage[]> {
   const [lines, upto] = await Promise.all([practiceLines(persona.id), lastUpto(persona.id)]);
   const fresh = newUserTurns(lines, upto);
   if (!fresh.length || (!force && !tipDue(lines, upto))) return [];
@@ -81,7 +82,7 @@ export async function maybeTip(persona: PersonaRow, blind: boolean, force = fals
   let messages: string[];
   let provider: string | null = null;
   try {
-    ({ messages, provider } = await coachTip(persona.spec, lines, fresh, blind));
+    ({ messages, provider } = await coachTip(persona.spec, lines, fresh, blind, regionFor(userRegion)));
   } catch (e) {
     console.error('[persons] coach idea', e instanceof Error ? e.message : e);
     messages = [ruleTip(fresh)];
@@ -94,8 +95,8 @@ export async function maybeTip(persona: PersonaRow, blind: boolean, force = fals
 }
 
 /** Después de responder al personaje: si ya toca, el coach deja su idea (la práctica no espera). */
-export function scheduleTip(persona: PersonaRow, blind: boolean) {
-  const run = () => maybeTip(persona, blind).then(() => undefined).catch(() => undefined);
+export function scheduleTip(persona: PersonaRow, blind: boolean, userRegion: string) {
+  const run = () => maybeTip(persona, blind, userRegion).then(() => undefined).catch(() => undefined);
   try { after(run); } catch { void run(); }
 }
 
@@ -122,7 +123,7 @@ export async function askCoach(s: PersonsSession, persona: PersonaRow, text: str
   const [lines, rows] = await Promise.all([practiceLines(persona.id), coachRows(persona.id, 20)]);
   const own = await saveOwn();
   try {
-    const { messages, provider } = await coachAnswer(persona.spec, lines, rows.filter((r) => r.kind !== 'report').map((r) => ({ role: r.role, content: r.content })), text, blind);
+    const { messages, provider } = await coachAnswer(persona.spec, lines, rows.filter((r) => r.kind !== 'report').map((r) => ({ role: r.role, content: r.content })), text, blind, regionFor(s.region));
     const last = lines.filter((l) => l.role === 'user').pop();
     const { data } = await insertCoach(persona, messages.map((content, i) => ({ content: content.slice(0, 2000), upto_at: i === 0 ? last?.at ?? null : null, meta: { provider } })));
     return { ok: true, messages: [...own, ...((data ?? []) as CoachRow[]).map(publicCoach)] };

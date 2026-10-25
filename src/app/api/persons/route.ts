@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   if ('presetId' in parsed.data) {
     const preset = presetById(parsed.data.presetId);
     if (!preset) return Response.json({ error: 'No encontramos ese personaje' }, { status: 404 });
-    const id = await insertPersona(s, preset.described, `Arquetipo: ${preset.scenario}`, preset.id);
+    const id = await insertPersona(s, preset.described, `Arquetipo: ${preset.scenario}`, preset.id, { localize: true });
     return Response.json({ id });
   }
   // La ficha vuelve del cliente: se revisa otra vez con las mismas reglas (edad adulta, límites, sin celebridades).

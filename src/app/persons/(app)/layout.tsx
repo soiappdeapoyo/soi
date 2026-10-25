@@ -1,4 +1,7 @@
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
+import { after } from 'next/server';
+import { ipCountry, rememberGeoCountry } from '@/lib/geo-country';
 import { getPersonsSession } from '@/lib/persons/server';
 import { getConsentState } from '@/lib/consent';
 import { PersonsNotifier } from '@/components/persons/notifier';
@@ -21,6 +24,11 @@ export default async function PersonsAppLayout({ children }: { children: React.R
         </div>
       </main>
     );
+  }
+  // Cuentas de antes de guardar el país de origen: se detecta por la IP la primera vez que vuelven.
+  if (!s.profile.geo_country) {
+    const code = ipCountry(await headers());
+    after(() => rememberGeoCountry(s.userId, code, { setCountry: s.profile.app_role === 'persons' }));
   }
   const consent = await getConsentState(s.userId);
   if (consent.state !== 'ok') redirect('/consentimiento?next=/persons');

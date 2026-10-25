@@ -5,11 +5,12 @@ import { loadPersona, personsApiSession } from '@/lib/persons/server';
 import { cachedVoice, hasTtsProvider, normalizeSpeech, synthesize, TTS_MODEL } from '@/lib/voice/server';
 import { getSettings } from '@/lib/settings';
 import type { EmotionSnapshot } from '@/lib/persons/emotion';
+import { personaRegion } from '@/lib/persons/ai';
 
 export const maxDuration = 60;
 
 /** Cómo suena una nota de voz: su tono y su ánimo de ese momento, en palabras (sin llanto, suspiros ni sonidos). */
-function voiceInstructions(gender: string, tone: string, emotion: EmotionSnapshot | null) {
+function voiceInstructions(gender: string, tone: string, emotion: EmotionSnapshot | null, accent: string) {
   const mood = !emotion ? 'natural'
     : emotion.label === 'excited' ? 'con energía y una sonrisa en la voz'
     : emotion.label === 'warm' ? 'cálido y relajado'
@@ -18,7 +19,7 @@ function voiceInstructions(gender: string, tone: string, emotion: EmotionSnapsho
     : emotion.label === 'busy' ? 'con prisa, como quien va haciendo algo'
     : 'tranquilo';
   const who = gender === 'masculino' ? 'un hombre' : gender === 'femenino' ? 'una mujer' : 'una persona';
-  return `Eres ${who} adulto que manda una nota de voz por WhatsApp a alguien que conoció hace poco, en español latinoamericano. Habla como en una conversación real, no como locutor: tono ${tone}, ${mood}. Di solo las palabras del texto; nada de risas forzadas, suspiros, llanto ni sonidos.`;
+  return `Eres ${who} adulto que manda una nota de voz por WhatsApp a alguien que conoció hace poco, en español con acento de ${accent} (natural, de alguien de ahí). Habla como en una conversación real, no como locutor: tono ${tone}, ${mood}. Di solo las palabras del texto; nada de risas forzadas, suspiros, llanto ni sonidos.`;
 }
 
 /**
@@ -41,7 +42,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const text = normalizeSpeech(msg.content as string);
   const emotion = (msg.emotion as EmotionSnapshot | null) ?? null;
-  const instructions = voiceInstructions(persona.gender, persona.spec.tone, emotion);
+  const instructions = voiceInstructions(persona.gender, persona.spec.tone, emotion, personaRegion(persona.spec, s.region).name);
   const voice = persona.voice ?? persona.spec.derived.voice;
   const path = `persons/${createHash('sha256').update(`${TTS_MODEL}|${voice}|${instructions}|${text}`).digest('hex')}`;
   const hit = await cachedVoice(path);

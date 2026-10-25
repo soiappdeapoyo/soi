@@ -12,7 +12,7 @@ import { humanizeItems, quirksFor } from './humanize';
 import { scheduleChatPhoto } from './images';
 import { scheduleTip } from './coach-server';
 import { blockNotice, checkTurn } from './moderation';
-import { actorReply, type ChatLine } from './ai';
+import { actorReply, personaRegion, type ChatLine } from './ai';
 import { canSendToday } from './entitlements';
 import type { PersonaMessageRow, PersonaRow, PersonsSession } from './server';
 
@@ -103,10 +103,11 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
     .reverse()
     .map((m) => ({ role: m.role, kind: m.kind, content: m.content, at: m.role === 'user' ? m.created_at : m.deliver_at }));
 
+  const region = personaRegion(spec, s.region);
   let reply;
   try {
     ({ reply } = await actorReply(spec, history, {
-      emotion: next, label, presence, now, timezone: persona.timezone,
+      emotion: next, label, presence, now, timezone: persona.timezone, region,
       boundary: check.level === 'boundary' ? REASON_LABEL[check.reason ?? 'pressure'] : null, risk: next.risk,
     }));
   } catch (error) {
@@ -123,7 +124,7 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
   const pace = paceFor({ userTurns: userTurns ?? 0, lastPersonaAt: lastPersona ? new Date(lastPersona.deliver_at as string) : null, now: replyNow, presence });
   const plan = planDelivery({
     now: replyNow, presence, emotion: next, profile: spec.derived.responseProfile, userText: text, replies: reply.messages,
-    boundary, voiceAllowed: s.limits.voice, vulnerable: events.includes('shared_self'), pace, rand,
+    boundary, voiceAllowed: s.limits.voice, vulnerable: events.includes('shared_self'), pace, ack: region.ack, rand,
   });
   // Escribe como en el teléfono: minúsculas, acentos que se le pasan, algún dedazo (nunca al marcar un límite).
   plan.items = humanizeItems(plan.items, quirksFor(spec, persona.id), rand, boundary);
@@ -141,7 +142,7 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
       scheduleChatPhoto({ personaId: persona.id, userId: s.userId, query: reply.photo, caption: null, deliverAt: plan.items[0]!.deliverAt });
     }
   }
-  scheduleTip(persona, Boolean(opts.blind));
+  scheduleTip(persona, Boolean(opts.blind), s.region);
   await db.from('personas').update({ emotion: next, emotion_at: nowIso, last_message_at: nowIso, updated_at: nowIso }).eq('id', persona.id);
   return { ok: true, messageId: inserted.id as string };
 }

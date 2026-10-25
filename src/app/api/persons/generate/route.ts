@@ -3,6 +3,7 @@ import { z } from 'zod/v3';
 import { createAdminClient } from '@/lib/supabase/server';
 import { BLOCK_COPY, checkDescription, diffSpecs } from '@/lib/persons/spec';
 import { generateDescribed } from '@/lib/persons/ai';
+import { regionFor } from '@/config/regionalisms';
 import { loadPersona, personsApiSession } from '@/lib/persons/server';
 import { canGenerate, GATE_COPY } from '@/lib/persons/entitlements';
 import { startOfTodayISO } from '@/lib/utils';
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
   if (personaId && !base) return Response.json({ error: 'No encontramos a esta persona' }, { status: 404 });
 
   try {
-    const result = await generateDescribed({ description: input, name, base: base?.spec, delta });
+    const result = await generateDescribed({ description: input, name, base: base?.spec, delta, region: regionFor(s.region) });
     await db.from('persona_generations').insert({ user_id: s.userId, kind, blocked_reason: result ? null : 'output', description_hash: descriptionHash });
     if (!result) return Response.json({ error: BLOCK_COPY.real_person, reason: 'output' }, { status: 422 });
     return Response.json({

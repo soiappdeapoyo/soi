@@ -4,6 +4,7 @@ import { DescribedSchema, normalizeDescribed, checkDescription, personaLine, typ
 import { expressionGuide, type EmotionLabel, type EmotionState } from './emotion';
 import type { Presence } from './presence';
 import { COACH_NAME, type PracticeLine } from './coach';
+import { cityCountry, regionFor, type Region } from '@/config/regionalisms';
 import { CoachSchema, SKILLS, type CoachReport, type DebriefMessage, type TimelinePoint } from './debrief';
 
 /**
@@ -18,17 +19,17 @@ Devuelves una ficha coherente de un ARQUETIPO adulto, nunca una persona real ni 
 Reglas:
 - Edad 18 o más, siempre. Nada sexualizado ni de sumisión: límites sanos (respeto, consentimiento, no insistir).
 - Si la descripción nombra o imita a una persona real o famosa, crea un arquetipo genérico con otro nombre.
-- Nombre de pila común en Latinoamérica o España (sin apellidos). Ciudad real hispanohablante si no se dice otra.
+- Nombre de pila común (sin apellidos) del país de su ciudad. Si la descripción no dice ciudad, usa la que se te indica.
 - traits: 2–6 rasgos breves. interests: 2–8 intereses concretos. boundaries: 1–6 límites en sus palabras.
 - style: cómo escribe en el chat (largo de mensajes, emojis, humor). bio: 1–2 frases en tercera persona.
 - availability: su rutina (profesional, estudiante, freelance o turnos). energy 0–1. difficulty 1 (fácil, muy legible)
   a 3 (difícil: reservada, se abre lento). Si no se dice, 2.
 - Personas diversas, sin estereotipos.`;
 
-export async function generateDescribed(o: { description: string; name?: string; base?: Described; delta?: string }): Promise<{ described: Described; provider: ProviderName } | null> {
+export async function generateDescribed(o: { description: string; name?: string; base?: Described; delta?: string; region?: Region }): Promise<{ described: Described; provider: ProviderName } | null> {
   const prompt = o.base
     ? `Ficha actual (JSON):\n${JSON.stringify(o.base)}\n\nAjuste pedido: «${(o.delta ?? o.description).slice(0, 400)}»\n\nDevuelve la ficha completa con el ajuste aplicado. Cambia SOLO lo que el ajuste pide; todo lo demás queda igual.`
-    : `Descripción: «${o.description.slice(0, 400)}»${o.name ? `\nNombre elegido: ${o.name.slice(0, 40)}` : ''}`;
+    : `Descripción: «${o.description.slice(0, 400)}»${o.name ? `\nNombre elegido: ${o.name.slice(0, 40)}` : ''}\nSi no dice ciudad: una ciudad real de ${o.region?.name ?? 'Latinoamérica'} (${(o.region?.cities ?? ['CDMX']).slice(0, 4).join(', ')}…), porque quien practica es de ahí.`;
   const { object, provider } = await objectWithFallback({ schema: DescribedSchema, instructions: GENERATOR, prompt, timeoutMs: 30_000 });
   const described = normalizeDescribed(object as Described);
   if (!described) return null;
@@ -53,6 +54,17 @@ export type ActorReply = z.infer<typeof ActorSchema>;
 
 export type ChatLine = { role: 'user' | 'persona' | 'system'; content: string; at: string; kind?: 'text' | 'voice' };
 
+/** De dónde es el personaje: su país guardado, el de su ciudad o, si no, el de quien practica. */
+export function personaRegion(spec: Pick<PersonSpec, 'country' | 'city'>, userRegion: string | null | undefined): Region {
+  return regionFor(spec.country ?? cityCountry(spec.city) ?? userRegion);
+}
+
+/** Cómo habla alguien de su país (para el prompt del actor). */
+export function regionGuide(r: Region) {
+  return `Eres de ${r.name} y escribes como alguien de ahí: ${r.notes}${r.voseo ? ' Usa vos (vos tenés, contame), nunca tú.' : ''}
+Expresiones que te salen solas (úsalas cuando caigan natural: a lo mucho una por mensaje y no en todos; nada de caricatura): ${r.slang.join(', ')}.`;
+}
+
 const pron = (s: PersonSpec) => (s.gender === 'masculino' ? 'él' : s.gender === 'femenino' ? 'ella' : 'elle');
 
 function clock(iso: string, tz: string) {
@@ -63,7 +75,7 @@ function clock(iso: string, tz: string) {
   }
 }
 
-export function actorInstructions(spec: PersonSpec, ctx: { emotion: EmotionState; label: EmotionLabel; presence: Presence; now: Date; timezone: string; boundary: string | null; risk: boolean }) {
+export function actorInstructions(spec: PersonSpec, ctx: { emotion: EmotionState; label: EmotionLabel; presence: Presence; now: Date; timezone: string; boundary: string | null; risk: boolean; region?: Region }) {
   const doing = ctx.presence.state === 'online'
     ? 'Tienes el teléfono a la mano.'
     : ctx.presence.state === 'asleep'
@@ -79,6 +91,8 @@ Hora local: ${clock(ctx.now.toISOString(), ctx.timezone)}. ${doing}
 
 Cómo te sientes (no lo digas, que se note): ${expressionGuide(ctx.emotion, ctx.label)}
 ${ctx.boundary ? `Su último mensaje cruzó un límite (${ctx.boundary}). Márcalo con claridad, sin sermones y sin agresividad, en una frase corta.${ctx.risk ? ' Ya te había pasado: despídete y no sigas la conversación hoy.' : ''}\n` : ''}
+${regionGuide(ctx.region ?? personaRegion(spec, null))}
+
 Cómo escribes en el chat (esto es lo más importante: que no suene a robot ni a asistente):
 - Como alguien con el teléfono en la mano: informal, rápido, sin cuidar la redacción. Mensajes cortos; a veces una
   sola palabra («jajaja», «siii», «nooo», «va», «uff»). Varía el largo: no todos tus mensajes iguales.
@@ -150,11 +164,12 @@ export const CoachChatSchema = z.object({
   messages: z.array(z.string().min(1).max(500)).min(1).max(3),
 });
 
-function coachVoice(spec: PersonSpec, blind: boolean) {
+function coachVoice(spec: PersonSpec, blind: boolean, region: Region) {
   return `Eres ${COACH_NAME}, coach de habilidades sociales. La persona practica conversaciones por chat con ${spec.name}, un
 personaje ficticio (${personaLine(spec)}; rasgos: ${spec.traits.join(', ')}; límites: ${spec.boundaries.join(' · ')}).
 Hablas con la persona como un amigo que sabe mucho del tema, por WhatsApp:
 - Informal, cercano y directo. Minúsculas está bien, sin títulos, sin listas largas, sin sonar a reporte ni a manual.
+- La persona es de ${region.name}: háblale como alguien de ahí (${region.notes}${region.voseo ? ' Con vos, nunca tú.' : ''}), con sus modismos cuando caigan natural, sin exagerar. Si te pide qué escribir, que suene a ${region.name}.
 - 1 a 3 mensajes cortos. UNA idea concreta a la vez, sobre lo que de verdad pasó (cita sus palabras entre comillas).
 - Si pide qué escribir, dale 1 o 2 opciones de mensaje que suenen naturales, en su estilo, entre comillas. Nunca
   guiones de seducción, trucos ni manipulación. Retirarse bien o respetar un no también es un acierto.
@@ -174,10 +189,10 @@ function practiceTranscript(spec: PersonSpec, lines: PracticeLine[], blind: bool
 const trimAll = (m: string[]) => m.map((x) => x.trim()).filter(Boolean).slice(0, 3);
 
 /** Una idea por su cuenta sobre los últimos mensajes (mientras practica). */
-export async function coachTip(spec: PersonSpec, lines: PracticeLine[], fresh: PracticeLine[], blind: boolean) {
+export async function coachTip(spec: PersonSpec, lines: PracticeLine[], fresh: PracticeLine[], blind: boolean, region: Region) {
   const { object, provider } = await objectWithFallback({
     schema: CoachChatSchema,
-    instructions: coachVoice(spec, blind),
+    instructions: coachVoice(spec, blind, region),
     prompt: `Conversación de práctica:\n${practiceTranscript(spec, lines, blind)}\n\nSus últimos mensajes (los que vas a comentar):\n${fresh.map((f) => `«${f.content}»`).join('\n')}\n\nMándale por tu cuenta una idea corta sobre cómo va (1 o 2 mensajes): qué está funcionando o qué ajustar ahora. Sin saludo largo.`,
     order: FAST_ORDER,
     timeoutMs: 15_000,
@@ -187,11 +202,11 @@ export async function coachTip(spec: PersonSpec, lines: PracticeLine[], fresh: P
 }
 
 /** Responde lo que la persona le pregunta al coach. */
-export async function coachAnswer(spec: PersonSpec, lines: PracticeLine[], chat: { role: 'user' | 'coach'; content: string }[], question: string, blind: boolean) {
+export async function coachAnswer(spec: PersonSpec, lines: PracticeLine[], chat: { role: 'user' | 'coach'; content: string }[], question: string, blind: boolean, region: Region) {
   const history = chat.slice(-16).map((m) => `${m.role === 'user' ? 'Persona' : COACH_NAME}: ${m.content}`).join('\n');
   const { object, provider } = await objectWithFallback({
     schema: CoachChatSchema,
-    instructions: coachVoice(spec, blind),
+    instructions: coachVoice(spec, blind, region),
     prompt: `Conversación de práctica con ${spec.name}:\n${practiceTranscript(spec, lines, blind) || '(todavía no hay mensajes)'}\n\nTu chat con la persona:\n${history || '(nuevo)'}\n\nLa persona te escribe: «${question.slice(0, 800)}»\n\nResponde.`,
     order: CHAT_ORDER,
     timeoutMs: 25_000,

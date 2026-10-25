@@ -48,6 +48,8 @@ export type Temperament = {
 export type ResponseProfile = 'fast' | 'bursty' | 'slow' | 'professional';
 
 export type PersonSpec = Described & {
+  /** País del personaje (ISO; regionalismos). Las fichas anteriores no lo tienen: se deduce de la ciudad. */
+  country?: string;
   derived: { temperament: Temperament; dayPlan: DayPlan; responseProfile: ResponseProfile; voice: string; hue: number };
   sourceDescription: string;
 };
