@@ -1,7 +1,7 @@
 import { z } from 'zod/v3';
 import { DescribedSchema, normalizeDescribed } from '@/lib/persons/spec';
 import { presetById } from '@/config/persons-presets';
-import { activeCount, insertPersona, loadChatList, personsApiSession } from '@/lib/persons/server';
+import { activeCount, insertPersona, loadChatList, loadInbox, personsApiSession } from '@/lib/persons/server';
 import { canCreatePersona, GATE_COPY } from '@/lib/persons/entitlements';
 
 /** La lista de chats (se consulta cada pocos segundos para los no leídos y el aviso de mensaje nuevo). */
@@ -9,7 +9,8 @@ export async function GET(req: Request) {
   const s = await personsApiSession();
   if (s instanceof Response) return s;
   const archived = new URL(req.url).searchParams.get('archivados') === '1';
-  return Response.json({ chats: await loadChatList(s.userId, { archived }) }, { headers: { 'Cache-Control': 'no-store' } });
+  const body = archived ? { chats: await loadChatList(s.userId, { archived }), coach: null } : await loadInbox(s.userId);
+  return Response.json(body, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 const Body = z.union([

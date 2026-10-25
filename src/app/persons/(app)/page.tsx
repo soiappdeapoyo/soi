@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Archive, Plus, UserRound } from 'lucide-react';
-import { getPersonsSession, loadChatList } from '@/lib/persons/server';
+import { getPersonsSession, loadInbox } from '@/lib/persons/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { trialDaysLeft } from '@/lib/billing/access-rules';
 import { ChatList } from '@/components/persons/chat-list';
@@ -15,8 +15,8 @@ export const dynamic = 'force-dynamic';
 export default async function PersonsHome() {
   const s = await getPersonsSession();
   if (typeof s === 'string') redirect('/persons/entrar');
-  const [chats, { count: archived }] = await Promise.all([
-    loadChatList(s.userId),
+  const [{ chats, coach }, { count: archived }] = await Promise.all([
+    loadInbox(s.userId),
     createAdminClient().from('personas').select('id', { count: 'exact', head: true }).eq('user_id', s.userId).not('archived_at', 'is', null),
   ]);
   const days = trialDaysLeft(s.profile);
@@ -44,7 +44,7 @@ export default async function PersonsHome() {
         </Link>
       )}
 
-      {chats.length ? <ChatList initial={chats} /> : (
+      {chats.length ? <ChatList initial={chats} coach={coach} /> : (
         <div className="px-4 py-6">
           <p className="text-center text-lg font-medium">Aún no tienes con quién practicar.</p>
           <p className="mt-1 text-center text-soi-muted">Crea a alguien desde una descripción o agrega a una de estas personas.</p>

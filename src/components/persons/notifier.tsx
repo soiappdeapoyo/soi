@@ -3,9 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ChatListItem } from '@/lib/persons/server';
+import type { CoachSummary } from '@/lib/persons/coach-server';
+import { COACH_HUE, COACH_NAME } from '@/lib/persons/coach';
 import { PersonaAvatar } from './avatar';
 
 export const CHATS_EVENT = 'persons:chats';
+export type InboxEvent = { chats: ChatListItem[]; coach: CoachSummary | null };
 const POLL_MS = 15_000;
 
 /**
@@ -17,6 +20,7 @@ export function PersonsNotifier() {
   const pathname = usePathname();
   const router = useRouter();
   const seen = useRef<Map<string, string> | null>(null);
+  const seenCoach = useRef<string | null | undefined>(undefined);
   const [banner, setBanner] = useState<{ id: string; name: string; hue: number; avatar: string | null; text: string } | null>(null);
   const [shown, setShown] = useState(false);
   const pathRef = useRef(pathname);
@@ -30,8 +34,14 @@ export function PersonsNotifier() {
         try {
           const res = await fetch('/api/persons', { cache: 'no-store' });
           if (res.ok) {
-            const { chats } = (await res.json()) as { chats: ChatListItem[] };
-            window.dispatchEvent(new CustomEvent(CHATS_EVENT, { detail: chats }));
+            const { chats, coach } = (await res.json()) as InboxEvent;
+            window.dispatchEvent(new CustomEvent<InboxEvent>(CHATS_EVENT, { detail: { chats, coach } }));
+            // Ale dejó algo nuevo y su chat no está abierto.
+            const coachAt = coach?.last?.role === 'coach' && coach.unread > 0 ? coach.last.at : null;
+            if (seenCoach.current !== undefined && coachAt && coachAt !== seenCoach.current && pathRef.current !== '/persons/coach') {
+              setBanner({ id: 'coach', name: COACH_NAME, hue: COACH_HUE, avatar: null, text: coach!.last!.content });
+            }
+            seenCoach.current = coachAt;
             const prev = seen.current;
             const next = new Map(chats.map((c) => [c.id, c.last?.at ?? '']));
             if (prev) {
@@ -63,7 +73,7 @@ export function PersonsNotifier() {
     <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
       <button
         type="button"
-        onClick={() => { setShown(false); router.push(`/persons/${banner.id}`); }}
+        onClick={() => { setShown(false); router.push(banner.id === 'coach' ? '/persons/coach' : `/persons/${banner.id}`); }}
         className={`press pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-raised transition-[transform,opacity] duration-(--dur-enter) ease-out-strong motion-reduce:transition-none ${shown ? 'translate-y-0 opacity-100' : '-translate-y-3 opacity-0'}`}
       >
         <PersonaAvatar name={banner.name} hue={banner.hue} src={banner.avatar} size={40} />

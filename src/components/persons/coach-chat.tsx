@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, GraduationCap, Lightbulb, SendHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
-import type { CoachMessage, CoachState } from '@/lib/persons/coach-server';
+import type { CoachMessage, CoachThread } from '@/lib/persons/coach-server';
 import { COACH_HUE, COACH_NAME, COACH_PROMPTS, FEEDBACK_PROMPT } from '@/lib/persons/coach';
 import { SKILLS, type DebriefReport } from '@/lib/persons/debrief';
 import type { Gender } from '@/lib/persons/spec';
@@ -19,34 +19,36 @@ import { clockTime, dayKey, dayLabel } from './time';
 const HEADER = '#4A3AA8';
 const MIN_TYPING_MS = 900;
 
+export type CoachPersona = { id: string; name: string; gender: Gender; hue: number; avatar: string | null };
 type Local = CoachMessage & { local?: boolean };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * El chat con el coach de un personaje, como hablar con un amigo que sabe del tema: va dejando ideas sobre tu
- * práctica, le preguntas cómo mejorar o qué contestar, y al terminar la sesión te deja el feedback como tarjeta.
+ * El chat con Ale, el coach: UNA conversación más de la lista. Junta lo que te ha dicho de todas tus prácticas (cada
+ * mensaje marca de quién habla), te deja ideas mientras practicas, le preguntas cómo mejorar o qué contestar, y al
+ * terminar una sesión te deja el feedback como tarjeta. Arriba del cuadro eliges de qué plática le hablas.
  */
-export function CoachChat({ personaId, persona, initial, autoFeedback, gate: initialGate }: {
-  personaId: string;
-  persona: { name: string; gender: Gender; hue: number; avatar: string | null };
-  initial: CoachState; autoFeedback: boolean; gate: boolean;
+export function CoachChat({ personas, initial, autoFeedback, gate: initialGate }: {
+  personas: CoachPersona[]; initial: CoachThread; autoFeedback: boolean; gate: boolean;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<Local[]>(initial.messages);
+  const [focus, setFocus] = useState<string | null>(initial.focus);
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState('');
   const [gate, setGate] = useState(initialGate);
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const started = useRef(false);
+  const byId = new Map(personas.map((p) => [p.id, p]));
+  const current = focus ? byId.get(focus) ?? null : null;
 
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el && atBottom.current) el.scrollTop = el.scrollHeight;
   }, [messages.length, typing]);
 
-  const say = (content: string): Local => ({ id: `local-${Date.now()}-${Math.random()}`, role: 'coach', kind: 'text', content, created_at: new Date().toISOString(), local: true });
-  const mine = (content: string): Local => ({ id: `local-${Date.now()}`, role: 'user', kind: 'text', content, created_at: new Date().toISOString(), local: true });
+  const local = (role: 'user' | 'coach', content: string): Local => ({ id: `local-${Date.now()}-${Math.random()}`, persona_id: focus ?? '', role, kind: 'text', content, created_at: new Date().toISOString(), local: true });
 
   /** Pide algo al servidor con "escribiendo…" visible un mínimo (que no aparezca y desaparezca de golpe). */
   async function withTyping<T>(run: () => Promise<T>): Promise<T> {
@@ -60,24 +62,25 @@ export function CoachChat({ personaId, persona, initial, autoFeedback, gate: ini
     }
   }
 
-  async function feedback() {
+  async function feedback(id: string) {
+    const name = byId.get(id)?.name ?? 'esa persona';
     const r = await withTyping(async () => {
       try {
-        const res = await fetch(`/api/persons/${personaId}/debrief`, { method: 'POST' });
-        return { ok: res.ok, data: (await res.json().catch(() => ({}))) as { coach?: CoachMessage[]; report?: DebriefReport; error?: string; reason?: string } };
+        const res = await fetch(`/api/persons/${id}/debrief`, { method: 'POST' });
+        return { ok: res.ok, data: (await res.json().catch(() => ({}))) as { coach?: CoachMessage[]; report?: DebriefReport; reason?: string } };
       } catch {
-        return { ok: false, data: { error: 'sin conexión' } };
+        return { ok: false, data: {} as { coach?: CoachMessage[]; reason?: string } };
       }
     });
     if (r.ok && r.data.coach?.length) setMessages((m) => [...m, ...r.data.coach!]);
-    else if (r.data.reason === 'too_short') setMessages((m) => [...m, say(`todavía no hay mucho que revisar 😅 escríbele unos mensajes más a ${persona.name} y me dices`)]);
-    else setMessages((m) => [...m, say('uy, no pude leer la plática ahorita. inténtalo otra vez en un momento')]);
+    else if (r.data.reason === 'too_short') setMessages((m) => [...m, local('coach', `todavía no hay mucho que revisar con ${name} 😅 escríbele unos mensajes más y me dices`)]);
+    else setMessages((m) => [...m, local('coach', 'uy, no pude leer la plática ahorita. inténtalo otra vez en un momento')]);
   }
 
-  async function observe() {
+  async function observe(id: string) {
     const r = await withTyping(async () => {
       try {
-        const res = await fetch(`/api/persons/${personaId}/coach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'observe' }) });
+        const res = await fetch(`/api/persons/${id}/coach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'observe' }) });
         return res.ok ? ((await res.json()) as { messages: CoachMessage[] }).messages : [];
       } catch { return []; }
     });
@@ -85,31 +88,31 @@ export function CoachChat({ personaId, persona, initial, autoFeedback, gate: ini
   }
 
   useEffect(() => {
-    if (started.current) return;
+    if (started.current || !initial.focus) return;
     started.current = true;
     if (autoFeedback) {
-      router.replace(`/persons/${personaId}/coach`, { scroll: false });
-      void feedback();
+      router.replace(`/persons/coach?p=${initial.focus}`, { scroll: false });
+      void feedback(initial.focus);
     } else if (initial.pendingTurns > 0) {
-      void observe();
+      void observe(initial.focus);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function send(raw: string) {
     const content = raw.trim();
-    if (!content || typing) return;
+    if (!content || typing || !focus) return;
     setText('');
-    const own = mine(content);
+    const own = local('user', content);
     setMessages((m) => [...m, own]);
-    if (content === FEEDBACK_PROMPT) { await feedback(); return; }
-    if (gate) { setMessages((m) => [...m, say('para seguir platicando conmigo necesitas Plus. tu práctica y todo lo que hablamos queda guardado')]); return; }
+    if (content === FEEDBACK_PROMPT) { await feedback(focus); return; }
+    if (gate) { setMessages((m) => [...m, local('coach', 'para seguir platicando conmigo necesitas Plus. tu práctica y todo lo que hablamos queda guardado')]); return; }
     const r = await withTyping(async () => {
       try {
-        const res = await fetch(`/api/persons/${personaId}/coach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: content }) });
+        const res = await fetch(`/api/persons/${focus}/coach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: content }) });
         return { ok: res.ok, data: (await res.json().catch(() => ({}))) as { messages?: CoachMessage[]; error?: string; reason?: string } };
       } catch {
-        return { ok: false, data: { error: 'Sin conexión. Tu mensaje no se envió.' } };
+        return { ok: false, data: { error: 'Sin conexión. Tu mensaje no se envió.' } as { messages?: CoachMessage[]; error?: string; reason?: string } };
       }
     });
     if (r.ok && r.data.messages) {
@@ -117,7 +120,7 @@ export function CoachChat({ personaId, persona, initial, autoFeedback, gate: ini
       setMessages((m) => [...m.filter((x) => x.id !== own.id), ...r.data.messages!]);
     } else if (r.data.reason === 'exhausted') {
       setGate(true);
-      setMessages((m) => [...m, say('se acabaron tus mensajes del plan Free. con Plus seguimos cuando quieras')]);
+      setMessages((m) => [...m, local('coach', 'se acabaron tus mensajes del plan Free. con Plus seguimos cuando quieras')]);
     } else {
       setMessages((m) => m.filter((x) => x.id !== own.id));
       setText(content);
@@ -125,22 +128,26 @@ export function CoachChat({ personaId, persona, initial, autoFeedback, gate: ini
     }
   }
 
+  function choose(id: string) {
+    if (id === focus) return;
+    setFocus(id);
+    router.replace(`/persons/coach?p=${id}`, { scroll: false });
+  }
+
   let lastDay = '';
+  let lastAbout = '';
   return (
     <div className="flex h-dvh flex-col overflow-hidden md:h-[calc(100dvh-2rem)]" style={{ background: WA.chatBg }}>
       <header className="flex shrink-0 items-center gap-1 px-1 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-white" style={{ background: HEADER }}>
-        <Link href={`/persons/${personaId}`} aria-label={`Volver al chat con ${persona.name}`} className="press flex h-11 w-10 shrink-0 items-center justify-center rounded-full"><ArrowLeft className="h-6 w-6" aria-hidden="true" /></Link>
+        <Link href="/persons" aria-label="Volver a los chats" className="press flex h-11 w-10 shrink-0 items-center justify-center rounded-full"><ArrowLeft className="h-6 w-6" aria-hidden="true" /></Link>
         <PersonaAvatar name={COACH_NAME} hue={COACH_HUE} size={40} icon={<GraduationCap className="h-5 w-5" aria-hidden="true" />} />
         <span className="ml-1.5 min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-[17px] font-medium">{COACH_NAME}</span>
             <span className="shrink-0 rounded bg-white/20 px-1 text-[10px] font-semibold uppercase tracking-wide">Coach IA</span>
           </span>
-          <span className="block truncate text-[13px] text-white/90" aria-live="polite">{typing ? 'escribiendo…' : `sobre tu chat con ${persona.name}`}</span>
+          <span className="block truncate text-[13px] text-white/90" aria-live="polite">{typing ? 'escribiendo…' : 'en línea'}</span>
         </span>
-        <Link href={`/persons/${personaId}`} aria-label={`Ir al chat con ${persona.name}`} className="press mr-1 shrink-0 rounded-full">
-          <PersonaAvatar name={persona.name} hue={persona.hue} src={persona.avatar} size={34} />
-        </Link>
       </header>
 
       <div
@@ -150,12 +157,20 @@ export function CoachChat({ personaId, persona, initial, autoFeedback, gate: ini
         role="log" aria-label={`Conversación con ${COACH_NAME}, tu coach`}
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-1">
-          <Bubble m={{ id: 'intro', role: 'coach', kind: 'text', created_at: '', content: `hola! soy ${COACH_NAME} 👋 voy viendo cómo va tu plática con ${persona.name} y te dejo ideas mientras practicas. pregúntame lo que quieras: qué contestarle, por qué se enfrió, cómo cerrar…` }} name={persona.name} gender={persona.gender} grouped={false} />
+          <Bubble m={{ id: 'intro', persona_id: '', role: 'coach', kind: 'text', created_at: '', content: personas.length
+            ? `hola! soy ${COACH_NAME} 👋 voy viendo cómo van tus pláticas y te dejo ideas mientras practicas. pregúntame lo que quieras: qué contestar, por qué se enfrió una charla, cómo cerrar…`
+            : `hola! soy ${COACH_NAME} 👋 cuando empieces a platicar con alguien, aquí te voy dejando ideas. crea a tu primera persona y me cuentas` }} grouped={false} />
           {messages.map((m, i) => {
             const k = dayKey(m.created_at);
             const divider = k !== lastDay ? (lastDay = k, <p key={`d-${k}`} className="my-2 self-center rounded-lg bg-white/90 px-3 py-1 text-xs font-medium text-[#3B4A54] shadow-[0_1px_0_rgb(0_0_0/0.06)]">{dayLabel(m.created_at)}</p>) : null;
+            const p = byId.get(m.persona_id);
+            const about = p && m.persona_id !== lastAbout ? (lastAbout = m.persona_id, (
+              <Link key={`a-${m.id}`} href={`/persons/${p.id}`} className="my-1.5 flex items-center gap-1.5 self-center rounded-full bg-white/80 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-[#3B4A54] shadow-[0_1px_0_rgb(0_0_0/0.06)]">
+                <PersonaAvatar name={p.name} hue={p.hue} src={p.avatar} size={20} />sobre tu chat con {p.name}
+              </Link>
+            )) : null;
             const prev = messages[i - 1];
-            return [divider, <Bubble key={m.id} m={m} name={persona.name} gender={persona.gender} grouped={Boolean(prev && prev.role === m.role)} />];
+            return [divider, about, <Bubble key={m.id} m={m} name={p?.name ?? ''} gender={p?.gender ?? 'femenino'} grouped={Boolean(prev && prev.role === m.role && !about)} />];
           })}
           {typing && <TypingDots />}
         </div>
@@ -163,27 +178,44 @@ export function CoachChat({ personaId, persona, initial, autoFeedback, gate: ini
 
       <footer className="shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5">
         <div className="mx-auto max-w-3xl">
-          <div className="flex gap-2 overflow-x-auto px-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {COACH_PROMPTS.map((p) => (
-              <button key={p} type="button" disabled={typing} onClick={() => void send(p)}
-                className="press shrink-0 rounded-full bg-white px-3.5 py-2 text-sm font-medium text-[#3B2F8A] shadow-[0_1px_0_rgb(0_0_0/0.08)] disabled:opacity-60">
-                {p}
-              </button>
-            ))}
-          </div>
-          {gate ? (
+          {personas.length > 1 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto px-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="radiogroup" aria-label="De qué plática le hablas">
+              <span className="shrink-0 text-xs font-medium text-[#3B4A54]">Sobre:</span>
+              {personas.map((p) => (
+                <button key={p.id} type="button" role="radio" aria-checked={p.id === focus} onClick={() => choose(p.id)}
+                  className={`press flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-sm shadow-[0_1px_0_rgb(0_0_0/0.08)] ${p.id === focus ? 'bg-[#4A3AA8] text-white' : 'bg-white text-[#111B21]'}`}>
+                  <PersonaAvatar name={p.name} hue={p.hue} src={p.avatar} size={24} />{p.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {current && (
+            <div className="flex gap-2 overflow-x-auto px-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {COACH_PROMPTS.map((p) => (
+                <button key={p} type="button" disabled={typing} onClick={() => void send(p)}
+                  className="press shrink-0 rounded-full bg-white px-3.5 py-2 text-sm font-medium text-[#3B2F8A] shadow-[0_1px_0_rgb(0_0_0/0.08)] disabled:opacity-60">
+                  {p}
+                </button>
+              ))}
+            </div>
+          )}
+          {!current ? (
+            <div className="mx-2 rounded-xl bg-white p-3 text-center text-sm shadow-soft">
+              <Link href="/persons/nueva" className={buttonClass('primary', 'sm', 'bg-[#008069] hover:bg-[#006E5A]')}>Crear a alguien para practicar</Link>
+            </div>
+          ) : gate ? (
             <div className="mx-2 rounded-xl bg-white p-3 text-center text-sm shadow-soft">
               <p>Tus mensajes del plan Free se terminaron. Tu conversación está guardada.</p>
               <Link href="/persons/planes" className={buttonClass('primary', 'sm', 'mt-2 bg-[#008069] hover:bg-[#006E5A]')}>Continuar con Plus</Link>
             </div>
           ) : (
             <form onSubmit={(e) => { e.preventDefault(); void send(text); }} className="flex items-end gap-2 px-2">
-              <label htmlFor="coach-composer" className="sr-only">Escríbele a {COACH_NAME}</label>
+              <label htmlFor="coach-composer" className="sr-only">Escríbele a {COACH_NAME} sobre tu chat con {current.name}</label>
               <textarea
                 id="coach-composer" value={text} rows={1} maxLength={1000}
                 onChange={(e) => { setText(e.target.value); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(140, e.currentTarget.scrollHeight)}px`; }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !window.matchMedia('(pointer: coarse)').matches) { e.preventDefault(); void send(text); } }}
-                placeholder="Pregúntale a tu coach"
+                placeholder={`Pregúntale sobre ${current.name}`}
                 className="max-h-[140px] min-h-11 min-w-0 flex-1 resize-none rounded-3xl bg-white px-4 py-2.5 text-base leading-snug text-[#111B21] shadow-[0_1px_0_rgb(0_0_0/0.08)] outline-none placeholder:text-[#556770]"
               />
               <button type="submit" disabled={!text.trim() || typing} aria-label="Enviar" className="press flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-60" style={{ background: HEADER }}>
@@ -197,7 +229,7 @@ export function CoachChat({ personaId, persona, initial, autoFeedback, gate: ini
   );
 }
 
-function Bubble({ m, name, gender, grouped }: { m: Local; name: string; gender: Gender; grouped: boolean }) {
+function Bubble({ m, name = '', gender = 'femenino', grouped }: { m: Local; name?: string; gender?: Gender; grouped: boolean }) {
   const mine = m.role === 'user';
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'} ${grouped ? '' : 'mt-1.5'}`}>
@@ -218,7 +250,7 @@ function ReportCard({ report, name, gender }: { report: DebriefReport; name: str
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#5B47C2]">Feedback de la sesión</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#5B47C2]">Feedback de la sesión{name ? ` con ${name}` : ''}</p>
       {open ? <DebriefView report={report} name={name} gender={gender} /> : (
         <>
           <p className="leading-relaxed">{report.summary}</p>

@@ -11,7 +11,7 @@ import { lastSeenAt, presenceAt, presenceLabel } from './presence';
 import { personsLimits, type PersonsLimits } from './entitlements';
 import { ENGAGED_MS, typingSeconds } from './scheduler';
 import { personsImageUrl, scheduleAvatar } from './images';
-import { coachBadge } from './coach-server';
+import { coachBadge, coachSummary, type CoachSummary } from './coach-server';
 
 /** Fila de `personas` (0041). */
 export type PersonaRow = {
@@ -164,6 +164,14 @@ export type ChatListItem = {
 };
 
 /** La lista de chats: último mensaje entregado, no leídos y si está en línea. */
+/** La lista de chats y la fila fija de Ale (el coach), con lo nuevo de cada uno. */
+export async function loadInbox(userId: string): Promise<{ chats: ChatListItem[]; coach: CoachSummary | null }> {
+  const { data } = await createAdminClient().from('personas').select('id, name, created_at, coach_read_at').eq('user_id', userId).limit(60);
+  const personas = (data ?? []) as Pick<PersonaRow, 'id' | 'name' | 'created_at' | 'coach_read_at'>[];
+  const [chats, coach] = await Promise.all([loadChatList(userId), personas.length ? coachSummary(userId, personas) : Promise.resolve(null)]);
+  return { chats, coach };
+}
+
 export async function loadChatList(userId: string, opts: { archived?: boolean } = {}): Promise<ChatListItem[]> {
   const db = createAdminClient();
   let q = db.from('personas').select('*').eq('user_id', userId);

@@ -133,7 +133,7 @@ export function ChatView({ personaId, spec, hue, scenario, initial, gate: initia
     void refresh();
   }
 
-  const coachHref = `/persons/${personaId}/coach`;
+  const coachHref = `/persons/coach?p=${personaId}`;
 
   async function archive() {
     setMenu(false);
@@ -172,10 +172,6 @@ export function ChatView({ personaId, spec, hue, scenario, initial, gate: initia
             </span>
           </span>
         </button>
-        <Link href={coachHref} aria-label={`Hablar con ${COACH_NAME}, tu coach${state.coach.unread ? ` (${state.coach.unread} sin leer)` : ''}`} className="press relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
-          <GraduationCap className="h-5 w-5" aria-hidden="true" />
-          {state.coach.unread > 0 && <span aria-hidden="true" className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-[#008069]" style={{ background: WA.badge }} />}
-        </Link>
         <div className="relative shrink-0">
           <button ref={menuBtn} type="button" onClick={() => setMenu((m) => !m)} aria-haspopup="menu" aria-expanded={menu} aria-label="Más opciones" className="press flex h-11 w-11 items-center justify-center rounded-full">
             <EllipsisVertical className="h-5 w-5" aria-hidden="true" />
@@ -184,8 +180,7 @@ export function ChatView({ personaId, spec, hue, scenario, initial, gate: initia
             <div ref={menuRef} role="menu" className="popover-motion absolute right-1 top-12 z-30 w-64 origin-top-right overflow-hidden rounded-xl bg-white py-1.5 text-[15px] text-[#111B21] shadow-raised">
               <MenuItem onClick={() => { setMenu(false); setProfile(true); }}>Ver ficha</MenuItem>
               <MenuItem href={`/persons/${personaId}/ajustar`}>Ajustar personaje</MenuItem>
-              <MenuItem href={coachHref}>Hablar con {COACH_NAME}, tu coach</MenuItem>
-              <MenuItem href={`${coachHref}?feedback=1`}>Terminar sesión y recibir feedback</MenuItem>
+              <MenuItem href={`${coachHref}&feedback=1`}>Terminar sesión y recibir feedback</MenuItem>
               {blindAllowed
                 ? <MenuItem onClick={toggleBlind}>{blind ? 'Mostrar su emoción' : 'Modo ciego (ocultar su emoción)'}</MenuItem>
                 : <MenuItem href="/persons/planes">Modo ciego · Plus</MenuItem>}

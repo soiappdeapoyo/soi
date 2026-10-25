@@ -1,19 +1,10 @@
 import { z } from 'zod/v3';
 import { loadPersona, personsApiSession } from '@/lib/persons/server';
-import { askCoach, loadCoachState, maybeTip } from '@/lib/persons/coach-server';
+import { askCoach, maybeTip } from '@/lib/persons/coach-server';
 import { GATE_COPY } from '@/lib/persons/entitlements';
 import { BLIND_COOKIE_RE } from '@/config/persons';
 
 export const maxDuration = 60;
-
-/** El chat con el coach de un personaje: lo que se han dicho y cuántos mensajes tuyos aún no comenta. */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const s = await personsApiSession();
-  if (s instanceof Response) return s;
-  const persona = await loadPersona(s.userId, (await params).id);
-  if (!persona) return Response.json({ error: 'No encontramos a esta persona' }, { status: 404 });
-  return Response.json(await loadCoachState(persona), { headers: { 'Cache-Control': 'no-store' } });
-}
 
 const Body = z.union([
   z.object({ text: z.string().trim().min(1).max(1000) }),

@@ -12,6 +12,7 @@ import type { PersonaMessageRow, PersonaRow, PersonsSession } from './server';
 /** Fila de `persona_coach_messages` (0042). */
 export type CoachRow = {
   id: string;
+  persona_id: string;
   role: 'user' | 'coach';
   kind: 'text' | 'tip' | 'report';
   content: string;
@@ -19,9 +20,9 @@ export type CoachRow = {
   meta: { report?: DebriefReport; debrief_id?: string | null } & Record<string, unknown>;
   created_at: string;
 };
-export type CoachMessage = Pick<CoachRow, 'id' | 'role' | 'kind' | 'content' | 'created_at'> & { report?: DebriefReport };
+export type CoachMessage = Pick<CoachRow, 'id' | 'persona_id' | 'role' | 'kind' | 'content' | 'created_at'> & { report?: DebriefReport };
 
-const publicCoach = (r: CoachRow): CoachMessage => ({ id: r.id, role: r.role, kind: r.kind, content: r.content, created_at: r.created_at, report: r.meta?.report });
+const publicCoach = (r: CoachRow): CoachMessage => ({ id: r.id, persona_id: r.persona_id, role: r.role, kind: r.kind, content: r.content, created_at: r.created_at, report: r.meta?.report });
 
 /** Lo entregado de la práctica (sin bloqueados ni crisis), en orden. */
 export async function practiceLines(personaId: string, limit = 80): Promise<PracticeLine[]> {
@@ -45,13 +46,44 @@ async function lastUpto(personaId: string) {
   return (data?.upto_at as string | undefined) ?? null;
 }
 
-/** Lo que ve el chat del coach; marca leído lo del coach. */
-export async function loadCoachState(persona: PersonaRow) {
-  const [rows, lines, upto] = await Promise.all([coachRows(persona.id), practiceLines(persona.id), lastUpto(persona.id)]);
-  void createAdminClient().from('personas').update({ coach_read_at: new Date().toISOString() }).eq('id', persona.id).then(() => undefined);
-  return { messages: rows.map(publicCoach), pendingTurns: newUserTurns(lines, upto).length };
+/**
+ * El chat con Ale es UNO (una conversación más de la lista): junta lo que te ha dicho de todas tus prácticas, en orden,
+ * y cada mensaje sabe de qué personaje habla. Marca leído lo del coach en todos.
+ */
+export async function loadCoachThread(userId: string, personas: PersonaRow[], focusId: string | null) {
+  const db = createAdminClient();
+  const { data } = await db.from('persona_coach_messages').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(120);
+  const rows = ((data ?? []) as CoachRow[]).reverse();
+  const ids = new Set(personas.map((p) => p.id));
+  // De qué personaje se habla al abrir: el pedido, el del último mensaje con Ale o el de la práctica más reciente.
+  const focus = (focusId && ids.has(focusId) ? focusId : null)
+    ?? [...rows].reverse().find((r) => ids.has(r.persona_id))?.persona_id
+    ?? personas[0]?.id ?? null;
+  const focusPersona = personas.find((p) => p.id === focus);
+  let pendingTurns = 0;
+  if (focusPersona) {
+    const [lines, upto] = await Promise.all([practiceLines(focusPersona.id), lastUpto(focusPersona.id)]);
+    pendingTurns = newUserTurns(lines, upto).length;
+  }
+  void db.from('personas').update({ coach_read_at: new Date().toISOString() }).eq('user_id', userId).then(() => undefined);
+  return { messages: rows.filter((r) => ids.has(r.persona_id)).map(publicCoach), focus, pendingTurns };
 }
-export type CoachState = Awaited<ReturnType<typeof loadCoachState>>;
+export type CoachThread = Awaited<ReturnType<typeof loadCoachThread>>;
+
+/** La fila de Ale en la lista de chats: su último mensaje (y de quién hablaba) y cuántos sin leer. */
+export async function coachSummary(userId: string, personas: Pick<PersonaRow, 'id' | 'name' | 'created_at' | 'coach_read_at'>[]) {
+  const { data } = await createAdminClient().from('persona_coach_messages').select('persona_id, role, kind, content, created_at')
+    .eq('user_id', userId).order('created_at', { ascending: false }).limit(40);
+  const byId = new Map(personas.map((p) => [p.id, p]));
+  const rows = ((data ?? []) as Pick<CoachRow, 'persona_id' | 'role' | 'kind' | 'content' | 'created_at'>[]).filter((r) => byId.has(r.persona_id));
+  const unread = rows.filter((r) => r.role === 'coach' && r.created_at > (byId.get(r.persona_id)!.coach_read_at ?? byId.get(r.persona_id)!.created_at)).length;
+  const last = rows[0];
+  return {
+    unread,
+    last: last ? { content: last.kind === 'report' ? '📋 Feedback de la sesión' : last.content, at: last.created_at, role: last.role, about: byId.get(last.persona_id)!.name } : null,
+  };
+}
+export type CoachSummary = Awaited<ReturnType<typeof coachSummary>>;
 
 /** Lo nuevo del coach para el chat de práctica: cuántas ideas sin leer y la última. */
 export async function coachBadge(persona: PersonaRow & { coach_read_at?: string }) {

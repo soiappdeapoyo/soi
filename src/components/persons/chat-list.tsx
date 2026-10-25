@@ -2,21 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCheck, Check, Mic } from 'lucide-react';
+import { CheckCheck, Check, GraduationCap, Mic } from 'lucide-react';
 import type { ChatListItem } from '@/lib/persons/server';
+import type { CoachSummary } from '@/lib/persons/coach-server';
+import { COACH_HUE, COACH_NAME } from '@/lib/persons/coach';
 import { WA } from '@/config/persons';
 import { PersonaAvatar } from './avatar';
-import { CHATS_EVENT } from './notifier';
+import { CHATS_EVENT, type InboxEvent } from './notifier';
 import { listTime } from './time';
 
-/** Lista de chats estilo WhatsApp: se actualiza con el sondeo del notificador (nuevos mensajes, no leídos, orden). */
-export function ChatList({ initial, archived = false }: { initial: ChatListItem[]; archived?: boolean }) {
+/**
+ * Lista de chats estilo WhatsApp: arriba, fija, la conversación con Ale (el coach); luego cada persona. Se actualiza
+ * con el sondeo del notificador (nuevos mensajes, no leídos, orden).
+ */
+export function ChatList({ initial, coach: initialCoach = null, archived = false }: { initial: ChatListItem[]; coach?: CoachSummary | null; archived?: boolean }) {
   const [chats, setChats] = useState(initial);
+  const [coach, setCoach] = useState(initialCoach);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (archived) return;
-    const on = (e: Event) => setChats((e as CustomEvent<ChatListItem[]>).detail);
+    const on = (e: Event) => { const d = (e as CustomEvent<InboxEvent>).detail; setChats(d.chats); setCoach(d.coach); };
     window.addEventListener(CHATS_EVENT, on);
     return () => window.removeEventListener(CHATS_EVENT, on);
   }, [archived]);
@@ -36,6 +42,7 @@ export function ChatList({ initial, archived = false }: { initial: ChatListItem[
         </div>
       )}
       <ul>
+        {!archived && !q && chats.length > 0 && <CoachRow coach={coach} />}
         {shown.map((c) => (
           <li key={c.id}>
             <Link href={`/persons/${c.id}`} className="flex items-center gap-3 px-3 py-2.5 active:bg-black/[0.04] [@media(hover:hover)]:hover:bg-[#F5F6F6]">
@@ -69,5 +76,37 @@ export function ChatList({ initial, archived = false }: { initial: ChatListItem[
       </ul>
       {q && !shown.length && <p className="px-4 py-6 text-center text-sm text-soi-muted">Nadie con ese nombre.</p>}
     </div>
+  );
+}
+
+/** La conversación con Ale: siempre arriba, con su último mensaje (de qué plática hablaba) y los no leídos. */
+function CoachRow({ coach }: { coach: CoachSummary | null }) {
+  const last = coach?.last ?? null;
+  const unread = coach?.unread ?? 0;
+  return (
+    <li>
+      <Link href="/persons/coach" className="flex items-center gap-3 px-3 py-2.5 active:bg-black/[0.04] [@media(hover:hover)]:hover:bg-[#F5F6F6]">
+        <PersonaAvatar name={COACH_NAME} hue={COACH_HUE} size={50} icon={<GraduationCap className="h-6 w-6" aria-hidden="true" />} />
+        <span className="min-w-0 flex-1 border-b border-black/[0.06] pb-2.5">
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-[17px] font-medium text-[#111B21]">{COACH_NAME}</span>
+              <span className="shrink-0 rounded bg-[#ECE8FB] px-1 text-[10px] font-semibold uppercase tracking-wide text-[#4A3AA8]">Coach IA</span>
+            </span>
+            {last && <span className="nums shrink-0 text-xs" style={{ color: unread ? '#117A3E' : WA.time }}>{listTime(last.at)}</span>}
+          </span>
+          <span className="mt-0.5 flex items-center gap-1.5">
+            <span className="min-w-0 flex-1 truncate text-sm" style={{ color: WA.time }}>
+              {last ? `${last.role === 'user' ? 'Tú: ' : ''}${last.content}` : 'Tu coach: te deja ideas mientras practicas'}
+            </span>
+            {unread > 0 && (
+              <span className="nums flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold text-[#0B3B1E]" style={{ background: WA.badge }}>
+                {unread}<span className="sr-only"> mensajes sin leer</span>
+              </span>
+            )}
+          </span>
+        </span>
+      </Link>
+    </li>
   );
 }

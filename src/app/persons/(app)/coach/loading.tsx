@@ -1,6 +1,6 @@
 import { WA } from '@/config/persons';
 
-/** Mientras carga el chat del coach: su fondo y su encabezado, para que no parpadee en blanco al entrar. */
+/** Mientras carga el chat con Ale: su fondo y su encabezado, para que no parpadee en blanco al entrar. */
 export default function Loading() {
   return (
     <div className="flex h-dvh flex-col md:h-[calc(100dvh-2rem)]" style={{ background: WA.chatBg }} aria-busy="true" aria-label="Cargando">
