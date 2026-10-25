@@ -217,3 +217,8 @@ img:not([data-bare]) { outline: 1px solid rgb(0 0 0 / 0.08); outline-offset: -1p
   .exercise-flip { animation: none !important; opacity: 0 !important; }
   .film-voice-bar { animation: none !important; }
 }
+
+/* /persons: los tres puntos de "escribiendo…" (rebote suave, solo transform). */
+@keyframes wa-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.55; } 30% { transform: translateY(-3px); opacity: 1; } }
+.wa-dot { animation: wa-dot 1.2s var(--ease-in-out-strong) infinite; }
+@media (prefers-reduced-motion: reduce) { .wa-dot { animation: none; } }

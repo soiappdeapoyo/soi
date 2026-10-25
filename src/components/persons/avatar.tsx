@@ -1,10 +1,12 @@
 import { cn } from '@/lib/utils';
 
 /**
- * Avatar ilustrado de una persona sintética: inicial sobre un degradado de su color. Nunca una foto realista (son
- * personas ficticias; la etiqueta "IA" lo deja claro donde se ve su ficha).
+ * Avatar de una persona sintética: su foto de perfil (generada con IA o libre de derechos) sobre el degradado con su
+ * inicial, que se ve mientras carga o si no tiene foto. La etiqueta "IA" lo deja claro donde se ve su ficha.
  */
-export function PersonaAvatar({ name, hue, size = 48, ai = false, className }: { name: string; hue: number; size?: number; ai?: boolean; className?: string }) {
+export function PersonaAvatar({ name, hue, src, size = 48, ai = false, icon, className }: {
+  name: string; hue: number; src?: string | null; size?: number; ai?: boolean; icon?: React.ReactNode; className?: string;
+}) {
   const initial = name.trim().charAt(0).toUpperCase() || '·';
   return (
     <span
@@ -15,7 +17,12 @@ export function PersonaAvatar({ name, hue, size = 48, ai = false, className }: {
         background: `linear-gradient(135deg, hsl(${hue} 52% 58%), hsl(${(hue + 38) % 360} 48% 38%))`,
       }}
     >
-      {initial}
+      {icon ?? initial}
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" width={size} height={size} loading="lazy" decoding="async" draggable={false}
+          className="absolute inset-0 h-full w-full rounded-full object-cover" />
+      )}
       {ai && (
         <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-white px-1 text-[9px] font-bold leading-[14px] text-[#008069] shadow-[0_0_0_1px_rgb(0_0_0/0.08)]">IA</span>
       )}

@@ -7,7 +7,10 @@ import { AllProvidersFailedError } from '@/lib/ai/fallback';
 import { hash, seeded } from './spec';
 import { applyEvents, circadianEnergy, decay, detectEvents, labelFor, parseEmotion, snapshot } from './emotion';
 import { localClock, presenceAt } from './presence';
-import { planDelivery } from './scheduler';
+import { paceFor, planDelivery } from './scheduler';
+import { humanizeItems, quirksFor } from './humanize';
+import { scheduleChatPhoto } from './images';
+import { scheduleTip } from './coach-server';
 import { blockNotice, checkTurn } from './moderation';
 import { actorReply, type ChatLine } from './ai';
 import { canSendToday } from './entitlements';
@@ -24,7 +27,7 @@ export type TurnResult =
 
 const REASON_LABEL = { sexual: 'un comentario sexual', insult: 'un insulto', pressure: 'presión para que conteste', control: 'querer controlar dónde está o con quién', threat: 'una amenaza' } as const;
 
-export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: string): Promise<TurnResult> {
+export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: string, opts: { blind?: boolean } = {}): Promise<TurnResult> {
   if (persona.archived_at) return { ok: false, status: 409, reason: 'archived' };
   const db = createAdminClient();
   const now = new Date();
@@ -70,8 +73,12 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
   const hours = (now.getTime() - Date.parse(persona.emotion_at)) / 3_600_000;
   const prev = decay(parseEmotion(persona.emotion, t), hours, t, circadianEnergy(t.energy, minute, presence.state));
 
-  const { data: lastUser } = await db.from('persona_messages').select('created_at').eq('persona_id', persona.id).eq('role', 'user')
-    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  const [{ data: lastUser }, { count: userTurns }, { data: lastPersona }, { count: recentPhotos }] = await Promise.all([
+    db.from('persona_messages').select('created_at').eq('persona_id', persona.id).eq('role', 'user').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    db.from('persona_messages').select('id', { count: 'exact', head: true }).eq('persona_id', persona.id).eq('role', 'user'),
+    db.from('persona_messages').select('deliver_at').eq('persona_id', persona.id).eq('role', 'persona').lte('deliver_at', nowIso).order('deliver_at', { ascending: false }).limit(1).maybeSingle(),
+    db.from('persona_messages').select('id', { count: 'exact', head: true }).eq('persona_id', persona.id).eq('role', 'persona').not('meta->photo', 'is', null).gte('deliver_at', new Date(now.getTime() - 6 * 3_600_000).toISOString()),
+  ]);
   const hoursSinceLast = lastUser ? (now.getTime() - Date.parse(lastUser.created_at as string)) / 3_600_000 : null;
   const recentBoundary = Boolean(prev.boundaryAt && now.getTime() - Date.parse(prev.boundaryAt) < 6 * 3_600_000);
   const events = detectEvents(text, { interests: spec.interests, boundary: check.level === 'boundary', previousBoundary: recentBoundary, hoursSinceLast, trust: prev.trust });
@@ -109,11 +116,17 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
     return { ok: false, status: 503, reason: 'ai' };
   }
 
+  // El tiempo cuenta desde que terminó de "pensar": al inicio la respuesta llega en segundos.
+  const replyNow = new Date();
+  const rand = seeded(hash(`${inserted.id}`));
+  const boundary = reply.sets_boundary || check.level === 'boundary';
+  const pace = paceFor({ userTurns: userTurns ?? 0, lastPersonaAt: lastPersona ? new Date(lastPersona.deliver_at as string) : null, now: replyNow, presence });
   const plan = planDelivery({
-    now, presence, emotion: next, profile: spec.derived.responseProfile, userText: text, replies: reply.messages,
-    boundary: reply.sets_boundary || check.level === 'boundary', voiceAllowed: s.limits.voice,
-    vulnerable: events.includes('shared_self'), rand: seeded(hash(`${inserted.id}`)),
+    now: replyNow, presence, emotion: next, profile: spec.derived.responseProfile, userText: text, replies: reply.messages,
+    boundary, voiceAllowed: s.limits.voice, vulnerable: events.includes('shared_self'), pace, rand,
   });
+  // Escribe como en el teléfono: minúsculas, acentos que se le pasan, algún dedazo (nunca al marcar un límite).
+  plan.items = humanizeItems(plan.items, quirksFor(spec, persona.id), rand, boundary);
 
   const unread = await db.from('persona_messages').update({ read_at: plan.readAt.toISOString() }).eq('persona_id', persona.id).eq('role', 'user').is('read_at', null);
   if (unread.error) console.error('[persons] read_at', unread.error.message);
@@ -123,7 +136,12 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
       deliver_at: it.deliverAt.toISOString(), emotion: snap, meta: { ...it.meta, boundary: reply.sets_boundary || undefined },
     })));
     if (e) console.error('[persons] programar respuesta', e.message);
+    // Una foto de lo que está viendo, de vez en cuando (máx. una cada 6 h, nunca al marcar un límite ni en el primer mensaje).
+    if (reply.photo && !boundary && (userTurns ?? 0) >= 2 && !(recentPhotos ?? 0)) {
+      scheduleChatPhoto({ personaId: persona.id, userId: s.userId, query: reply.photo, caption: null, deliverAt: plan.items[0]!.deliverAt });
+    }
   }
+  scheduleTip(persona, Boolean(opts.blind));
   await db.from('personas').update({ emotion: next, emotion_at: nowIso, last_message_at: nowIso, updated_at: nowIso }).eq('id', persona.id);
   return { ok: true, messageId: inserted.id as string };
 }

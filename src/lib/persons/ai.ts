@@ -1,8 +1,9 @@
 import { z } from 'zod/v3';
-import { objectWithFallback, CHAT_ORDER, type ProviderName } from '@/lib/ai/fallback';
+import { objectWithFallback, CHAT_ORDER, FAST_ORDER, type ProviderName } from '@/lib/ai/fallback';
 import { DescribedSchema, normalizeDescribed, checkDescription, personaLine, type Described, type PersonSpec } from './spec';
 import { expressionGuide, type EmotionLabel, type EmotionState } from './emotion';
 import type { Presence } from './presence';
+import { COACH_NAME, type PracticeLine } from './coach';
 import { CoachSchema, SKILLS, type CoachReport, type DebriefMessage, type TimelinePoint } from './debrief';
 
 /**
@@ -45,6 +46,8 @@ export const ActorSchema = z.object({
   messages: z.array(z.string().min(1).max(400)).min(1).max(3),
   /** La respuesta marca un límite (se entrega siempre por escrito, nunca como nota de voz). */
   sets_boundary: z.boolean(),
+  /** Una foto de lo que está viendo o haciendo (escena en inglés, sin personas), solo si sale natural; si no, null. */
+  photo: z.string().max(40).nullable().optional(),
 });
 export type ActorReply = z.infer<typeof ActorSchema>;
 
@@ -76,13 +79,26 @@ Hora local: ${clock(ctx.now.toISOString(), ctx.timezone)}. ${doing}
 
 Cómo te sientes (no lo digas, que se note): ${expressionGuide(ctx.emotion, ctx.label)}
 ${ctx.boundary ? `Su último mensaje cruzó un límite (${ctx.boundary}). Márcalo con claridad, sin sermones y sin agresividad, en una frase corta.${ctx.risk ? ' Ya te había pasado: despídete y no sigas la conversación hoy.' : ''}\n` : ''}
+Cómo escribes en el chat (esto es lo más importante: que no suene a robot ni a asistente):
+- Como alguien con el teléfono en la mano: informal, rápido, sin cuidar la redacción. Mensajes cortos; a veces una
+  sola palabra («jajaja», «siii», «nooo», «va», «uff»). Varía el largo: no todos tus mensajes iguales.
+- No siempre preguntas de vuelta. No siempre saludas ni cierras. No resumas lo que dijo la otra persona ni la felicites.
+- Nada de frases de asistente («¡Qué interesante!», «Me encantaría saber más», «¡Claro!»). Muletillas reales de tu
+  ciudad cuando salgan (sin exagerar), risas («jaja», «jsjs»), alargar letras para enfatizar.
+- Si algo no te interesa, contestas corto. Si algo te emociona, mandas varios mensajes seguidos.
+
 Reglas:
-- Responde como en un chat real: 1 a 3 mensajes cortos (cada uno 1–2 frases). Nada de párrafos ni listas.
-- Español natural de tu ciudad, sin exagerar modismos. Minúsculas y emojis solo si van con tu estilo.
+- 1 a 3 mensajes (cada uno 1–2 frases como mucho). Nada de párrafos, listas ni guiones largos.
+- Emojis solo si van con tu estilo, y pocos.
+- photo: casi siempre null. Solo si en esta respuesta de verdad mandarías una foto de lo que estás viendo o haciendo
+  (el paisaje de tu ruta, tu café, la comida, tu planta, tu perro), escribe la escena en inglés en 2–4 palabras
+  («mountain trail sunset», «latte art cafe»). Nunca personas ni selfies: si te piden una foto tuya, te sales con
+  naturalidad («jaja no soy de selfies»).
 - No eres complaciente: si el mensaje es genérico, contesta corto; si es invasivo, marca el límite; si no te interesa
   algo, se nota. Tampoco eres cruel: eres una persona normal con su día.
 - Nunca des consejos para ligar ni evalúes cómo escribe la otra persona. Nunca hables de apps, planes, precios ni dinero de la app.
 - Nunca culpa, celos, chantaje ni "me tienes abandonada". Si te dejaron de escribir, no lo reclamas.
+- Nunca prometas mandar algo que no puedes (llamadas, ubicación, tu número).
 - Si te preguntan directamente si eres una IA, di con naturalidad que sí, que eres un personaje para practicar, y sigue la charla si quiere.
 - Si la otra persona habla de hacerse daño o de una crisis, sal del personaje: dile con calidez que busque ayuda profesional o una línea de crisis.
 - Nada sexual. Nunca aceptes ver a la persona en un lugar real ni compartas datos de contacto reales.`;
@@ -125,4 +141,61 @@ export async function coachReport(spec: PersonSpec, messages: DebriefMessage[], 
     timeoutMs: 40_000,
   });
   return { report: object as CoachReport, provider };
+}
+
+// ── Coach en conversación ────────────────────────────────────────────────────────────────────────────────────────
+
+export const CoachChatSchema = z.object({
+  /** 1 a 3 burbujas, como un amigo por WhatsApp. */
+  messages: z.array(z.string().min(1).max(500)).min(1).max(3),
+});
+
+function coachVoice(spec: PersonSpec, blind: boolean) {
+  return `Eres ${COACH_NAME}, coach de habilidades sociales. La persona practica conversaciones por chat con ${spec.name}, un
+personaje ficticio (${personaLine(spec)}; rasgos: ${spec.traits.join(', ')}; límites: ${spec.boundaries.join(' · ')}).
+Hablas con la persona como un amigo que sabe mucho del tema, por WhatsApp:
+- Informal, cercano y directo. Minúsculas está bien, sin títulos, sin listas largas, sin sonar a reporte ni a manual.
+- 1 a 3 mensajes cortos. UNA idea concreta a la vez, sobre lo que de verdad pasó (cita sus palabras entre comillas).
+- Si pide qué escribir, dale 1 o 2 opciones de mensaje que suenen naturales, en su estilo, entre comillas. Nunca
+  guiones de seducción, trucos ni manipulación. Retirarse bien o respetar un no también es un acierto.
+- Valoras: curiosidad genuina, ida y vuelta, leer cómo está la otra persona, respeto, humor natural, saber cerrar.
+- ${blind ? 'Modo ciego: NO le digas cómo se siente el personaje; ayúdale a leerlo con preguntas («¿cómo notaste su último mensaje?»).' : 'Puedes decirle cómo se sintió el personaje (en palabras, nunca números): sus emociones son simuladas.'}
+- Nunca hablas de la app, planes ni precios. Si la persona habla de hacerse daño, deja la práctica y recomiéndale ayuda profesional.`;
+}
+
+function practiceTranscript(spec: PersonSpec, lines: PracticeLine[], blind: boolean) {
+  return lines.slice(-40).map((l) => {
+    const who = l.role === 'user' ? 'Persona' : l.role === 'persona' ? spec.name : 'App';
+    const feel = !blind && l.role === 'user' && l.emotion ? ` [${spec.name} después de leerlo: ${l.emotion.label}]` : '';
+    return `${who}: ${l.content}${feel}`;
+  }).join('\n').slice(-9000);
+}
+
+const trimAll = (m: string[]) => m.map((x) => x.trim()).filter(Boolean).slice(0, 3);
+
+/** Una idea por su cuenta sobre los últimos mensajes (mientras practica). */
+export async function coachTip(spec: PersonSpec, lines: PracticeLine[], fresh: PracticeLine[], blind: boolean) {
+  const { object, provider } = await objectWithFallback({
+    schema: CoachChatSchema,
+    instructions: coachVoice(spec, blind),
+    prompt: `Conversación de práctica:\n${practiceTranscript(spec, lines, blind)}\n\nSus últimos mensajes (los que vas a comentar):\n${fresh.map((f) => `«${f.content}»`).join('\n')}\n\nMándale por tu cuenta una idea corta sobre cómo va (1 o 2 mensajes): qué está funcionando o qué ajustar ahora. Sin saludo largo.`,
+    order: FAST_ORDER,
+    timeoutMs: 15_000,
+    maxOutputTokens: 300,
+  });
+  return { messages: trimAll((object as z.infer<typeof CoachChatSchema>).messages), provider };
+}
+
+/** Responde lo que la persona le pregunta al coach. */
+export async function coachAnswer(spec: PersonSpec, lines: PracticeLine[], chat: { role: 'user' | 'coach'; content: string }[], question: string, blind: boolean) {
+  const history = chat.slice(-16).map((m) => `${m.role === 'user' ? 'Persona' : COACH_NAME}: ${m.content}`).join('\n');
+  const { object, provider } = await objectWithFallback({
+    schema: CoachChatSchema,
+    instructions: coachVoice(spec, blind),
+    prompt: `Conversación de práctica con ${spec.name}:\n${practiceTranscript(spec, lines, blind) || '(todavía no hay mensajes)'}\n\nTu chat con la persona:\n${history || '(nuevo)'}\n\nLa persona te escribe: «${question.slice(0, 800)}»\n\nResponde.`,
+    order: CHAT_ORDER,
+    timeoutMs: 25_000,
+    maxOutputTokens: 500,
+  });
+  return { messages: trimAll((object as z.infer<typeof CoachChatSchema>).messages), provider };
 }

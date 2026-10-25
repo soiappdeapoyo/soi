@@ -23,7 +23,7 @@ export default async function PersonsAccountPage() {
   const planLine = s.plan === 'soi_plus' ? 'Plus' : s.plan === 'trial' ? `Prueba · ${trialDaysLeft(p)} días restantes` : 'Free';
 
   return (
-    <main id="main" className="min-h-dvh bg-[#F0F2F5]">
+    <main id="main" className="min-h-dvh bg-[#F0F2F5] md:min-h-[calc(100dvh-2rem)]">
       <header className="flex items-center gap-2 bg-[#008069] px-2 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-white">
         <Link href="/persons" aria-label="Volver a los chats" className="press flex h-11 w-11 items-center justify-center rounded-full"><ArrowLeft className="h-6 w-6" aria-hidden="true" /></Link>
         <h1 className="text-lg font-semibold">Tu cuenta</h1>

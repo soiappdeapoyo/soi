@@ -15,9 +15,9 @@ export function DebriefView({ report, name, gender }: { report: DebriefReport; n
           {SKILLS.map((s) => {
             const v = report.scores[s.id];
             return (
-              <li key={s.id} className="flex items-center gap-3">
-                <span className="w-36 shrink-0 text-sm">{s.label}</span>
-                <span className="h-2 flex-1 overflow-hidden rounded-full bg-soi-tray" aria-hidden="true">
+              <li key={s.id} className="flex min-w-0 items-center gap-3">
+                <span className="w-[7.5rem] shrink-0 truncate text-sm">{s.label}</span>
+                <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-soi-tray" aria-hidden="true">
                   <span className="block h-full rounded-full bg-[#008069]" style={{ width: `${(v / 5) * 100}%` }} />
                 </span>
                 <span className="nums w-8 text-right text-sm font-medium">{v}/5</span>
@@ -33,7 +33,7 @@ export function DebriefView({ report, name, gender }: { report: DebriefReport; n
           <ul className="mt-2 flex flex-col gap-2">
             {report.highlights.map((h, i) => (
               <li key={i} className="rounded-xl bg-[#D9FDD3]/60 p-3">
-                <p className="italic">«{h.quote}»</p>
+                <p className="italic [overflow-wrap:anywhere]">«{h.quote}»</p>
                 <p className="mt-1 text-sm text-soi-muted">{h.why}</p>
               </li>
             ))}
@@ -53,7 +53,7 @@ export function DebriefView({ report, name, gender }: { report: DebriefReport; n
       {report.rewrite && (
         <section aria-labelledby="db-rewrite">
           <h3 id="db-rewrite" className="text-sm font-semibold text-soi-muted">Otra forma de decirlo</h3>
-          <p className="mt-2 rounded-xl bg-soi-tray p-3 text-soi-muted line-through decoration-black/20">{report.rewrite.original}</p>
+          <p className="mt-2 rounded-xl bg-soi-tray p-3 text-soi-muted line-through decoration-black/20 [overflow-wrap:anywhere]">{report.rewrite.original}</p>
           <ul className="mt-2 flex flex-col gap-2">
             {report.rewrite.alternatives.map((a, i) => <li key={i} className="rounded-xl bg-[#D9FDD3] p-3">{a}</li>)}
           </ul>
@@ -66,7 +66,7 @@ export function DebriefView({ report, name, gender }: { report: DebriefReport; n
           <h3 id="db-emotions" className="text-sm font-semibold text-soi-muted">Cómo se fue sintiendo {name}</h3>
           <ol className="mt-2 flex flex-col gap-1.5">
             {report.timeline.map((p) => (
-              <li key={p.turn} className="flex items-center gap-2 text-sm">
+              <li key={p.turn} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
                 <span className="nums w-16 shrink-0 text-soi-muted">Turno {p.turn}</span>
                 {p.trend === 'up' ? <ArrowUp className="h-4 w-4 text-[#117A3E]" aria-label="subió" /> : p.trend === 'down' ? <ArrowDown className="h-4 w-4 text-soi-danger" aria-label="bajó" /> : <Minus className="h-4 w-4 text-soi-subtle" aria-label="igual" />}
                 <span className="font-medium">{labelText(p.label, gender)}</span>
@@ -82,7 +82,7 @@ export function DebriefView({ report, name, gender }: { report: DebriefReport; n
           <h3 id="db-blind" className="text-sm font-semibold text-soi-muted">Señales que se te pasaron</h3>
           <ul className="mt-2 flex flex-col gap-2">
             {report.blindSpots.map((b, i) => (
-              <li key={i} className="rounded-xl bg-[#FFF3C4] p-3 text-sm">
+              <li key={i} className="rounded-xl bg-[#FFF3C4] p-3 text-sm [overflow-wrap:anywhere]">
                 <p><span className="font-medium">{name}:</span> «{b.persona}»</p>
                 {b.next && <p className="mt-1"><span className="font-medium">Tú:</span> «{b.next}»</p>}
                 <p className="mt-1.5 text-soi-muted">{b.tip}</p>

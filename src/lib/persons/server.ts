@@ -8,7 +8,9 @@ import { buildSpec, type Described, type PersonSpec } from './spec';
 import { initialEmotion, labelFor, parseEmotion, type EmotionLabel, type EmotionSnapshot } from './emotion';
 import { lastSeenAt, presenceAt, presenceLabel } from './presence';
 import { personsLimits, type PersonsLimits } from './entitlements';
-import { typingSeconds } from './scheduler';
+import { ENGAGED_MS, typingSeconds } from './scheduler';
+import { personsImageUrl, scheduleAvatar } from './images';
+import { coachBadge } from './coach-server';
 
 /** Fila de `personas` (0041). */
 export type PersonaRow = {
@@ -33,6 +35,11 @@ export type PersonaRow = {
   last_read_at: string;
   archived_at: string | null;
   created_at: string;
+  /** 0042: foto de perfil (IA o libre de derechos) y hasta dónde leyó lo del coach. */
+  avatar_path?: string | null;
+  avatar_source?: string | null;
+  avatar_at?: string | null;
+  coach_read_at?: string;
 };
 
 export type PersonaMessageRow = {
@@ -104,25 +111,39 @@ export async function insertPersona(s: PersonsSession, described: Described, sou
     emotion: initialEmotion(spec.derived.temperament),
   }).select('id').single();
   if (error || !data) throw new Error(error?.message ?? 'no se pudo crear');
+  // La foto de perfil se prepara mientras abre el chat (no retrasa la creación).
+  scheduleAvatar({ id: data.id as string, user_id: s.userId, spec });
   return data.id as string;
 }
 
 export type PersonaHeader = { presence: string; emotion: EmotionLabel; online: boolean };
 
-export function headerFor(p: PersonaRow, now: Date, lastPersonaAt: Date | null): PersonaHeader {
+/**
+ * `active`: están platicando (contestó hace poco o su respuesta viene en camino en segundos): se queda «en línea»
+ * aunque su día diga otra cosa, como quien sigue con el chat abierto.
+ */
+export function headerFor(p: PersonaRow, now: Date, lastPersonaAt: Date | null, active = false): PersonaHeader {
   const presence = presenceAt(p.spec.derived.dayPlan, now, p.timezone);
   const emotion = parseEmotion(p.emotion, p.spec.derived.temperament);
+  const online = presence.state === 'online' || active;
   return {
-    presence: presenceLabel(presence, lastSeenAt(p.spec.derived.dayPlan, now, p.timezone, lastPersonaAt), now, p.timezone),
+    presence: online ? 'en línea' : presenceLabel(presence, lastSeenAt(p.spec.derived.dayPlan, now, p.timezone, lastPersonaAt), now, p.timezone),
     emotion: labelFor(emotion, now, presence.state),
-    online: presence.state === 'online',
+    online,
   };
+}
+
+/** Foto de perfil si ya la tiene; si no, se prepara después de responder (la pantalla no espera). */
+export function avatarFor(p: PersonaRow): string | null {
+  if (!p.avatar_path && !p.archived_at) scheduleAvatar(p);
+  return personsImageUrl(p.avatar_path);
 }
 
 export type ChatListItem = {
   id: string;
   name: string;
   hue: number;
+  avatar: string | null;
   gender: string;
   line: string;
   online: boolean;
@@ -142,16 +163,16 @@ export async function loadChatList(userId: string, opts: { archived?: boolean } 
   const nowIso = now.toISOString();
   return Promise.all(personas.map(async (p) => {
     const [{ data: last }, { count }] = await Promise.all([
-      db.from('persona_messages').select('content, kind, role, deliver_at, read_at').eq('persona_id', p.id).lte('deliver_at', nowIso)
+      db.from('persona_messages').select('content, kind, role, deliver_at, read_at, meta').eq('persona_id', p.id).lte('deliver_at', nowIso)
         .order('deliver_at', { ascending: false }).limit(1).maybeSingle(),
       db.from('persona_messages').select('id', { count: 'exact', head: true }).eq('persona_id', p.id).eq('role', 'persona')
         .gt('deliver_at', p.last_read_at).lte('deliver_at', nowIso),
     ]);
     const presence = presenceAt(p.spec.derived.dayPlan, now, p.timezone);
     return {
-      id: p.id, name: p.name, hue: p.hue, gender: p.gender, line: `${p.profession} · ${p.city}`,
-      online: presence.state === 'online' && !p.archived_at,
-      last: last ? { content: last.content as string, kind: last.kind as 'text' | 'voice', role: last.role as string, at: last.deliver_at as string, read: Boolean(last.read_at && (last.read_at as string) <= nowIso) } : null,
+      id: p.id, name: p.name, hue: p.hue, avatar: avatarFor(p), gender: p.gender, line: `${p.profession} · ${p.city}`,
+      online: (presence.state === 'online' || Boolean(last && last.role === 'persona' && now.getTime() - Date.parse(last.deliver_at as string) < ENGAGED_MS)) && !p.archived_at,
+      last: last ? { content: (last.meta as { photo?: string } | null)?.photo ? '📷 Foto' : last.content as string, kind: last.kind as 'text' | 'voice', role: last.role as string, at: last.deliver_at as string, read: Boolean(last.read_at && (last.read_at as string) <= nowIso) } : null,
       unread: count ?? 0,
       archived: Boolean(p.archived_at),
     };
@@ -169,6 +190,8 @@ export function publicMessage(m: PersonaMessageRow, nowIso: string, showEmotion:
     read: m.role === 'user' ? Boolean(m.read_at && m.read_at <= nowIso) : undefined,
     heard: m.kind === 'voice' ? Boolean(m.heard_at) : undefined,
     emotion: showEmotion && m.role === 'user' && m.emotion ? m.emotion.label : undefined,
+    photo: typeof m.meta?.photo === 'string' ? personsImageUrl(m.meta.photo) : undefined,
+    caption: typeof m.meta?.photo === 'string' ? m.meta.caption === true : undefined,
   };
 }
 export type PublicMessage = ReturnType<typeof publicMessage>;
@@ -178,14 +201,17 @@ export async function loadChatState(persona: PersonaRow, showEmotion: boolean) {
   const db = createAdminClient();
   const now = new Date();
   const nowIso = now.toISOString();
-  const [{ data: rows }, { data: pending }] = await Promise.all([
+  const [{ data: rows }, { data: pending }, coach] = await Promise.all([
     db.from('persona_messages').select('*').eq('persona_id', persona.id).lte('deliver_at', nowIso).order('deliver_at', { ascending: false }).limit(120),
     db.from('persona_messages').select('kind, content, deliver_at').eq('persona_id', persona.id).eq('role', 'persona').gt('deliver_at', nowIso)
       .order('deliver_at', { ascending: true }).limit(1).maybeSingle(),
+    coachBadge(persona).catch(() => ({ unread: 0, preview: null })),
   ]);
   const messages = ((rows ?? []) as PersonaMessageRow[]).reverse();
   const lastPersona = [...messages].reverse().find((m) => m.role === 'persona');
-  const header = headerFor(persona, now, lastPersona ? new Date(lastPersona.deliver_at) : null);
+  const active = Boolean((lastPersona && now.getTime() - Date.parse(lastPersona.deliver_at) < ENGAGED_MS)
+    || (pending && Date.parse(pending.deliver_at as string) - now.getTime() < 2 * 60_000));
+  const header = headerFor(persona, now, lastPersona ? new Date(lastPersona.deliver_at) : null, active);
   let next: { at: string; typingFrom: string; kind: 'text' | 'voice' } | null = null;
   if (pending) {
     const at = Date.parse(pending.deliver_at as string);
@@ -197,6 +223,8 @@ export async function loadChatState(persona: PersonaRow, showEmotion: boolean) {
     header: { ...header, emotion: showEmotion ? header.emotion : null },
     next,
     archived: Boolean(persona.archived_at),
+    avatar: avatarFor(persona),
+    coach,
   };
 }
 export type ChatState = Awaited<ReturnType<typeof loadChatState>>;

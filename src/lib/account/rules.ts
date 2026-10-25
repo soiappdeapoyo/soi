@@ -10,6 +10,7 @@ export const USER_TABLES: Record<string, readonly string[]> = {
   persona_messages: ['user_id'],
   persona_debriefs: ['user_id'],
   persona_generations: ['user_id'],
+  persona_coach_messages: ['user_id'],
   conversations: ['user_id'],
   messages: ['user_id'],
   agent_knowledge: ['user_id'],

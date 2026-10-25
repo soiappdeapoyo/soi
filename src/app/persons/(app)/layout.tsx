@@ -26,10 +26,10 @@ export default async function PersonsAppLayout({ children }: { children: React.R
   if (consent.state !== 'ok') redirect('/consentimiento?next=/persons');
 
   return (
-    <div className="min-h-dvh bg-[#F0F2F5] md:py-4">
+    <div className="min-h-dvh overflow-x-clip bg-[#F0F2F5] md:py-4">
       <AnalyticsProvider userId={s.userId} />
       <PersonsNotifier />
-      <div className="mx-auto min-h-dvh max-w-3xl bg-white md:min-h-[calc(100dvh-2rem)] md:overflow-hidden md:rounded-2xl md:shadow-soft">{children}</div>
+      <div className="relative mx-auto min-h-dvh w-full max-w-3xl overflow-x-clip bg-white md:min-h-[calc(100dvh-2rem)] md:overflow-hidden md:rounded-2xl md:shadow-soft">{children}</div>
     </div>
   );
 }

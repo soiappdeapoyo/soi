@@ -10,6 +10,8 @@ import type { EmotionState } from './emotion';
  *   "ando en el trabajo, te escribo al rato" primero) · dormida: al despertar.
  * - Nunca más de 4 h de espera (salvo dormida: a su hora de despertar). Nunca deja en visto para siempre.
  * - El retraso nunca se usa para castigar: con algo vulnerable y ocupada, el aviso es cálido y honesto.
+ * - Ritmo (`paceFor`): al inicio (los primeros mensajes) contesta en segundos, para que la charla arranque; y si ya
+ *   están platicando (contestó hace poco), se queda en el chat y sigue rápido.
  */
 
 export type Delivery = { content: string; kind: 'text' | 'voice'; deliverAt: Date; meta?: Record<string, unknown> };
@@ -50,6 +52,19 @@ export function ackMessage(activity: string | undefined, warm: boolean, rand: ()
   return list[Math.floor(rand() * list.length) % list.length]!.replace('{a}', a);
 }
 
+/** Mensajes propios con los que la charla todavía "arranca" (respuesta en segundos, haga lo que haga). */
+export const START_TURNS = 6;
+/** Si contestó hace menos que esto, sigue en el chat. */
+export const ENGAGED_MS = 6 * 60_000;
+
+export type Pace = 'start' | 'engaged' | 'normal';
+
+export function paceFor(o: { userTurns: number; lastPersonaAt: Date | null; now: Date; presence: Presence }): Pace {
+  if (o.userTurns < START_TURNS) return 'start';
+  if (o.presence.state !== 'asleep' && o.lastPersonaAt && o.now.getTime() - o.lastPersonaAt.getTime() < ENGAGED_MS) return 'engaged';
+  return 'normal';
+}
+
 const PROFILE_FACTOR: Record<ResponseProfile, (rand: () => number) => number> = {
   fast: () => 0.6,
   slow: () => 1.6,
@@ -68,6 +83,8 @@ export function planDelivery(o: {
   voiceAllowed: boolean;
   /** Lo que la persona contó es vulnerable: si hay aviso, cálido. */
   vulnerable?: boolean;
+  /** Ritmo de la charla (por defecto, el de su día). */
+  pace?: Pace;
   rand: () => number;
 }): Plan {
   const { now, presence, emotion, rand } = o;
@@ -78,7 +95,12 @@ export function planDelivery(o: {
 
   let firstAt: number;
   let ack: Delivery | null = null;
-  switch (presence.state) {
+  const pace = o.pace ?? 'normal';
+  if (pace === 'start') {
+    firstAt = t0 + between(rand, 3, 10) * 1000;
+  } else if (pace === 'engaged') {
+    firstAt = t0 + between(rand, 4, 30) * 1000 * Math.min(1.3, factor);
+  } else switch (presence.state) {
     case 'online':
       firstAt = t0 + between(rand, 8, 60) * 1000 * factor;
       break;

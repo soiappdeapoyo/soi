@@ -17,7 +17,7 @@ export function PersonsNotifier() {
   const pathname = usePathname();
   const router = useRouter();
   const seen = useRef<Map<string, string> | null>(null);
-  const [banner, setBanner] = useState<{ id: string; name: string; hue: number; text: string } | null>(null);
+  const [banner, setBanner] = useState<{ id: string; name: string; hue: number; avatar: string | null; text: string } | null>(null);
   const [shown, setShown] = useState(false);
   const pathRef = useRef(pathname);
   pathRef.current = pathname;
@@ -36,7 +36,7 @@ export function PersonsNotifier() {
             const next = new Map(chats.map((c) => [c.id, c.last?.at ?? '']));
             if (prev) {
               const fresh = chats.find((c) => c.last && c.last.role === 'persona' && prev.get(c.id) !== c.last.at && c.unread > 0 && pathRef.current !== `/persons/${c.id}`);
-              if (fresh?.last) setBanner({ id: fresh.id, name: fresh.name, hue: fresh.hue, text: fresh.last.kind === 'voice' ? '🎤 Nota de voz' : fresh.last.content });
+              if (fresh?.last) setBanner({ id: fresh.id, name: fresh.name, hue: fresh.hue, avatar: fresh.avatar, text: fresh.last.kind === 'voice' ? '🎤 Nota de voz' : fresh.last.content });
             }
             seen.current = next;
           }
@@ -66,7 +66,7 @@ export function PersonsNotifier() {
         onClick={() => { setShown(false); router.push(`/persons/${banner.id}`); }}
         className={`press pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-raised transition-[transform,opacity] duration-(--dur-enter) ease-out-strong motion-reduce:transition-none ${shown ? 'translate-y-0 opacity-100' : '-translate-y-3 opacity-0'}`}
       >
-        <PersonaAvatar name={banner.name} hue={banner.hue} size={40} />
+        <PersonaAvatar name={banner.name} hue={banner.hue} src={banner.avatar} size={40} />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold">{banner.name}</span>
           <span className="block truncate text-sm text-soi-muted">{banner.text}</span>

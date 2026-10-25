@@ -101,17 +101,17 @@ async function getJSON(url: string, headers: Record<string, string> = {}) {
 }
 
 /** Pexels (con clave): licencia libre, se puede guardar y modificar. */
-async function searchPexels(query: string): Promise<Photo[]> {
+async function searchPexels(query: string, shape: 'wide' | 'square' = 'wide'): Promise<Photo[]> {
   const key = process.env.PEXELS_API_KEY;
   if (!key) return [];
-  const d = await getJSON(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&orientation=landscape&per_page=10`, { Authorization: key });
-  return ((d.photos ?? []) as { id: number; src: { landscape?: string; medium?: string } }[])
-    .map((p) => ({ key: `pexels-${p.id}`, url: p.src.landscape ?? p.src.medium ?? '' })).filter((p) => p.url);
+  const d = await getJSON(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&orientation=${shape === 'wide' ? 'landscape' : 'square'}&per_page=10`, { Authorization: key });
+  return ((d.photos ?? []) as { id: number; src: { landscape?: string; medium?: string; large?: string } }[])
+    .map((p) => ({ key: `pexels-${p.id}`, url: (shape === 'wide' ? p.src.landscape : p.src.large) ?? p.src.medium ?? '' })).filter((p) => p.url);
 }
 
-/** Openverse (sin clave): solo CC0 y dominio público, fotos horizontales; StockSnap primero (más aesthetic). */
-async function searchOpenverse(query: string): Promise<Photo[]> {
-  const base = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&license=cc0,pdm&category=photograph&aspect_ratio=wide&mature=false&page_size=12`;
+/** Openverse (sin clave): solo CC0 y dominio público; StockSnap primero (más aesthetic). */
+async function searchOpenverse(query: string, shape: 'wide' | 'square' = 'wide'): Promise<Photo[]> {
+  const base = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&license=cc0,pdm&category=photograph&aspect_ratio=${shape}&mature=false&page_size=12`;
   const map = (rs: { id: string; source: string; url: string; thumbnail?: string }[]) =>
     rs.map((r) => ({ key: `ov-${r.id.replace(/[^a-z0-9]/gi, '').slice(0, 40).toLowerCase()}`, url: r.source === 'stocksnap' ? r.url : r.thumbnail ?? r.url }));
   const snap = await getJSON(`${base}&source=stocksnap`).catch(() => ({ results: [] }));
@@ -120,15 +120,23 @@ async function searchOpenverse(query: string): Promise<Photo[]> {
   return map(any.results ?? []);
 }
 
-/** Descarga y reduce a 640×360 WebP (recorte centrado). */
-async function optimize(url: string): Promise<Buffer | null> {
+/** Fotos libres de derechos (Pexels con clave; si no, Openverse CC0 / dominio público). */
+export async function searchFreePhotos(query: string, shape: 'wide' | 'square' = 'wide'): Promise<Photo[]> {
+  let photos: Photo[] = [];
+  try { photos = await searchPexels(query, shape); } catch { /* sin Pexels */ }
+  if (!photos.length) { try { photos = await searchOpenverse(query, shape); } catch { /* sin resultados */ } }
+  return photos;
+}
+
+/** Descarga y reduce a WebP (recorte centrado en lo interesante); por defecto 640×360. */
+export async function optimize(url: string, width = WIDTH, height = HEIGHT): Promise<Buffer | null> {
   const res = await fetch(url, { headers: { 'User-Agent': 'SOI-app (covers)' }, signal: AbortSignal.timeout(10_000) });
   if (!res.ok) return null;
   const len = Number(res.headers.get('content-length') ?? 0);
   if (len > 12 * 1024 * 1024) return null;
   const sharp = (await import('sharp')).default;
   return sharp(Buffer.from(await res.arrayBuffer())).rotate()
-    .resize({ width: WIDTH, height: HEIGHT, fit: 'cover', position: 'attention' })
+    .resize({ width, height, fit: 'cover', position: 'attention' })
     .webp({ quality: 55, effort: 5 }).toBuffer();
 }
 
@@ -137,9 +145,7 @@ export async function findCover(m: CoverInput): Promise<string | null> {
   const queries = [...new Set([await coverQueryByAI(m), coverQueryByRules(m)].filter(Boolean) as string[])];
   const admin = createAdminClient();
   for (const q of queries) {
-    let photos: Photo[] = [];
-    try { photos = await searchPexels(q); } catch { /* sin Pexels */ }
-    if (!photos.length) { try { photos = await searchOpenverse(q); } catch { /* sin resultados */ } }
+    const photos = await searchFreePhotos(q);
     // Entre las primeras, una al azar: variedad sin perder relevancia.
     const pool = photos.slice(0, 6).sort(() => Math.random() - 0.5);
     for (const p of pool.slice(0, 3)) {

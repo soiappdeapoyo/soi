@@ -40,7 +40,7 @@ export function ChatList({ initial, archived = false }: { initial: ChatListItem[
           <li key={c.id}>
             <Link href={`/persons/${c.id}`} className="flex items-center gap-3 px-3 py-2.5 active:bg-black/[0.04] [@media(hover:hover)]:hover:bg-[#F5F6F6]">
               <span className="relative">
-                <PersonaAvatar name={c.name} hue={c.hue} size={50} />
+                <PersonaAvatar name={c.name} hue={c.hue} src={c.avatar} size={50} />
                 {c.online && <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full border-2 border-white" style={{ background: WA.badge }}><span className="sr-only">en línea</span></span>}
               </span>
               <span className="min-w-0 flex-1 border-b border-black/[0.06] pb-2.5">

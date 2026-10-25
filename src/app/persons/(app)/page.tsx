@@ -22,7 +22,7 @@ export default async function PersonsHome() {
   const days = trialDaysLeft(s.profile);
 
   return (
-    <main id="main">
+    <main id="main" className="pb-24">
       <header className="sticky top-0 z-20 flex items-center gap-1 bg-[#008069] px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-white">
         <h1 className="flex-1 text-xl font-semibold">{PERSONS_BRAND}</h1>
         <Link href="/persons/nueva" aria-label="Nueva persona" className="press flex h-11 w-11 items-center justify-center rounded-full"><Plus className="h-6 w-6" aria-hidden="true" /></Link>
@@ -53,7 +53,7 @@ export default async function PersonsHome() {
       )}
 
       {chats.length > 0 && (
-        <Link href="/persons/nueva" aria-label="Nueva persona" className="press fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#008069] text-white shadow-raised">
+        <Link href="/persons/nueva" aria-label="Nueva persona" className="press fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1.25rem,calc((100vw-48rem)/2+1.25rem))] z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#008069] text-white shadow-raised">
           <Plus className="h-6 w-6" aria-hidden="true" />
         </Link>
       )}

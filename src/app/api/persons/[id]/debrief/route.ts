@@ -2,12 +2,14 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { loadPersona, personsApiSession, type PersonaMessageRow } from '@/lib/persons/server';
 import { blindSpots, emotionTimeline, MIN_DEBRIEF_MESSAGES, ruleReport, type DebriefMessage, type DebriefReport } from '@/lib/persons/debrief';
 import { coachReport } from '@/lib/persons/ai';
+import { postReport } from '@/lib/persons/coach-server';
 
 export const maxDuration = 60;
 
 /**
  * Terminar la sesión y recibir feedback: lo que se habló desde el último debrief. El coach (IA) puntúa; la línea de
- * emociones y los puntos ciegos salen de reglas. Si la IA no responde, el feedback sale solo por reglas.
+ * emociones y los puntos ciegos salen de reglas. Si la IA no responde, el feedback sale solo por reglas. El feedback
+ * llega al chat del coach como tarjeta (y queda en el historial de la ficha).
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const s = await personsApiSession();
@@ -46,7 +48,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     messages_count: messages.length, report, provider,
   }).select('id, created_at').single();
   if (error) console.error('[persons] guardar debrief', error.message);
-  return Response.json({ id: saved?.id ?? null, report });
+  const coach = await postReport(persona, report, (saved?.id as string | undefined) ?? null, nowIso).catch((e: unknown) => {
+    console.error('[persons] feedback al coach', e instanceof Error ? e.message : e);
+    return [];
+  });
+  return Response.json({ id: saved?.id ?? null, report, coach });
 }
 
 /** Los debriefs anteriores (historial de la ficha). */

@@ -15,7 +15,7 @@ const DIFFICULTY = ['', 'Fácil: sus señales son muy claras', 'Media: tiene dí
 type Past = { id: string; created_at: string; messages_count: number; report: DebriefReport };
 
 /** La ficha: quién es, sus límites, cómo es su día y el historial de feedback. Siempre con la marca de sintética. */
-export function PersonaProfile({ personaId, spec, hue }: { personaId: string; spec: PersonSpec; hue: number }) {
+export function PersonaProfile({ personaId, spec, hue, avatar }: { personaId: string; spec: PersonSpec; hue: number; avatar?: string | null }) {
   const [past, setPast] = useState<Past[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => {
@@ -27,7 +27,7 @@ export function PersonaProfile({ personaId, spec, hue }: { personaId: string; sp
   return (
     <div className="flex flex-col gap-5 text-[15px]">
       <div className="flex flex-col items-center text-center">
-        <PersonaAvatar name={spec.name} hue={hue} size={88} ai />
+        <PersonaAvatar name={spec.name} hue={hue} src={avatar} size={112} ai />
         <p className="mt-3 text-xl font-semibold">{spec.name}, {spec.age}</p>
         <p className="text-soi-muted">{spec.profession} · {spec.city}</p>
         <p className="mt-2 rounded-full bg-[#E7F3EF] px-3 py-1 text-xs font-medium text-[#005C4B]">IA · persona sintética</p>
@@ -43,7 +43,7 @@ export function PersonaProfile({ personaId, spec, hue }: { personaId: string; sp
           <dt className="text-sm font-semibold text-soi-muted">Su día entre semana</dt>
           <dd><ul className="mt-1 flex flex-col gap-0.5 text-sm">
             {spec.derived.dayPlan.weekday.map((s) => (
-              <li key={s.from} className="flex gap-3"><span className="nums w-24 shrink-0 text-soi-muted">{fmt(s.from)}–{fmt(s.to)}</span><span>{s.activity ? s.activity.charAt(0).toUpperCase() + s.activity.slice(1) : s.state === 'busy' ? busy : s.state === 'asleep' ? asleep : STATE[s.state]}</span></li>
+              <li key={s.from} className="flex min-w-0 gap-3"><span className="nums w-[6.5rem] shrink-0 text-soi-muted">{fmt(s.from)}–{fmt(s.to)}</span><span>{s.activity ? s.activity.charAt(0).toUpperCase() + s.activity.slice(1) : s.state === 'busy' ? busy : s.state === 'asleep' ? asleep : STATE[s.state]}</span></li>
             ))}
           </ul></dd>
         </div>
@@ -54,7 +54,7 @@ export function PersonaProfile({ personaId, spec, hue }: { personaId: string; sp
       <section aria-labelledby="pp-history">
         <h3 id="pp-history" className="text-sm font-semibold text-soi-muted">Feedback de tus sesiones</h3>
         {past === null ? <p className="mt-2 text-sm text-soi-muted">Cargando…</p>
-          : !past.length ? <p className="mt-2 text-sm text-soi-muted">Aún no hay. Al terminar una sesión (menú ⋮) recibes tu feedback.</p>
+          : !past.length ? <p className="mt-2 text-sm text-soi-muted">Aún no hay. Al terminar una sesión (menú ⋮) tu coach te deja el feedback.</p>
           : (
             <ul className="mt-2 flex flex-col gap-2">
               {past.map((d) => (
