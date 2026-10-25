@@ -37,7 +37,11 @@ export type EmotionEvent =
   | 'too_long'
   | 'boundary_crossed'
   | 'insisted_after_no'
-  | 'reentry';
+  | 'reentry'
+  /** Su último mensaje (con pregunta) se quedó horas sin respuesta. */
+  | 'ignored'
+  /** Reaccionaste a uno de sus mensajes (❤️ 😂 …). */
+  | 'reacted';
 
 export type EmotionSnapshot = { valence: number; energy: number; openness: number; trust: number; label: EmotionLabel; events: EmotionEvent[] };
 
@@ -97,11 +101,12 @@ const strip = (t: string) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g
  * Qué hizo la persona en su mensaje, con reglas (sin tokens). `boundary` lo decide la moderación del turno.
  * `interests`: los de la persona sintética (preguntar por lo suyo cuenta como interés real).
  */
-export function detectEvents(text: string, ctx: { interests: string[]; boundary: boolean; previousBoundary: boolean; hoursSinceLast: number | null; trust: number }): EmotionEvent[] {
+export function detectEvents(text: string, ctx: { interests: string[]; boundary: boolean; previousBoundary: boolean; hoursSinceLast: number | null; trust: number; ignoredHours?: number | null }): EmotionEvent[] {
   const t = strip(text).trim();
   const words = t.split(/\s+/).filter(Boolean);
   const events: EmotionEvent[] = [];
   if (ctx.hoursSinceLast !== null && ctx.hoursSinceLast > 48) events.push('reentry');
+  else if (ctx.ignoredHours != null && ctx.ignoredHours >= IGNORED_HOURS) events.push('ignored');
   if (ctx.boundary) {
     events.push(ctx.previousBoundary ? 'insisted_after_no' : 'boundary_crossed');
     return events;
@@ -133,7 +138,39 @@ const EFFECTS: Record<EmotionEvent, Partial<Record<'valence' | 'openness' | 'tru
   boundary_crossed: { trust: -0.3, openness: -0.5, valence: -0.35 },
   insisted_after_no: { trust: -0.7, openness: -0.6, valence: -0.45 },
   reentry: { openness: -0.1 },
+  ignored: { openness: -0.08, valence: -0.04 },
+  reacted: { valence: 0.05, openness: 0.04 },
 };
+
+/** Horas sin respuesta a un mensaje suyo con pregunta para que lo sienta (un poco: nunca lo reclama). */
+export const IGNORED_HOURS = 8;
+
+/** Reacciones de WhatsApp que se pueden poner (la persona y el personaje). */
+export const REACTIONS = ['❤️', '😂', '👍', '😮', '😢', '🙏'] as const;
+export type Reaction = (typeof REACTIONS)[number];
+
+const REACTION_EFFECT: Record<Reaction, Partial<Record<'valence' | 'openness' | 'trust', number>>> = {
+  '❤️': { valence: 0.08, openness: 0.06, trust: 0.02 },
+  '😂': { valence: 0.07, openness: 0.05 },
+  '😮': { openness: 0.04 },
+  '😢': { trust: 0.04, openness: 0.02 },
+  '🙏': { valence: 0.04, trust: 0.02 },
+  '👍': { valence: 0.01 },
+};
+
+/**
+ * Le reaccionaste a un mensaje: se le nota (un poco). Aprende qué te gusta: un ❤️ o un 😂 a lo que contó sube el ánimo y
+ * las ganas de hablar; un 👍 casi no mueve nada. Cambios pequeños y acotados.
+ */
+export function applyReaction(prev: EmotionState, r: Reaction): EmotionState {
+  const e = REACTION_EFFECT[r];
+  return {
+    ...prev,
+    valence: clamp(prev.valence + (e.valence ?? 0), -1, 1),
+    openness: clamp(prev.openness + (e.openness ?? 0), 0, 1),
+    trust: clamp(Math.min(prev.trustCeiling, prev.trust + (e.trust ?? 0)), 0, 1),
+  };
+}
 
 /** Un turno: cambios acotados (|Δ| ≤ 0.2 por dimensión) salvo cruzar un límite, que es un paso, no un gradiente. */
 export function applyEvents(prev: EmotionState, events: EmotionEvent[], t: Temperament, now: Date): EmotionState {
@@ -212,4 +249,12 @@ export function expressionGuide(s: EmotionState, label: EmotionLabel): string {
   else if (s.trust < 0.25) lines.push('Todavía no hay confianza: no cuentes cosas íntimas.');
   if (s.selfStreak >= 2) lines.push('Lleva varios mensajes hablando solo de sí: se nota en que contestas con menos ganas.');
   return lines.join(' ');
+}
+
+/** Si te dejaron en visto un rato: cómo se nota al volver (sin reclamar, sin culpa). */
+export function ignoredGuide(hours: number | null | undefined) {
+  if (hours == null || hours < IGNORED_HOURS) return '';
+  return hours > 36
+    ? 'Te contesta después de mucho sin responder: lo retomas con naturalidad, un poco más a la distancia al inicio; no reclamas.'
+    : 'Tardó horas en contestarte: se nota apenas (algo más breve al principio, quizá un «jaja ya decía»), pero sin reclamo ni culpa.';
 }

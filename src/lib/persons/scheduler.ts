@@ -1,5 +1,6 @@
 import type { ResponseProfile } from './spec';
-import type { Presence } from './presence';
+import { presenceAt, type Presence } from './presence';
+import type { DayPlan } from './spec';
 import type { EmotionState } from './emotion';
 
 /**
@@ -33,11 +34,17 @@ export function voiceSeconds(text: string) {
 
 const VOICE_ACTIVITIES = /corriendo|manejando|en bici|caminando|cocinando|en el cami[oó]n/;
 
-export function wantsVoice(o: { allowed: boolean; boundary: boolean; text: string; presence: Presence; emotion: EmotionState; rand: () => number }) {
-  if (!o.allowed || o.boundary || o.text.length > 180 || o.text.length < 12) return false;
+/**
+ * ¿Nota de voz? Como en WhatsApp: seguido si va corriendo o manejando, y de vez en cuando cuando va a gusto (más con
+ * confianza). `first`: aún no ha mandado ninguna y ya llevan unos mensajes: la primera llega pronto, para que se oiga.
+ */
+export function wantsVoice(o: { allowed: boolean; boundary: boolean; text: string; presence: Presence; emotion: EmotionState; rand: () => number; first?: boolean }) {
   // En un "no" la voz suena a presión: los límites siempre van por escrito.
+  if (!o.allowed || o.boundary || o.text.length > 220 || o.text.length < 12) return false;
+  if (o.emotion.valence < -0.15) return false;
   if (o.presence.activity && VOICE_ACTIVITIES.test(o.presence.activity)) return o.rand() < 0.75;
-  return o.presence.state === 'online' && o.emotion.valence > 0.2 && o.emotion.trust >= 0.35 && o.rand() < 0.15;
+  if (o.first) return o.rand() < 0.7;
+  return o.rand() < (o.emotion.trust >= 0.35 ? 0.3 : 0.18);
 }
 
 const ACK: Record<string, string[]> = {
@@ -87,6 +94,8 @@ export function planDelivery(o: {
   pace?: Pace;
   /** Cómo dice "te escribo al rato" alguien de su país. */
   ack?: { warm: string[]; plain: string[] };
+  /** Aún no ha mandado ninguna nota de voz en este chat. */
+  firstVoice?: boolean;
   rand: () => number;
 }): Plan {
   const { now, presence, emotion, rand } = o;
@@ -134,7 +143,7 @@ export function planDelivery(o: {
 
   // Una nota de voz reemplaza las burbujas (dice lo mismo, en una).
   const joined = replies.join(' ');
-  const voice = wantsVoice({ allowed: o.voiceAllowed, boundary: o.boundary, text: joined, presence, emotion, rand });
+  const voice = wantsVoice({ allowed: o.voiceAllowed, boundary: o.boundary, text: joined, presence, emotion, rand, first: o.firstVoice });
   const items: Delivery[] = [];
   if (ack) items.push(ack);
   if (voice) {
@@ -153,4 +162,16 @@ export function planDelivery(o: {
     ? new Date(Math.max(t0 + 2000, first.deliverAt.getTime() - (typingSeconds(first.content, first.kind) + between(rand, 3, 20)) * 1000))
     : new Date(t0 + 2000);
   return { items, readAt };
+}
+
+/**
+ * Cuándo llega su mensaje de seguimiento si no le contestas (el actor propone las horas; aquí se acota a 1–30 h y
+ * nunca de madrugada: si cae mientras duerme, llega al despertar). Si contestas antes, se borra solo (ver turn.ts).
+ */
+export function followupAt(o: { lastAt: Date; afterHours: number; dayPlan: DayPlan; timezone: string; rand: () => number }): Date {
+  const h = Math.min(30, Math.max(1, o.afterHours));
+  let t = new Date(o.lastAt.getTime() + h * 3_600_000);
+  const p = presenceAt(o.dayPlan, t, o.timezone);
+  if (p.state === 'asleep') t = new Date(p.endsAt.getTime() + between(o.rand, 10, 40) * 60_000);
+  return t;
 }

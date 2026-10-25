@@ -7,10 +7,10 @@ import { AllProvidersFailedError } from '@/lib/ai/fallback';
 import { hash, seeded } from './spec';
 import { applyEvents, circadianEnergy, decay, detectEvents, labelFor, parseEmotion, snapshot } from './emotion';
 import { localClock, presenceAt } from './presence';
-import { paceFor, planDelivery } from './scheduler';
+import { followupAt, paceFor, planDelivery } from './scheduler';
 import { humanizeItems, quirksFor } from './humanize';
 import { scheduleChatPhoto } from './images';
-import { scheduleTip } from './coach-server';
+import { scheduleFirstTip } from './coach-server';
 import { blockNotice, checkTurn } from './moderation';
 import { actorReply, personaRegion, type ChatLine } from './ai';
 import { canSendToday } from './entitlements';
@@ -27,7 +27,7 @@ export type TurnResult =
 
 const REASON_LABEL = { sexual: 'un comentario sexual', insult: 'un insulto', pressure: 'presión para que conteste', control: 'querer controlar dónde está o con quién', threat: 'una amenaza' } as const;
 
-export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: string, opts: { blind?: boolean } = {}): Promise<TurnResult> {
+export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: string): Promise<TurnResult> {
   if (persona.archived_at) return { ok: false, status: 409, reason: 'archived' };
   const db = createAdminClient();
   const now = new Date();
@@ -73,15 +73,19 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
   const hours = (now.getTime() - Date.parse(persona.emotion_at)) / 3_600_000;
   const prev = decay(parseEmotion(persona.emotion, t), hours, t, circadianEnergy(t.energy, minute, presence.state));
 
-  const [{ data: lastUser }, { count: userTurns }, { data: lastPersona }, { count: recentPhotos }] = await Promise.all([
+  const [{ data: lastUser }, { count: userTurns }, { data: lastPersona }, { count: recentPhotos }, { count: voiceNotes }] = await Promise.all([
     db.from('persona_messages').select('created_at').eq('persona_id', persona.id).eq('role', 'user').order('created_at', { ascending: false }).limit(1).maybeSingle(),
     db.from('persona_messages').select('id', { count: 'exact', head: true }).eq('persona_id', persona.id).eq('role', 'user'),
-    db.from('persona_messages').select('deliver_at').eq('persona_id', persona.id).eq('role', 'persona').lte('deliver_at', nowIso).order('deliver_at', { ascending: false }).limit(1).maybeSingle(),
+    db.from('persona_messages').select('deliver_at, content').eq('persona_id', persona.id).eq('role', 'persona').lte('deliver_at', nowIso).order('deliver_at', { ascending: false }).limit(1).maybeSingle(),
     db.from('persona_messages').select('id', { count: 'exact', head: true }).eq('persona_id', persona.id).eq('role', 'persona').not('meta->photo', 'is', null).gte('deliver_at', new Date(now.getTime() - 6 * 3_600_000).toISOString()),
+    db.from('persona_messages').select('id', { count: 'exact', head: true }).eq('persona_id', persona.id).eq('role', 'persona').eq('kind', 'voice'),
   ]);
+  // ¿Te había preguntado algo y lo dejaste en visto horas? (se le nota un poco al volver; nunca lo reclama)
+  const ignoredHours = lastPersona && (!lastUser || (lastPersona.deliver_at as string) > (lastUser.created_at as string)) && /\?/.test(lastPersona.content as string)
+    ? (now.getTime() - Date.parse(lastPersona.deliver_at as string)) / 3_600_000 : null;
   const hoursSinceLast = lastUser ? (now.getTime() - Date.parse(lastUser.created_at as string)) / 3_600_000 : null;
   const recentBoundary = Boolean(prev.boundaryAt && now.getTime() - Date.parse(prev.boundaryAt) < 6 * 3_600_000);
-  const events = detectEvents(text, { interests: spec.interests, boundary: check.level === 'boundary', previousBoundary: recentBoundary, hoursSinceLast, trust: prev.trust });
+  const events = detectEvents(text, { interests: spec.interests, boundary: check.level === 'boundary', previousBoundary: recentBoundary, hoursSinceLast, trust: prev.trust, ignoredHours });
   const next = applyEvents(prev, events, t, now);
   const label = labelFor(next, now, presence.state);
   const snap = snapshot(next, events, now, presence.state);
@@ -101,13 +105,17 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
   const history: ChatLine[] = ((recent ?? []) as Pick<PersonaMessageRow, 'role' | 'kind' | 'content' | 'deliver_at' | 'created_at' | 'meta'>[])
     .filter((m) => !m.meta?.blocked && !m.meta?.crisis)
     .reverse()
-    .map((m) => ({ role: m.role, kind: m.kind, content: m.content, at: m.role === 'user' ? m.created_at : m.deliver_at }));
+    .map((m) => ({
+      role: m.role, kind: m.kind, content: m.content, at: m.role === 'user' ? m.created_at : m.deliver_at,
+      reaction: typeof m.meta?.reaction === 'string' ? m.meta.reaction : null,
+      theirReaction: typeof m.meta?.user_reaction === 'string' ? m.meta.user_reaction : null,
+    }));
 
   const region = personaRegion(spec, s.region);
   let reply;
   try {
     ({ reply } = await actorReply(spec, history, {
-      emotion: next, label, presence, now, timezone: persona.timezone, region,
+      emotion: next, label, presence, now, timezone: persona.timezone, region, ignoredHours,
       boundary: check.level === 'boundary' ? REASON_LABEL[check.reason ?? 'pressure'] : null, risk: next.risk,
     }));
   } catch (error) {
@@ -125,24 +133,42 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
   const plan = planDelivery({
     now: replyNow, presence, emotion: next, profile: spec.derived.responseProfile, userText: text, replies: reply.messages,
     boundary, voiceAllowed: s.limits.voice, vulnerable: events.includes('shared_self'), pace, ack: region.ack, rand,
+    firstVoice: !(voiceNotes ?? 0) && (userTurns ?? 0) >= 2,
   });
+  // Si no le contestas: su mensaje de seguimiento, con la emoción que la IA diseñó (se borra solo si contestas antes).
+  const last = plan.items[plan.items.length - 1];
+  if (reply.followup && last && !boundary && !next.risk && label !== 'annoyed') {
+    plan.items.push({
+      content: reply.followup.text, kind: 'text',
+      deliverAt: followupAt({ lastAt: last.deliverAt, afterHours: reply.followup.after_hours, dayPlan: spec.derived.dayPlan, timezone: persona.timezone, rand }),
+      meta: { followup: true, feeling: reply.followup.feeling },
+    });
+  }
   // Escribe como en el teléfono: minúsculas, acentos que se le pasan, algún dedazo (nunca al marcar un límite).
   plan.items = humanizeItems(plan.items, quirksFor(spec, persona.id), rand, boundary);
 
   const unread = await db.from('persona_messages').update({ read_at: plan.readAt.toISOString() }).eq('persona_id', persona.id).eq('role', 'user').is('read_at', null);
   if (unread.error) console.error('[persons] read_at', unread.error.message);
+  // Su reacción a tu mensaje aparece cuando lo lee (como en WhatsApp).
+  if (reply.reaction) {
+    const r = await db.from('persona_messages').update({ meta: { reaction: reply.reaction, reaction_at: plan.readAt.toISOString() } }).eq('id', inserted.id);
+    if (r.error) console.error('[persons] reacción', r.error.message);
+  }
   if (plan.items.length) {
     const { error: e } = await db.from('persona_messages').insert(plan.items.map((it) => ({
       persona_id: persona.id, user_id: s.userId, role: 'persona', kind: it.kind, content: it.content.slice(0, 2000),
-      deliver_at: it.deliverAt.toISOString(), emotion: snap, meta: { ...it.meta, boundary: reply.sets_boundary || undefined },
+      deliver_at: it.deliverAt.toISOString(),
+      emotion: it.meta?.followup ? { ...snap, label: it.meta.feeling, events: [] } : snap,
+      meta: { ...it.meta, boundary: reply.sets_boundary || undefined },
     })));
     if (e) console.error('[persons] programar respuesta', e.message);
     // Una foto de lo que está viendo, de vez en cuando (máx. una cada 6 h, nunca al marcar un límite ni en el primer mensaje).
     if (reply.photo && !boundary && (userTurns ?? 0) >= 2 && !(recentPhotos ?? 0)) {
-      scheduleChatPhoto({ personaId: persona.id, userId: s.userId, query: reply.photo, caption: null, deliverAt: plan.items[0]!.deliverAt });
+      scheduleChatPhoto({ personaId: persona.id, userId: s.userId, query: reply.photo, caption: null, deliverAt: plan.items.find((i) => !i.meta?.followup)?.deliverAt ?? plan.items[0]!.deliverAt });
     }
   }
-  scheduleTip(persona, Boolean(opts.blind), s.region);
+  // Tu coach no escribe a cada rato: solo una idea (sin IA) en tu primera plática, y el feedback al terminarla.
+  if ((userTurns ?? 0) + 1 === 3) scheduleFirstTip(s.userId, persona);
   await db.from('personas').update({ emotion: next, emotion_at: nowIso, last_message_at: nowIso, updated_at: nowIso }).eq('id', persona.id);
   return { ok: true, messageId: inserted.id as string };
 }

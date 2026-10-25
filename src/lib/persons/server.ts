@@ -6,12 +6,15 @@ import { isAdminEmail } from '@/lib/admin/auth';
 import type { UserProfile } from '@/types/database';
 import { buildSpec, hash, type Described, type PersonSpec } from './spec';
 import { cityCountry, localCity, REGIONS } from '@/config/regionalisms';
+import { meetingFor, writesFirst } from './meeting';
+import { scheduleOpener } from './opener';
 import { initialEmotion, labelFor, parseEmotion, type EmotionLabel, type EmotionSnapshot } from './emotion';
 import { lastSeenAt, presenceAt, presenceLabel } from './presence';
 import { personsLimits, type PersonsLimits } from './entitlements';
 import { ENGAGED_MS, typingSeconds } from './scheduler';
 import { personsImageUrl, scheduleAvatar } from './images';
-import { coachBadge, coachSummary, type CoachSummary } from './coach-server';
+import { coachBadge, coachSummary, scheduleAutoDebrief, type CoachSummary } from './coach-server';
+import { trialDaysLeft } from '@/lib/billing/access-rules';
 
 /** Fila de `personas` (0041). */
 export type PersonaRow = {
@@ -114,7 +117,10 @@ export async function insertPersona(s: PersonsSession, described: Described, sou
     described = { ...described, city: localCity(region, hash(presetId)) };
     country = s.region;
   }
-  const spec: PersonSpec = { ...buildSpec(described, source, seed), country };
+  // Cómo se conocieron y si escribe primero (un match, la amiga de tu amiga, un número que no te tiene guardado…).
+  const meeting = meetingFor(source, seed);
+  const firstMove = writesFirst(meeting, described, seed, /escribi[oó] primero/i.test(source));
+  const spec: PersonSpec = { ...buildSpec(described, source, seed), country, meeting, firstMove };
   const { data, error } = await db.from('personas').insert({
     user_id: s.userId, preset_id: presetId, name: spec.name, age: spec.age, gender: spec.gender,
     profession: spec.profession, city: spec.city, bio: spec.bio, difficulty: spec.difficulty,
@@ -124,6 +130,7 @@ export async function insertPersona(s: PersonsSession, described: Described, sou
   if (error || !data) throw new Error(error?.message ?? 'no se pudo crear');
   // La foto de perfil se prepara mientras abre el chat (no retrasa la creación).
   scheduleAvatar({ id: data.id as string, user_id: s.userId, spec });
+  if (firstMove) scheduleOpener({ personaId: data.id as string, userId: s.userId, spec, timezone: s.timezone, userRegion: s.region });
   return data.id as string;
 }
 
@@ -165,7 +172,10 @@ export type ChatListItem = {
 
 /** La lista de chats: último mensaje entregado, no leídos y si está en línea. */
 /** La lista de chats y la fila fija de Ale (el coach), con lo nuevo de cada uno. */
-export async function loadInbox(userId: string): Promise<{ chats: ChatListItem[]; coach: CoachSummary | null }> {
+export async function loadInbox(s: PersonsSession): Promise<{ chats: ChatListItem[]; coach: CoachSummary | null }> {
+  const userId = s.userId;
+  // Las pláticas que ya terminaron reciben su feedback de Ale (después de responder; la lista no espera).
+  scheduleAutoDebrief(userId, s.plan, trialDaysLeft(s.profile));
   const { data } = await createAdminClient().from('personas').select('id, name, created_at, coach_read_at').eq('user_id', userId).limit(60);
   const personas = (data ?? []) as Pick<PersonaRow, 'id' | 'name' | 'created_at' | 'coach_read_at'>[];
   const [chats, coach] = await Promise.all([loadChatList(userId), personas.length ? coachSummary(userId, personas) : Promise.resolve(null)]);
@@ -211,6 +221,9 @@ export function publicMessage(m: PersonaMessageRow, nowIso: string, showEmotion:
     emotion: showEmotion && m.role === 'user' && m.emotion ? m.emotion.label : undefined,
     photo: typeof m.meta?.photo === 'string' ? personsImageUrl(m.meta.photo) : undefined,
     caption: typeof m.meta?.photo === 'string' ? m.meta.caption === true : undefined,
+    /** Su reacción a tu mensaje (aparece cuando lo lee) y la tuya a los suyos. */
+    reaction: m.role === 'user' && typeof m.meta?.reaction === 'string' && typeof m.meta.reaction_at === 'string' && m.meta.reaction_at <= nowIso ? m.meta.reaction : undefined,
+    myReaction: m.role === 'persona' && typeof m.meta?.user_reaction === 'string' ? m.meta.user_reaction : undefined,
   };
 }
 export type PublicMessage = ReturnType<typeof publicMessage>;

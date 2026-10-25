@@ -9,8 +9,9 @@ import type { PersonSpec } from './spec';
 
 /**
  * Fotos de /persons.
- * - Foto de perfil: generada con IA (Gemini, `AI_MODEL_IMAGE`): una persona ficticia, adulta, en una foto casual de
- *   teléfono. Si no hay IA, una foto libre de derechos (Pexels / Openverse CC0) SIN personas, de algo que le gusta,
+ * - Foto de perfil: generada con IA (por OpenRouter, `AI_MODEL_IMAGE_OPENROUTER`, se paga con sus créditos; si no,
+ *   Gemini directo, `AI_MODEL_IMAGE`, que en el plan gratuito de Google no genera imágenes): una persona ficticia,
+ *   adulta, en una foto casual de teléfono. Si no hay IA, una foto libre de derechos (Pexels / Openverse CC0) SIN personas, de algo que le gusta,
  *   como tanta gente tiene en su perfil. Nunca la cara de una persona real.
  * - Fotos en el chat: lo que el personaje está viendo o haciendo (paisaje, comida, su café), siempre libres de
  *   derechos y sin personas; se comparten entre chats (mismo archivo).
@@ -19,9 +20,13 @@ import type { PersonSpec } from './spec';
 
 const BUCKET = 'moment-assets';
 const IMAGE_MODEL = () => process.env.AI_MODEL_IMAGE || 'gemini-2.5-flash-image';
+const OPENROUTER_IMAGE_MODEL = () => process.env.AI_MODEL_IMAGE_OPENROUTER || 'google/gemini-2.5-flash-image';
 const AVATAR = 384;
 /** Si falló, se vuelve a intentar al día siguiente (no en cada visita). */
 const RETRY_MS = 24 * 3_600_000;
+/** Los intentos anteriores a esto fallaron por la cuota de Google: se reintentan una vez con OpenRouter. */
+const RETRY_SINCE = Date.parse('2026-10-25T04:20:00Z');
+const retryCutoff = (now: number) => new Date(Math.max(now - RETRY_MS, RETRY_SINCE)).toISOString();
 
 export function personsImageUrl(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -63,24 +68,47 @@ export function avatarPrompt(spec: Pick<PersonSpec, 'age' | 'gender' | 'professi
   ].join(' ');
 }
 
-async function aiAvatar(spec: PersonSpec): Promise<Buffer | null> {
-  if (!hasKey('gemini')) return null;
-  const { image } = await generateImage({
-    model: google.image(IMAGE_MODEL()),
-    prompt: avatarPrompt(spec),
-    aspectRatio: '1:1',
-    abortSignal: AbortSignal.timeout(45_000),
-    maxRetries: 1,
+/** OpenRouter (chat con salida de imagen): devuelve la imagen como data URL. */
+async function viaOpenRouter(prompt: string): Promise<Uint8Array | null> {
+  const key = process.env.OPENROUTER_API_KEY?.trim();
+  if (!key) return null;
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'SOI' },
+    body: JSON.stringify({ model: OPENROUTER_IMAGE_MODEL(), messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text'], image_config: { aspect_ratio: '1:1' } }),
+    signal: AbortSignal.timeout(60_000),
   });
+  if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
+  const data = (await res.json()) as { choices?: { message?: { images?: { image_url?: { url?: string } }[] } }[] };
+  const url = data.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? '';
+  const b64 = url.match(/^data:image\/[a-z+]+;base64,(.+)$/)?.[1];
+  return b64 ? new Uint8Array(Buffer.from(b64, 'base64')) : null;
+}
+
+async function viaGoogle(prompt: string): Promise<Uint8Array | null> {
+  if (!hasKey('gemini')) return null;
+  const { image } = await generateImage({ model: google.image(IMAGE_MODEL()), prompt, aspectRatio: '1:1', abortSignal: AbortSignal.timeout(45_000), maxRetries: 0 });
+  return image.uint8Array;
+}
+
+async function aiAvatar(spec: PersonSpec): Promise<Buffer | null> {
+  const prompt = avatarPrompt(spec);
+  let raw: Uint8Array | null = null;
+  for (const [name, run] of [['openrouter', viaOpenRouter], ['google', viaGoogle]] as const) {
+    try { raw = await run(prompt); } catch (e) { console.error(`[persons] foto IA (${name})`, e instanceof Error ? e.message.slice(0, 300) : e); }
+    if (raw) break;
+  }
+  if (!raw) return null;
   const sharp = (await import('sharp')).default;
-  const out = await sharp(Buffer.from(image.uint8Array)).resize({ width: AVATAR, height: AVATAR, fit: 'cover', position: 'attention' }).webp({ quality: 72 }).toBuffer();
+  const out = await sharp(Buffer.from(raw)).resize({ width: AVATAR, height: AVATAR, fit: 'cover', position: 'attention' }).webp({ quality: 72 }).toBuffer();
   // La generación ya tiene filtros; una segunda mirada evita sorpresas (si la revisión no responde, se usa).
   const verdict = await moderateImage(new Uint8Array(out), 'image/webp').catch(() => null);
   return verdict && !verdict.allowed ? null : out;
 }
 
 async function webAvatar(spec: PersonSpec): Promise<Buffer | null> {
-  const photos = await searchFreePhotos(`${sceneFor(spec)} no people`, 'square').catch(() => []);
+  // Sin "no people" en la búsqueda: las bibliotecas no entienden negaciones y devuelven cero resultados.
+  const photos = await searchFreePhotos(sceneFor(spec), 'square').catch(() => []);
   for (const p of photos.slice(0, 4)) {
     const img = await optimize(p.url, AVATAR, AVATAR).catch(() => null);
     if (img) return img;
@@ -93,7 +121,7 @@ type AvatarTarget = { id: string; user_id: string; spec: PersonSpec; avatar_path
 /** ¿Hace falta (o se puede volver a intentar) la foto de perfil? */
 export function needsAvatar(p: AvatarTarget, now = Date.now()) {
   if (p.avatar_path) return false;
-  return !p.avatar_at || now - Date.parse(p.avatar_at) > RETRY_MS;
+  return !p.avatar_at || p.avatar_at < retryCutoff(now);
 }
 
 /** Genera y guarda la foto de perfil. Nunca lanza: sin foto, el avatar ilustrado sigue ahí. */
@@ -102,12 +130,13 @@ export async function ensureAvatar(p: AvatarTarget): Promise<string | null> {
   const nowIso = new Date().toISOString();
   // Se marca antes: dos visitas seguidas no generan dos fotos.
   const { data: claimed } = await db.from('personas').update({ avatar_at: nowIso }).eq('id', p.id).is('avatar_path', null)
-    .or(`avatar_at.is.null,avatar_at.lt.${new Date(Date.now() - RETRY_MS).toISOString()}`).select('id');
+    .or(`avatar_at.is.null,avatar_at.lt.${retryCutoff(Date.now())}`).select('id');
   if (!claimed?.length) return null;
   try {
     let source: 'ai' | 'web' = 'ai';
-    let img = await aiAvatar(p.spec).catch((e: unknown) => { console.error('[persons] foto IA', e instanceof Error ? e.message : e); return null; });
+    let img = await aiAvatar(p.spec).catch(() => null);
     if (!img) { source = 'web'; img = await webAvatar(p.spec); }
+    if (!img) console.error('[persons] sin foto de perfil (ni IA ni libre de derechos)', p.id);
     if (!img) { await db.from('personas').update({ avatar_source: 'none' }).eq('id', p.id); return null; }
     const path = `${p.user_id}/persons/${p.id}-${Date.now().toString(36)}.webp`;
     const { error } = await db.storage.from(BUCKET).upload(path, img, { contentType: 'image/webp', cacheControl: '31536000', upsert: false });

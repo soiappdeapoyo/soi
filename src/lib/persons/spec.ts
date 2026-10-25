@@ -50,6 +50,9 @@ export type ResponseProfile = 'fast' | 'bursty' | 'slow' | 'professional';
 export type PersonSpec = Described & {
   /** País del personaje (ISO; regionalismos). Las fichas anteriores no lo tienen: se deduce de la ciudad. */
   country?: string;
+  /** Cómo se conocieron (meeting.ts) y si el personaje escribió primero. */
+  meeting?: import('./meeting').Meeting;
+  firstMove?: boolean;
   derived: { temperament: Temperament; dayPlan: DayPlan; responseProfile: ResponseProfile; voice: string; hue: number };
   sourceDescription: string;
 };

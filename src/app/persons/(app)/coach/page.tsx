@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { avatarFor, getPersonsSession, type PersonaRow } from '@/lib/persons/server';
-import { loadCoachThread } from '@/lib/persons/coach-server';
+import { loadCoachThread, scheduleAutoDebrief } from '@/lib/persons/coach-server';
 import { createAdminClient } from '@/lib/supabase/server';
-import { evaluateAccess } from '@/lib/billing/access-rules';
+import { evaluateAccess, trialDaysLeft } from '@/lib/billing/access-rules';
 import { CoachChat } from '@/components/persons/coach-chat';
 import type { Gender } from '@/lib/persons/spec';
 
@@ -21,6 +21,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const { data } = await createAdminClient().from('personas').select('*').eq('user_id', s.userId).is('archived_at', null)
     .order('last_message_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(40);
   const personas = (data ?? []) as PersonaRow[];
+  // Nada de IA en el camino de la pantalla: si una plática terminó sin feedback, se prepara después de responder.
+  scheduleAutoDebrief(s.userId, s.plan, trialDaysLeft(s.profile));
   const thread = await loadCoachThread(s.userId, personas, p ?? null);
   return (
     <CoachChat

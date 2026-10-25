@@ -51,6 +51,8 @@ const CAUSE: Partial<Record<EmotionEvent, string>> = {
   boundary_crossed: 'se cruzó un límite',
   insisted_after_no: 'insististe después de un no',
   reentry: 'volviste tras varios días',
+  ignored: 'su mensaje se quedó horas sin respuesta',
+  reacted: 'reaccionaste a lo que contó',
 };
 
 const score = (s: EmotionSnapshot) => s.valence * 0.4 + s.openness * 0.4 + s.trust * 0.2;

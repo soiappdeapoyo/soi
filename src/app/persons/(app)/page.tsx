@@ -16,7 +16,7 @@ export default async function PersonsHome() {
   const s = await getPersonsSession();
   if (typeof s === 'string') redirect('/persons/entrar');
   const [{ chats, coach }, { count: archived }] = await Promise.all([
-    loadInbox(s.userId),
+    loadInbox(s),
     createAdminClient().from('personas').select('id', { count: 'exact', head: true }).eq('user_id', s.userId).not('archived_at', 'is', null),
   ]);
   const days = trialDaysLeft(s.profile);

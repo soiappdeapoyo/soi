@@ -1,7 +1,8 @@
 import { z } from 'zod/v3';
 import { objectWithFallback, CHAT_ORDER, FAST_ORDER, type ProviderName } from '@/lib/ai/fallback';
 import { DescribedSchema, normalizeDescribed, checkDescription, personaLine, type Described, type PersonSpec } from './spec';
-import { expressionGuide, type EmotionLabel, type EmotionState } from './emotion';
+import { expressionGuide, ignoredGuide, REACTIONS, type EmotionLabel, type EmotionState } from './emotion';
+import { MEETINGS } from './meeting';
 import type { Presence } from './presence';
 import { COACH_NAME, type PracticeLine } from './coach';
 import { cityCountry, regionFor, type Region } from '@/config/regionalisms';
@@ -44,15 +45,24 @@ export async function generateDescribed(o: { description: string; name?: string;
 
 export const ActorSchema = z.object({
   /** 1 a 3 burbujas, como se escribe en WhatsApp. */
-  messages: z.array(z.string().min(1).max(400)).min(1).max(3),
+  /** 0 a 3 burbujas (0 solo si contestas únicamente con una reacción). */
+  messages: z.array(z.string().min(1).max(400)).max(3),
   /** La respuesta marca un límite (se entrega siempre por escrito, nunca como nota de voz). */
   sets_boundary: z.boolean(),
   /** Una foto de lo que está viendo o haciendo (escena en inglés, sin personas), solo si sale natural; si no, null. */
   photo: z.string().max(40).nullable().optional(),
+  /** Reacción con emoji al último mensaje de la otra persona (como en WhatsApp), o null. */
+  reaction: z.enum(REACTIONS).nullable().optional(),
+  /** Si no te contesta: lo que mandarías después, cuántas horas después y cómo te sentirías. Null si no mandarías nada. */
+  followup: z.object({
+    text: z.string().min(1).max(300),
+    after_hours: z.number().min(0.5).max(36),
+    feeling: z.enum(['warm', 'excited', 'neutral', 'reserved', 'tired']),
+  }).nullable().optional(),
 });
 export type ActorReply = z.infer<typeof ActorSchema>;
 
-export type ChatLine = { role: 'user' | 'persona' | 'system'; content: string; at: string; kind?: 'text' | 'voice' };
+export type ChatLine = { role: 'user' | 'persona' | 'system'; content: string; at: string; kind?: 'text' | 'voice'; reaction?: string | null; theirReaction?: string | null };
 
 /** De dónde es el personaje: su país guardado, el de su ciudad o, si no, el de quien practica. */
 export function personaRegion(spec: Pick<PersonSpec, 'country' | 'city'>, userRegion: string | null | undefined): Region {
@@ -75,7 +85,7 @@ function clock(iso: string, tz: string) {
   }
 }
 
-export function actorInstructions(spec: PersonSpec, ctx: { emotion: EmotionState; label: EmotionLabel; presence: Presence; now: Date; timezone: string; boundary: string | null; risk: boolean; region?: Region }) {
+export function actorInstructions(spec: PersonSpec, ctx: { emotion: EmotionState; label: EmotionLabel; presence: Presence; now: Date; timezone: string; boundary: string | null; risk: boolean; region?: Region; ignoredHours?: number | null }) {
   const doing = ctx.presence.state === 'online'
     ? 'Tienes el teléfono a la mano.'
     : ctx.presence.state === 'asleep'
@@ -86,10 +96,10 @@ Rasgos: ${spec.traits.join(', ')}. Intereses: ${spec.interests.join(', ')}.
 Cómo escribes: ${spec.style || 'natural, como en cualquier chat'}. Tono de base: ${spec.tone}.
 Límites que NO negocias: ${spec.boundaries.join(' · ')}.
 
-Estás chateando por WhatsApp con alguien que conociste hace poco (no sabes nada de su vida salvo lo que te cuente).
+Estás chateando por WhatsApp con alguien. ${MEETINGS[spec.meeting ?? 'app_citas'].context} No sabes nada de su vida salvo lo que te cuente.
 Hora local: ${clock(ctx.now.toISOString(), ctx.timezone)}. ${doing}
 
-Cómo te sientes (no lo digas, que se note): ${expressionGuide(ctx.emotion, ctx.label)}
+Cómo te sientes (no lo digas, que se note): ${expressionGuide(ctx.emotion, ctx.label)} ${ignoredGuide(ctx.ignoredHours)}
 ${ctx.boundary ? `Su último mensaje cruzó un límite (${ctx.boundary}). Márcalo con claridad, sin sermones y sin agresividad, en una frase corta.${ctx.risk ? ' Ya te había pasado: despídete y no sigas la conversación hoy.' : ''}\n` : ''}
 ${regionGuide(ctx.region ?? personaRegion(spec, null))}
 
@@ -108,6 +118,14 @@ Reglas:
   (el paisaje de tu ruta, tu café, la comida, tu planta, tu perro), escribe la escena en inglés en 2–4 palabras
   («mountain trail sunset», «latte art cafe»). Nunca personas ni selfies: si te piden una foto tuya, te sales con
   naturalidad («jaja no soy de selfies»).
+- reaction: a veces (no siempre: 1 de cada 4 o 5 mensajes) reaccionas con un emoji a su último mensaje, como en
+  WhatsApp: ❤️ si te gustó lo que dijo, 😂 si te dio risa, 😮 sorpresa, 😢 si contó algo triste, 🙏 si te agradeció,
+  👍 para un «ok». Si su mensaje solo pide un «ok», puedes reaccionar y dejar messages vacío. Si no, null.
+- followup: piensa qué harías si después de tu respuesta NO te contesta. Si dejaste una pregunta o la plática iba
+  bien, a veces mandarías otro mensaje horas después para retomar (algo de tu día, un comentario nuevo, «y bueno? 😅»
+  con humor), con lo que sentirías (feeling). after_hours: 1–4 si iban muy bien y preguntaste algo; 6–24 si fue
+  casual. null si te despediste, dijiste buenas noches, marcaste un límite, estás molesta o no te interesa seguir.
+  Nunca reclamo, culpa ni «me dejaste en visto».
 - No eres complaciente: si el mensaje es genérico, contesta corto; si es invasivo, marca el límite; si no te interesa
   algo, se nota. Tampoco eres cruel: eres una persona normal con su día.
 - Nunca des consejos para ligar ni evalúes cómo escribe la otra persona. Nunca hables de apps, planes, precios ni dinero de la app.
@@ -122,7 +140,9 @@ export async function actorReply(spec: PersonSpec, history: ChatLine[], ctx: Par
   const transcript = history.slice(-24).map((m) => {
     if (m.role === 'system') return `[aviso de la app] ${m.content}`;
     const who = m.role === 'persona' ? `Tú (${spec.name})` : 'La otra persona';
-    return `${who} [${clock(m.at, ctx.timezone)}]${m.kind === 'voice' ? ' (nota de voz)' : ''}: ${m.content}`;
+    // Las reacciones también son parte de la plática: el personaje aprende qué le gusta a la otra persona.
+    const react = m.role === 'persona' && m.theirReaction ? ` [la otra persona reaccionó ${m.theirReaction}]` : m.role === 'user' && m.reaction ? ` [tú reaccionaste ${m.reaction}]` : '';
+    return `${who} [${clock(m.at, ctx.timezone)}]${m.kind === 'voice' ? ' (nota de voz)' : ''}: ${m.content}${react}`;
   }).join('\n');
   const { object, provider } = await objectWithFallback({
     schema: ActorSchema,
@@ -133,7 +153,25 @@ export async function actorReply(spec: PersonSpec, history: ChatLine[], ctx: Par
     maxOutputTokens: 600,
   });
   const reply = object as ActorReply;
-  return { reply: { ...reply, messages: reply.messages.map((m) => m.trim()).filter(Boolean).slice(0, 3) }, provider };
+  const messages = reply.messages.map((m) => m.trim()).filter(Boolean).slice(0, 3);
+  // Sin mensajes solo vale con una reacción; si no, la IA se equivocó: que conteste algo corto.
+  if (!messages.length && !reply.reaction) messages.push('jaja');
+  return { reply: { ...reply, messages }, provider };
+}
+
+export const OpenerSchema = z.object({ messages: z.array(z.string().min(1).max(300)).min(1).max(2) });
+
+/** El personaje escribe primero en un chat nuevo, según cómo se conocieron. */
+export async function actorOpener(spec: PersonSpec, ctx: Parameters<typeof actorInstructions>[1]) {
+  const { object } = await objectWithFallback({
+    schema: OpenerSchema,
+    instructions: actorInstructions(spec, ctx),
+    prompt: `Todavía no se han escrito nada. Tú escribes primero, como lo harías de verdad en este caso (${MEETINGS[spec.meeting ?? 'app_citas'].context}). 1 o 2 mensajes cortos. Si no tienes guardado su número, pregunta quién es o cómo consiguió tu número, con naturalidad.`,
+    order: FAST_ORDER,
+    timeoutMs: 12_000,
+    maxOutputTokens: 200,
+  });
+  return (object as z.infer<typeof OpenerSchema>).messages.map((m) => m.trim()).filter(Boolean).slice(0, 2);
 }
 
 // ── Coach ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -187,19 +225,6 @@ function practiceTranscript(spec: PersonSpec, lines: PracticeLine[], blind: bool
 }
 
 const trimAll = (m: string[]) => m.map((x) => x.trim()).filter(Boolean).slice(0, 3);
-
-/** Una idea por su cuenta sobre los últimos mensajes (mientras practica). */
-export async function coachTip(spec: PersonSpec, lines: PracticeLine[], fresh: PracticeLine[], blind: boolean, region: Region) {
-  const { object, provider } = await objectWithFallback({
-    schema: CoachChatSchema,
-    instructions: coachVoice(spec, blind, region),
-    prompt: `Conversación de práctica:\n${practiceTranscript(spec, lines, blind)}\n\nSus últimos mensajes (los que vas a comentar):\n${fresh.map((f) => `«${f.content}»`).join('\n')}\n\nMándale por tu cuenta una idea corta sobre cómo va (1 o 2 mensajes): qué está funcionando o qué ajustar ahora. Sin saludo largo.`,
-    order: FAST_ORDER,
-    timeoutMs: 15_000,
-    maxOutputTokens: 300,
-  });
-  return { messages: trimAll((object as z.infer<typeof CoachChatSchema>).messages), provider };
-}
 
 /** Responde lo que la persona le pregunta al coach. */
 export async function coachAnswer(spec: PersonSpec, lines: PracticeLine[], chat: { role: 'user' | 'coach'; content: string }[], question: string, blind: boolean, region: Region) {

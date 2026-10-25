@@ -4,7 +4,7 @@ import { presenceAt } from '@/lib/persons/presence';
 import { initialEmotion } from '@/lib/persons/emotion';
 import { paceFor, planDelivery, START_TURNS } from '@/lib/persons/scheduler';
 import { humanize, humanizeItems, quirksFor, typo, type Quirks } from '@/lib/persons/humanize';
-import { newUserTurns, ruleTip, tipDue, TIP_EVERY, type PracticeLine } from '@/lib/persons/coach';
+import { newUserTurns, ruleTip, type PracticeLine } from '@/lib/persons/coach';
 import { PERSONA_PRESETS } from '@/config/persons-presets';
 
 const TZ = 'America/Mexico_City';
@@ -94,11 +94,9 @@ describe('coach', () => {
     emotion: role === 'user' ? { valence: 0, energy: 0.5, openness: 0.5, trust: 0.2, label: 'neutral', events: events as never } : null,
   });
 
-  it('deja una idea cada TIP_EVERY mensajes tuyos', () => {
+  it('solo cuenta lo que aún no comentó', () => {
     const lines = [line('user', 'hola', 1), line('persona', 'hola!', 2), line('user', 'qué haces', 3), line('user', 'yo trabajo', 4)];
-    expect(TIP_EVERY).toBe(3);
-    expect(tipDue(lines, null)).toBe(true);
-    expect(tipDue(lines, lines[1]!.at)).toBe(false);
+    expect(newUserTurns(lines, null)).toHaveLength(3);
     expect(newUserTurns(lines, lines[2]!.at)).toHaveLength(1);
   });
 
@@ -106,5 +104,62 @@ describe('coach', () => {
     const tip = ruleTip([line('user', 'jaja', 1, ['generic']), line('user', 'ándale', 2, ['insisted_after_no'])], () => 0);
     expect(tip).toMatch(/no/);
     expect(ruleTip([line('user', 'qué te gusta hacer?', 1, ['asked_about_her'])], () => 0)).toMatch(/preguntando/);
+  });
+});
+
+import { fallbackOpener, meetingFor, MEETINGS, writesFirst } from '@/lib/persons/meeting';
+import { followupAt, wantsVoice } from '@/lib/persons/scheduler';
+import { applyReaction, detectEvents, IGNORED_HOURS } from '@/lib/persons/emotion';
+
+describe('quién escribe primero', () => {
+  it('lee cómo se conocieron de la descripción o del escenario', () => {
+    expect(meetingFor('Arquetipo: Match en una app de citas', 'x')).toBe('app_citas');
+    expect(meetingFor('Lo conociste en un evento de networking', 'x')).toBe('networking');
+    expect(meetingFor('Amiga de una amiga, coincidieron en una fiesta', 'x')).toBe('amigos');
+    expect(meetingFor('alguien a quien le pasaron su número, no me conoce', 'x')).toBe('desconocido');
+    expect(Object.keys(MEETINGS)).toContain(meetingFor('una chica de 30 años', 'semilla'));
+  });
+
+  it('si el escenario lo dice, escribe primero; un número desconocido pregunta quién eres', () => {
+    expect(writesFirst('app_citas', { tone: 'reservada', difficulty: 3 }, 's', true)).toBe(true);
+    expect(fallbackOpener('desconocido', 'Ana', 'k')).toMatch(/qui[eé]n eres|guardado/);
+    expect(fallbackOpener('amigos', 'Ana', 'k')).toMatch(/ana/);
+  });
+});
+
+describe('si no le contestas', () => {
+  const spec = buildSpec(lucia, '', 'x');
+  it('su seguimiento llega horas después y nunca de madrugada', () => {
+    const t = followupAt({ lastAt: at(23), afterHours: 2, dayPlan: spec.derived.dayPlan, timezone: TZ, rand: () => 0.5 });
+    const p = presenceAt(spec.derived.dayPlan, t, TZ);
+    expect(p.state).not.toBe('asleep');
+    expect(t.getTime()).toBeGreaterThan(at(23).getTime() + 3_600_000);
+    const capped = followupAt({ lastAt: at(12), afterHours: 99, dayPlan: spec.derived.dayPlan, timezone: TZ, rand: () => 0.5 });
+    expect(capped.getTime() - at(12).getTime()).toBeLessThanOrEqual(31 * 3_600_000);
+  });
+
+  it('lo siente un poco si su pregunta se quedó horas sin respuesta', () => {
+    const base = { interests: ['café'], boundary: false, previousBoundary: false, hoursSinceLast: 10, trust: 0.3 };
+    expect(detectEvents('perdón, andaba ocupado', { ...base, ignoredHours: IGNORED_HOURS + 1 })).toContain('ignored');
+    expect(detectEvents('perdón, andaba ocupado', { ...base, ignoredHours: 1 })).not.toContain('ignored');
+  });
+});
+
+describe('reacciones y notas de voz', () => {
+  it('un ❤️ se le nota más que un 👍, sin pasar el techo de confianza', () => {
+    const e = initialEmotion(buildSpec(lucia, '', 'x').derived.temperament);
+    expect(applyReaction(e, '❤️').valence).toBeGreaterThan(applyReaction(e, '👍').valence);
+    expect(applyReaction({ ...e, trust: 0.5, trustCeiling: 0.5 }, '❤️').trust).toBe(0.5);
+  });
+
+  it('la primera nota de voz llega pronto; un límite nunca es audio', () => {
+    const spec = buildSpec(lucia, '', 'x');
+    const now = at(21);
+    const presence = presenceAt(spec.derived.dayPlan, now, TZ);
+    const emotion = initialEmotion(spec.derived.temperament);
+    const o = { allowed: true, boundary: false, text: 'jaja sí, me encanta ese lugar', presence, emotion, rand: () => 0.5 };
+    expect(wantsVoice({ ...o, first: true })).toBe(true);
+    expect(wantsVoice({ ...o, boundary: true, first: true })).toBe(false);
+    expect(wantsVoice({ ...o, allowed: false, first: true })).toBe(false);
   });
 });

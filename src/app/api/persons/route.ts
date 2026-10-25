@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   const s = await personsApiSession();
   if (s instanceof Response) return s;
   const archived = new URL(req.url).searchParams.get('archivados') === '1';
-  const body = archived ? { chats: await loadChatList(s.userId, { archived }), coach: null } : await loadInbox(s.userId);
+  const body = archived ? { chats: await loadChatList(s.userId, { archived }), coach: null } : await loadInbox(s);
   return Response.json(body, { headers: { 'Cache-Control': 'no-store' } });
 }
 

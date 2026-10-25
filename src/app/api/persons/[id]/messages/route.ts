@@ -32,8 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed.success) return Response.json({ error: 'Escribe un mensaje' }, { status: 400 });
 
   try {
-    const blind = BLIND_COOKIE_RE.test(req.headers.get('cookie') ?? '') && s.limits.blindMode;
-    const r = await sendTurn(s, persona, parsed.data.text, { blind });
+    const r = await sendTurn(s, persona, parsed.data.text);
     if (r.ok) return Response.json({ ok: true, id: r.messageId });
     const error = r.reason === 'ai'
       ? 'Tu mensaje se guardó, pero no pudimos generar la respuesta. Escribe de nuevo en un momento.'

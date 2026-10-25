@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, CheckCheck, Clock, EllipsisVertical, GraduationCap, Lock, SendHorizontal } from 'lucide-react';
+import { ArrowLeft, Check, CheckCheck, Clock, EllipsisVertical, GraduationCap, Lock, SendHorizontal, SmilePlus } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ChatState, PublicMessage } from '@/lib/persons/server';
 import type { PersonSpec } from '@/lib/persons/spec';
-import { labelText } from '@/lib/persons/emotion';
+import { labelText, REACTIONS, type Reaction } from '@/lib/persons/emotion';
+import { MEETINGS } from '@/lib/persons/meeting';
 import { BLIND_COOKIE, WA } from '@/config/persons';
 import { useDismiss } from '@/hooks/use-dismiss';
 import { buttonClass } from '@/components/ui/button';
@@ -108,7 +109,7 @@ export function ChatView({ personaId, spec, hue, scenario, initial, gate: initia
     const content = text.trim();
     if (!content || gate || state.archived) return;
     setText('');
-    const temp: Local = { id: `local-${Date.now()}`, role: 'user', kind: 'text', content, at: new Date().toISOString(), read: false, heard: undefined, emotion: undefined, photo: undefined, caption: undefined, pending: true };
+    const temp: Local = { id: `local-${Date.now()}`, role: 'user', kind: 'text', content, at: new Date().toISOString(), read: false, heard: undefined, emotion: undefined, photo: undefined, caption: undefined, reaction: undefined, myReaction: undefined, pending: true };
     setLocal((l) => [...l, temp]);
     atBottom.current = true;
     try {
@@ -134,6 +135,22 @@ export function ChatView({ personaId, spec, hue, scenario, initial, gate: initia
   }
 
   const coachHref = `/persons/coach?p=${personaId}`;
+  const [picker, setPicker] = useState<string | null>(null);
+
+  /** Reaccionas a uno de sus mensajes (tocar el mismo emoji lo quita). Al instante en pantalla; el servidor lo guarda. */
+  async function react(messageId: string, emoji: Reaction) {
+    setPicker(null);
+    const current = state.messages.find((m) => m.id === messageId)?.myReaction;
+    const next = current === emoji ? null : emoji;
+    setState((st) => ({ ...st, messages: st.messages.map((m) => (m.id === messageId ? { ...m, myReaction: next ?? undefined } : m)) }));
+    try {
+      const res = await fetch(`/api/persons/${personaId}/messages/${messageId}/react`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji: next }) });
+      if (!res.ok) throw new Error();
+    } catch {
+      setState((st) => ({ ...st, messages: st.messages.map((m) => (m.id === messageId ? { ...m, myReaction: current } : m)) }));
+      toast.error('No pudimos guardar tu reacción.');
+    }
+  }
 
   async function archive() {
     setMenu(false);
@@ -203,8 +220,8 @@ export function ChatView({ personaId, spec, hue, scenario, initial, gate: initia
           </p>
           {!shown.length && (
             <div className="mx-auto my-6 max-w-xs rounded-xl bg-white/80 p-4 text-center text-sm text-[#3B4A54] shadow-[0_1px_0_rgb(0_0_0/0.06)]">
-              {scenario && <p className="mb-1 font-medium text-[#111B21]">{scenario}</p>}
-              <p>{spec.name} aún no sabe nada de ti. Empieza tú.</p>
+              <p className="mb-1 font-medium text-[#111B21]">{scenario ?? MEETINGS[spec.meeting ?? 'app_citas'].line(spec.name)}</p>
+              <p>{spec.firstMove ? `Parece que ${spec.name} te va a escribir…` : `${spec.name} aún no sabe nada de ti. Empieza tú.`}</p>
             </div>
           )}
           {shown.map((m, i) => {
@@ -212,7 +229,7 @@ export function ChatView({ personaId, spec, hue, scenario, initial, gate: initia
             const divider = k !== lastDay ? (lastDay = k, <DateDivider key={`d-${k}`} label={dayLabel(m.at)} />) : null;
             const prev = shown[i - 1];
             const grouped = prev && prev.role === m.role && dayKey(prev.at) === k;
-            return [divider, <Bubble key={m.id} m={m} personaId={personaId} grouped={Boolean(grouped)} />];
+            return [divider, <Bubble key={m.id} m={m} personaId={personaId} grouped={Boolean(grouped)} picker={picker === m.id} onPicker={setPicker} onReact={react} />];
           })}
           {typing && (
             <TypingDots />
@@ -276,22 +293,33 @@ function DateDivider({ label }: { label: string }) {
 }
 
 
-function Bubble({ m, personaId, grouped }: { m: Local; personaId: string; grouped: boolean }) {
+function Bubble({ m, personaId, grouped, picker, onPicker, onReact }: {
+  m: Local; personaId: string; grouped: boolean; picker: boolean; onPicker: (id: string | null) => void; onReact: (id: string, e: Reaction) => void;
+}) {
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
   if (m.role === 'system') {
     return <p className="my-1.5 max-w-sm self-center rounded-lg px-3 py-2 text-center text-[13px] leading-snug text-[#54471A] [overflow-wrap:anywhere]" style={{ background: WA.system }}>{m.content}</p>;
   }
   const mine = m.role === 'user';
   const time = clockTime(m.at);
+  // Puedes reaccionar a sus mensajes: mantener presionado (teléfono), doble clic o el botón al pasar el cursor.
+  const reactable = !mine && !m.pending;
+  const reaction = mine ? m.reaction : m.myReaction;
+  const cancel = () => { if (hold.current) clearTimeout(hold.current); hold.current = null; };
   return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'} ${grouped ? '' : 'mt-1.5'}`}>
+    <div className={`group relative flex items-center gap-1 ${mine ? 'justify-end' : 'justify-start'} ${grouped ? '' : 'mt-1.5'} ${reaction ? 'mb-3.5' : ''}`}>
       <div
-        className={`relative min-w-0 max-w-[82%] rounded-lg text-[15.5px] leading-snug text-[#111B21] shadow-[0_1px_0_rgb(0_0_0/0.08)] ${m.photo ? 'p-1' : 'px-2.5 pb-1.5 pt-1.5'} ${grouped ? '' : mine ? 'rounded-tr-none' : 'rounded-tl-none'}`}
+        className={`relative min-w-0 max-w-[82%] rounded-lg text-[15.5px] leading-snug text-[#111B21] shadow-[0_1px_0_rgb(0_0_0/0.08)] [-webkit-touch-callout:none] ${m.photo ? 'p-1' : 'px-2.5 pb-1.5 pt-1.5'} ${grouped ? '' : mine ? 'rounded-tr-none' : 'rounded-tl-none'}`}
         style={{ background: mine ? WA.outBubble : WA.inBubble }}
+        onDoubleClick={reactable ? () => onPicker(m.id) : undefined}
+        onPointerDown={reactable ? (e) => { if (e.pointerType !== 'mouse') hold.current = setTimeout(() => { onPicker(m.id); navigator.vibrate?.(10); }, 450); } : undefined}
+        onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel}
+        onContextMenu={reactable ? (e) => { if (window.matchMedia('(pointer: coarse)').matches) { e.preventDefault(); cancel(); onPicker(m.id); } } : undefined}
       >
         {m.photo ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={m.photo} alt={m.caption ? m.content : 'Foto'} width={260} height={260} loading="lazy" decoding="async"
+            <img src={m.photo} alt={m.caption ? m.content : 'Foto'} width={260} height={260} loading="lazy" decoding="async" draggable={false}
               className="block aspect-square w-[min(260px,62vw)] rounded-md bg-black/5 object-cover" />
             {m.caption && <span className="block whitespace-pre-wrap px-1.5 pt-1 [overflow-wrap:anywhere]">{m.content}</span>}
           </>
@@ -306,7 +334,30 @@ function Bubble({ m, personaId, grouped }: { m: Local; personaId: string; groupe
               ? <CheckCheck className="h-4 w-4" style={{ color: WA.tick }} aria-label="Leído" />
               : <Check className="h-4 w-4" aria-label="Enviado" />)}
         </span>
+        {reaction && (
+          <button type="button" disabled={mine} onClick={() => onPicker(m.id)} aria-label={mine ? `Reaccionó con ${reaction}` : `Tu reacción: ${reaction}. Cambiarla`}
+            className={`absolute -bottom-3.5 flex h-6 min-w-7 items-center justify-center rounded-full bg-white px-1 text-[15px] leading-none shadow-[0_1px_2px_rgb(0_0_0/0.18)] ${mine ? 'right-2' : 'left-2'}`}>
+            {reaction}
+          </button>
+        )}
+        {picker && (
+          <>
+            <button type="button" aria-label="Cerrar reacciones" className="fixed inset-0 z-30 cursor-default" onClick={() => onPicker(null)} />
+            <div role="menu" aria-label="Reaccionar" className="popover-motion absolute bottom-full left-0 z-40 mb-1.5 flex origin-bottom-left gap-0.5 rounded-full bg-white p-1 shadow-raised">
+              {REACTIONS.map((r) => (
+                <button key={r} role="menuitem" type="button" onClick={() => onReact(m.id, r)} aria-label={`Reaccionar con ${r}`}
+                  className={`press flex h-10 w-10 items-center justify-center rounded-full text-[22px] ${m.myReaction === r ? 'bg-black/[0.07]' : ''}`}>{r}</button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
+      {reactable && !picker && (
+        <button type="button" onClick={() => onPicker(m.id)} aria-label="Reaccionar a este mensaje"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#54656F] opacity-0 shadow-[0_1px_0_rgb(0_0_0/0.08)] transition-opacity duration-(--dur-press) focus-visible:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
+          <SmilePlus className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }

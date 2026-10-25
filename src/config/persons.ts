@@ -2,7 +2,7 @@
  * /persons: gimnasio de conversación con personas sintéticas, para otro tipo de cuenta (`user_profiles.app_role`).
  * Nombre visible y colores en un solo lugar (estilo WhatsApp, por diseño del producto).
  */
-export const PERSONS_BRAND = 'Ensaya';
+export const PERSONS_BRAND = 'Háblame';
 export const PERSONS_TAGLINE = 'Practica conversaciones con alguien que tiene una vida.';
 
 /** Paleta tipo WhatsApp (contraste AA: el verde con texto blanco 5:1; la hora #556770 sobre las burbujas ≥ 4.5:1). */

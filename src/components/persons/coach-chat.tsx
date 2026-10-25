@@ -77,24 +77,12 @@ export function CoachChat({ personas, initial, autoFeedback, gate: initialGate }
     else setMessages((m) => [...m, local('coach', 'uy, no pude leer la plática ahorita. inténtalo otra vez en un momento')]);
   }
 
-  async function observe(id: string) {
-    const r = await withTyping(async () => {
-      try {
-        const res = await fetch(`/api/persons/${id}/coach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'observe' }) });
-        return res.ok ? ((await res.json()) as { messages: CoachMessage[] }).messages : [];
-      } catch { return []; }
-    });
-    if (r.length) setMessages((m) => [...m, ...r]);
-  }
-
   useEffect(() => {
     if (started.current || !initial.focus) return;
     started.current = true;
     if (autoFeedback) {
       router.replace(`/persons/coach?p=${initial.focus}`, { scroll: false });
       void feedback(initial.focus);
-    } else if (initial.pendingTurns > 0) {
-      void observe(initial.focus);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -158,7 +146,7 @@ export function CoachChat({ personas, initial, autoFeedback, gate: initialGate }
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-1">
           <Bubble m={{ id: 'intro', persona_id: '', role: 'coach', kind: 'text', created_at: '', content: personas.length
-            ? `hola! soy ${COACH_NAME} 👋 voy viendo cómo van tus pláticas y te dejo ideas mientras practicas. pregúntame lo que quieras: qué contestar, por qué se enfrió una charla, cómo cerrar…`
+            ? `hola! soy ${COACH_NAME} 👋 cuando terminas una plática te dejo el feedback: qué funcionó, qué decir distinto y cómo se fue sintiendo la otra persona. y si te atoras a la mitad, pregúntame: qué contestar, por qué se enfrió, cómo cerrar…`
             : `hola! soy ${COACH_NAME} 👋 cuando empieces a platicar con alguien, aquí te voy dejando ideas. crea a tu primera persona y me cuentas` }} grouped={false} />
           {messages.map((m, i) => {
             const k = dayKey(m.created_at);

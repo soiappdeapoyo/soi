@@ -3,11 +3,12 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { consumeChatQuery, refundChatQuery } from '@/lib/billing/check-access';
 import { detectCrisis } from '@/lib/ai/crisis';
 import { getCrisisResources } from '@/config/crisis-resources';
-import { coachAnswer, coachTip } from './ai';
+import { coachAnswer, coachReport } from './ai';
 import { regionFor } from '@/config/regionalisms';
-import { newUserTurns, ruleTip, tipDue, type PracticeLine } from './coach';
-import type { DebriefReport } from './debrief';
+import { newUserTurns, ruleTip, type PracticeLine } from './coach';
+import { blindSpots, emotionTimeline, MIN_DEBRIEF_MESSAGES, ruleReport, type DebriefMessage, type DebriefReport } from './debrief';
 import type { PersonaMessageRow, PersonaRow, PersonsSession } from './server';
+import type { EffectivePlan } from '@/lib/billing/access-rules';
 
 /** Fila de `persona_coach_messages` (0042). */
 export type CoachRow = {
@@ -40,12 +41,6 @@ async function coachRows(personaId: string, limit = 60) {
   return ((data ?? []) as CoachRow[]).reverse();
 }
 
-async function lastUpto(personaId: string) {
-  const { data } = await createAdminClient().from('persona_coach_messages').select('upto_at').eq('persona_id', personaId)
-    .not('upto_at', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
-  return (data?.upto_at as string | undefined) ?? null;
-}
-
 /**
  * El chat con Ale es UNO (una conversación más de la lista): junta lo que te ha dicho de todas tus prácticas, en orden,
  * y cada mensaje sabe de qué personaje habla. Marca leído lo del coach en todos.
@@ -59,14 +54,8 @@ export async function loadCoachThread(userId: string, personas: PersonaRow[], fo
   const focus = (focusId && ids.has(focusId) ? focusId : null)
     ?? [...rows].reverse().find((r) => ids.has(r.persona_id))?.persona_id
     ?? personas[0]?.id ?? null;
-  const focusPersona = personas.find((p) => p.id === focus);
-  let pendingTurns = 0;
-  if (focusPersona) {
-    const [lines, upto] = await Promise.all([practiceLines(focusPersona.id), lastUpto(focusPersona.id)]);
-    pendingTurns = newUserTurns(lines, upto).length;
-  }
   void db.from('personas').update({ coach_read_at: new Date().toISOString() }).eq('user_id', userId).then(() => undefined);
-  return { messages: rows.filter((r) => ids.has(r.persona_id)).map(publicCoach), focus, pendingTurns };
+  return { messages: rows.filter((r) => ids.has(r.persona_id)).map(publicCoach), focus };
 }
 export type CoachThread = Awaited<ReturnType<typeof loadCoachThread>>;
 
@@ -103,32 +92,26 @@ function insertCoach(persona: PersonaRow, rows: Partial<CoachRow>[]) {
 }
 
 /**
- * Una idea por su cuenta si hubo `TIP_EVERY` mensajes tuyos desde la anterior (con IA; si no responde, por reglas).
- * Nunca descuenta del plan. Devuelve lo insertado.
+ * Tu coach no escribe a cada rato (ni gasta IA mientras practicas). En tu PRIMERA plática deja una sola idea al tercer
+ * mensaje, por reglas, para que sepas que está ahí; después habla al terminar cada plática (`maybeAutoDebrief`) o
+ * cuando le preguntas.
  */
-export async function maybeTip(persona: PersonaRow, blind: boolean, userRegion: string, force = false): Promise<CoachMessage[]> {
-  const [lines, upto] = await Promise.all([practiceLines(persona.id), lastUpto(persona.id)]);
-  const fresh = newUserTurns(lines, upto);
-  if (!fresh.length || (!force && !tipDue(lines, upto))) return [];
-  const uptoAt = fresh[fresh.length - 1]!.at;
-  let messages: string[];
-  let provider: string | null = null;
-  try {
-    ({ messages, provider } = await coachTip(persona.spec, lines, fresh, blind, regionFor(userRegion)));
-  } catch (e) {
-    console.error('[persons] coach idea', e instanceof Error ? e.message : e);
-    messages = [ruleTip(fresh)];
-  }
-  // Otra petición pudo comentar lo mismo mientras tanto.
-  if ((await lastUpto(persona.id)) !== upto) return [];
-  const { data, error } = await insertCoach(persona, messages.map((content, i) => ({ kind: 'tip', content: content.slice(0, 2000), upto_at: i === 0 ? uptoAt : null, meta: { provider } })));
-  if (error) console.error('[persons] guardar idea', error.message);
-  return ((data ?? []) as CoachRow[]).map(publicCoach);
+export async function maybeFirstTip(userId: string, persona: PersonaRow) {
+  const db = createAdminClient();
+  const { count } = await db.from('persona_coach_messages').select('id', { count: 'exact', head: true }).eq('user_id', userId);
+  if (count) return;
+  const lines = await practiceLines(persona.id);
+  const fresh = newUserTurns(lines, null);
+  if (!fresh.length) return;
+  await insertCoach(persona, [
+    { kind: 'tip', content: ruleTip(fresh), upto_at: fresh[fresh.length - 1]!.at },
+    { content: `cuando termines de platicar con ${persona.name} te dejo el feedback completo: qué funcionó, qué decir distinto y cómo se fue sintiendo` },
+  ]);
 }
 
-/** Después de responder al personaje: si ya toca, el coach deja su idea (la práctica no espera). */
-export function scheduleTip(persona: PersonaRow, blind: boolean, userRegion: string) {
-  const run = () => maybeTip(persona, blind, userRegion).then(() => undefined).catch(() => undefined);
+/** Después de responder (Vercel `after`): la petición no espera. */
+export function scheduleFirstTip(userId: string, persona: PersonaRow) {
+  const run = () => maybeFirstTip(userId, persona).catch(() => undefined);
   try { after(run); } catch { void run(); }
 }
 
@@ -166,13 +149,82 @@ export async function askCoach(s: PersonsSession, persona: PersonaRow, text: str
   }
 }
 
-/** El feedback de la sesión llega al chat del coach: una frase suya y la tarjeta. */
-export async function postReport(persona: PersonaRow, report: DebriefReport, debriefId: string | null, uptoAt: string) {
-  const intro = report.source === 'ai' ? 'listo, ya leí toda la plática 👀 te dejo cómo te fue:' : 'leí la plática. va un resumen rápido de cómo te fue:';
-  const { data } = await insertCoach(persona, [
+/** Una plática "terminó" si no escribes en este tiempo (y tuvo al menos `AUTO_MIN_TURNS` mensajes tuyos). */
+export const SESSION_GAP_MS = 25 * 60_000;
+export const AUTO_MIN_TURNS = 5;
+
+export type DebriefResult = { ok: true; report: DebriefReport; id: string | null; coach: CoachMessage[] } | { ok: false; reason: 'too_short' };
+
+/**
+ * El feedback de lo que se habló desde el último. Prueba y Plus: el coach con IA (una llamada por plática); Free: el
+ * mismo informe por reglas, sin IA, y Ale cuenta qué más vería con Plus. La línea de emociones y los puntos ciegos
+ * siempre salen de reglas. Llega al chat de Ale como tarjeta y queda en el historial de la ficha.
+ */
+export async function runDebrief(persona: PersonaRow, plan: EffectivePlan, opts: { auto?: boolean; trialDays?: number } = {}): Promise<DebriefResult> {
+  const db = createAdminClient();
+  const nowIso = new Date().toISOString();
+  const { data: last } = await db.from('persona_debriefs').select('to_at').eq('persona_id', persona.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+  let q = db.from('persona_messages').select('role, content, emotion, meta, deliver_at').eq('persona_id', persona.id).lte('deliver_at', nowIso);
+  if (last?.to_at) q = q.gt('deliver_at', last.to_at as string);
+  const { data } = await q.order('deliver_at', { ascending: true }).limit(200);
+  const messages: DebriefMessage[] = ((data ?? []) as Pick<PersonaMessageRow, 'role' | 'content' | 'emotion' | 'meta'>[])
+    .filter((m) => !m.meta?.crisis)
+    .map((m) => ({ role: m.role, content: m.content, emotion: m.emotion }));
+  const own = messages.filter((m) => m.role === 'user').length;
+  if (own < (opts.auto ? AUTO_MIN_TURNS : MIN_DEBRIEF_MESSAGES)) return { ok: false, reason: 'too_short' };
+
+  const timeline = emotionTimeline(messages);
+  let report: DebriefReport = { ...ruleReport(messages), timeline, blindSpots: blindSpots(messages), source: 'rules' };
+  let provider: string | null = null;
+  if (plan !== 'free') {
+    try {
+      const r = await coachReport(persona.spec, messages, timeline);
+      provider = r.provider;
+      report = { ...r.report, timeline, blindSpots: blindSpots(messages), source: 'ai' };
+    } catch (error) {
+      console.error('[persons] coach', error instanceof Error ? error.message : error);
+    }
+  }
+  const { data: saved, error } = await db.from('persona_debriefs').insert({
+    persona_id: persona.id, user_id: persona.user_id, from_at: (last?.to_at as string | undefined) ?? null, to_at: nowIso,
+    messages_count: messages.length, report, provider,
+  }).select('id').single();
+  if (error) console.error('[persons] guardar debrief', error.message);
+  const id = (saved?.id as string | undefined) ?? null;
+
+  const intro = opts.auto ? `vi que terminaste de platicar con ${persona.name} 👀 te dejo cómo te fue:` : report.source === 'ai' ? 'listo, ya leí toda la plática 👀 te dejo cómo te fue:' : 'leí la plática. va un resumen rápido de cómo te fue:';
+  const outro = plan === 'free'
+    ? 'con Plus te explico frase por frase qué funcionó y qué le habrías podido decir distinto. ¿quieres que veamos algún mensaje?'
+    : plan === 'trial' && opts.trialDays
+      ? `esto viene completo en tu prueba (te ${opts.trialDays === 1 ? 'queda 1 día' : `quedan ${opts.trialDays} días`}). ¿vemos algún mensaje en específico?`
+      : '¿quieres que veamos algún mensaje en específico o qué le dirías la próxima vez?';
+  const { data: rows } = await insertCoach(persona, [
     { content: intro },
-    { kind: 'report', content: report.summary.slice(0, 2000), upto_at: uptoAt, meta: { report, debrief_id: debriefId } },
-    { content: '¿quieres que veamos algún mensaje en específico o qué le dirías la próxima vez?' },
+    { kind: 'report', content: report.summary.slice(0, 2000), upto_at: nowIso, meta: { report, debrief_id: id } },
+    { content: outro },
   ]);
-  return ((data ?? []) as CoachRow[]).map(publicCoach);
+  return { ok: true, report, id, coach: ((rows ?? []) as CoachRow[]).map(publicCoach) };
+}
+
+/**
+ * Al volver a la lista (o abrir a Ale): cada plática que terminó (sin mensajes tuyos en `SESSION_GAP_MS`) y aún no tiene
+ * feedback recibe el suyo. Se aparta antes (`auto_debrief_at`) para que dos consultas no lo hagan dos veces.
+ */
+export async function maybeAutoDebrief(userId: string, plan: EffectivePlan, trialDays: number) {
+  const db = createAdminClient();
+  const now = Date.now();
+  const { data } = await db.from('personas').select('*').eq('user_id', userId).is('archived_at', null)
+    .lt('last_message_at', new Date(now - SESSION_GAP_MS).toISOString()).gt('last_message_at', new Date(now - 3 * 86_400_000).toISOString()).limit(10);
+  for (const p of (data ?? []) as (PersonaRow & { auto_debrief_at?: string | null })[]) {
+    if (p.auto_debrief_at && p.last_message_at && p.auto_debrief_at >= p.last_message_at) continue;
+    const { data: claimed } = await db.from('personas').update({ auto_debrief_at: new Date().toISOString() }).eq('id', p.id)
+      .or(`auto_debrief_at.is.null,auto_debrief_at.lt.${p.last_message_at}`).select('id');
+    if (!claimed?.length) continue;
+    await runDebrief(p, plan, { auto: true, trialDays }).catch((e: unknown) => console.error('[persons] feedback automático', e instanceof Error ? e.message : e));
+  }
+}
+
+export function scheduleAutoDebrief(userId: string, plan: EffectivePlan, trialDays: number) {
+  const run = () => maybeAutoDebrief(userId, plan, trialDays).catch(() => undefined);
+  try { after(run); } catch { void run(); }
 }

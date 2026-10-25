@@ -1,27 +1,19 @@
 import type { EmotionEvent, EmotionSnapshot } from './emotion';
 
 /**
- * El coach como una conversación: un contacto más («Ale · tu coach») con el que hablas de cada práctica. Mientras
- * chateas con un personaje, va dejando ideas sobre lo que acaba de pasar (cada `TIP_EVERY` mensajes tuyos); puedes
- * preguntarle cómo mejorar o qué contestar; y al terminar la sesión te deja el feedback completo como tarjeta.
- * Lo determinista vive aquí (puro y testeable): cuándo toca una idea y las ideas sin IA.
+ * El coach como una conversación: un contacto más («Ale · tu coach»). No escribe a cada rato: una idea (sin IA) en tu
+ * primera plática, el feedback completo al terminar cada plática y lo que le preguntes. Lo determinista vive aquí
+ * (puro y testeable): las ideas sin IA.
  */
 
 export const COACH_NAME = 'Ale';
 export const COACH_HUE = 265;
-
-/** Mensajes tuyos nuevos (desde la última idea) para que el coach diga algo por su cuenta. */
-export const TIP_EVERY = 3;
 
 export type PracticeLine = { role: 'user' | 'persona' | 'system'; content: string; at: string; emotion?: EmotionSnapshot | null };
 
 /** Mensajes propios después de `uptoAt` (lo que el coach aún no comentó). */
 export function newUserTurns(lines: PracticeLine[], uptoAt: string | null) {
   return lines.filter((l) => l.role === 'user' && (!uptoAt || l.at > uptoAt));
-}
-
-export function tipDue(lines: PracticeLine[], uptoAt: string | null) {
-  return newUserTurns(lines, uptoAt).length >= TIP_EVERY;
 }
 
 const TIP_BY_EVENT: Partial<Record<EmotionEvent, string[]>> = {
