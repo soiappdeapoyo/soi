@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { authFailureMessage } from '@/lib/auth-errors';
 import { trackFunnel } from '@/lib/analytics/funnel-client';
+import { ConsentLegend } from '@/components/legal/consent-legend';
 
 function GoogleLogo() {
   return (
@@ -31,6 +32,8 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   const redirectTo = () => {
     const q = new URLSearchParams();
     if (next) q.set('next', next);
+    // La leyenda del consentimiento estaba junto al botón: el callback registra la constancia sin otra pantalla.
+    q.set('legal', '1');
     if (role) q.set('rol', role);
     // Invitación de /persons: el código del link viaja hasta el registro.
     const ref = params.get('ref');
@@ -58,6 +61,7 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
         <GoogleLogo /> {loading ? 'Conectando…' : 'Continuar con Google'}
       </Button>
       {error && <p role="alert" className="text-center text-sm text-soi-danger">{error}</p>}
+      <ConsentLegend />
     </div>
   );
 }

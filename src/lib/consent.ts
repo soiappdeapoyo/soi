@@ -3,15 +3,19 @@ import { unstable_cache } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
 
 /**
- * Consentimiento legal: antes de usar la app, cada persona acepta los términos y el aviso de privacidad y declara
- * ser mayor de 18 años. Si se publica una versión nueva de los términos o del aviso, se vuelve a pedir.
+ * Consentimiento legal: sin ventana aparte. La leyenda va junto al botón de entrar («Al continuar con Google…») y
+ * al entrar se registra la constancia. Si se publica una versión nueva de los términos o del aviso, se vuelve a
+ * pedir con la misma leyenda y un solo botón (`/consentimiento`).
  */
 
-/** Texto exacto de cada declaración: se guarda tal cual en la constancia. */
+/** Texto exacto de cada leyenda: se guarda tal cual en la constancia. */
 export const CONSENT_STATEMENTS = {
-  terms: 'Leí y acepto los Términos y condiciones y el Aviso de privacidad de SOI.',
-  adult: 'Declaro que soy mayor de 18 años.',
+  login: 'Al continuar con Google, aceptas los Términos y condiciones, declaras que leíste el Aviso de privacidad y que eres mayor de 18 años.',
+  update: 'Al tocar «Continuar», aceptas los Términos y condiciones, declaras que leíste el Aviso de privacidad y que eres mayor de 18 años.',
 } as const;
+
+/** El login lo manda a /auth/callback: la leyenda estaba junto al botón que tocó. */
+export const LEGEND_PARAM = 'legal';
 
 export const LEGAL_TAG = 'legal';
 
@@ -52,6 +56,30 @@ export const getConsentState = cache(async (userId: string) => {
   if (error) return { state: 'ok' as const, current };
   return { state: consentState(data, current), current };
 });
+
+/** Guarda la constancia (versiones vigentes tomadas en el servidor, nunca del navegador). */
+export async function recordAcceptance(input: {
+  userId: string; email: string | null; displayName: string | null; statement: string; headers: Headers;
+}) {
+  const versions = await currentLegalVersions();
+  const h = input.headers;
+  const ip = (h.get('x-forwarded-for')?.split(',')[0] ?? h.get('x-real-ip') ?? '').trim().slice(0, 100) || null;
+  const { error } = await createAdminClient().from('legal_acceptances').insert({
+    user_id: input.userId,
+    email: input.email,
+    display_name: input.displayName,
+    terms_version: versions.terminos,
+    privacy_version: versions.privacidad,
+    privacy_short_version: versions.privacidad_corto,
+    accepted_terms: true,
+    confirmed_adult: true,
+    statements: [input.statement],
+    ip,
+    user_agent: h.get('user-agent')?.slice(0, 500) ?? null,
+  });
+  if (error) console.error('[legal] no se pudo registrar la aceptación', error.message);
+  return !error;
+}
 
 /** Destino seguro tras aceptar (solo rutas internas). */
 export function safeNext(next: string | null | undefined, fallback = '/hoy') {

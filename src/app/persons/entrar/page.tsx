@@ -1,6 +1,5 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { MessageCircle } from 'lucide-react';
 import { LoginForm } from '@/components/auth/login-form';
 import { PERSONS_BRAND, PERSONS_TAGLINE } from '@/config/persons';
@@ -31,7 +30,7 @@ export default function PersonsLoginPage() {
           </ul>
           <div className="mt-6"><Suspense><LoginForm role="persons" /></Suspense></div>
           <p className="mt-5 text-center text-xs text-soi-muted">
-            Todas las personas son ficticias. Al entrar aceptas los <Link href="/terminos" className="underline">Términos</Link> y el <Link href="/privacidad" className="underline">Aviso de privacidad</Link>, y confirmas que eres mayor de 18 años.
+            Todas las personas son ficticias.
           </p>
         </div>
       </div>

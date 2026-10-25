@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@/lib/supabase/server';
-import { getConsentState } from '@/lib/consent';
+import { CONSENT_STATEMENTS, getConsentState, LEGEND_PARAM, recordAcceptance } from '@/lib/consent';
 import { isBrandNew } from '@/lib/journey';
 import { authFailureReason } from '@/lib/auth-errors';
 import { createAdminClient } from '@/lib/supabase/server';
@@ -95,14 +95,25 @@ export async function GET(request: Request) {
     : [];
 
   // Sin formulario previo: SOI conoce a la persona conversando desde el primer mensaje.
-  // Solo el consentimiento legal (términos, aviso y mayoría de edad) va antes, y luego a donde iba.
+  // El consentimiento legal se registra al entrar (leyenda junto al botón), y luego a donde iba.
   // Primera vez de verdad (sin mensajes ni Moments): su primer paso es contarle a SOI cómo llega, no un Hoy vacío.
   const dest = role === 'persons'
     ? (safeNext?.startsWith('/persons') ? safeNext : '/persons')
     : safeNext?.startsWith('/persons') && !isAdminEmail(u.email) ? '/persons'
     : safeNext ?? (claimed.length || (await isBrandNewUser(supabase, data.user.id)) ? '/chat?nueva=1' : '/hoy');
-  const { state } = await getConsentState(data.user.id);
-  if (state !== 'ok') return NextResponse.redirect(`${origin}/consentimiento?next=${encodeURIComponent(dest)}`);
+  // Sin ventana aparte: entró tocando el botón con la leyenda al lado, así que la constancia se guarda aquí.
+  // Si no viene de ahí (un enlace viejo) o no se pudo guardar, la pantalla de un botón lo pide.
+  const { state } = await getConsentState(u.id);
+  if (state !== 'ok') {
+    const recorded = searchParams.get(LEGEND_PARAM) === '1' && await recordAcceptance({
+      userId: u.id,
+      email: u.email ?? null,
+      displayName: (u.user_metadata?.full_name as string | undefined) ?? (u.user_metadata?.name as string | undefined) ?? null,
+      statement: CONSENT_STATEMENTS.login,
+      headers: request.headers,
+    });
+    if (!recorded) return NextResponse.redirect(`${origin}/consentimiento?next=${encodeURIComponent(dest)}`);
+  }
   return NextResponse.redirect(`${origin}${dest}`);
 }
 

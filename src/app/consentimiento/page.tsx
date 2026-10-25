@@ -9,7 +9,7 @@ import { Suspense } from 'react';
 export const metadata: Metadata = { title: 'Consentimiento legal', robots: { index: false, follow: false } };
 export const dynamic = 'force-dynamic';
 
-/** Antes de usar SOI: aceptar términos y aviso de privacidad y declarar ser mayor de 18 años. */
+/** Solo si cambiaron los términos o el aviso (o se entró sin la leyenda del login): la leyenda y un botón. */
 export default async function ConsentPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { user } = await getSessionUser();
   const next = safeNext((await searchParams).next);
@@ -26,8 +26,8 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
         <h1 className="sr-only">Términos y aviso de privacidad</h1>
         <p className="mt-5 text-soi-muted">
           {state === 'updated'
-            ? 'Actualizamos nuestros términos. Léelos y acéptalos para continuar.'
-            : 'Lee y acepta los términos para continuar.'}
+            ? 'Actualizamos nuestros términos y el aviso de privacidad.'
+            : 'Un último paso antes de entrar.'}
         </p>
         <ConsentForm next={next} />
         <form action="/auth/signout" method="post" className="mt-6 text-sm text-soi-muted">
