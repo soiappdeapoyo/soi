@@ -29,9 +29,10 @@ export function MomentProposal({ m, onSend }: { m: MomentProposalResult; onSend?
             <p className="nums text-xs text-soi-muted">{m.adjusted ? 'Ajusté tu Moment' : m.reused ? 'Uno que ya tienes' : m.habit ? 'Tu hábito, en pequeño' : 'Preparé un Moment'} · {m.minutes} minutos · {MOMENT_KINDS[m.kind]?.label}</p>
             <h3 className="mt-1 text-[17px] font-medium">{m.title}</h3>
             {m.reason && <p className="mt-0.5 text-sm text-soi-muted">{m.reason}</p>}
-            {m.habit && m.addedToDay && (
-              <Link href="/mi-vida" className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-soi-accent">
-                <AlarmClock className="h-4 w-4" aria-hidden="true" /><span className="nums">En Mi día{m.time ? ` · todos los días a las ${m.time}` : ''}</span>
+            {m.addedToDay && (
+              <Link href={m.habit ? '/mi-vida' : '/hoy'} className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-soi-accent">
+                <AlarmClock className="h-4 w-4" aria-hidden="true" />
+                <span className="nums">{m.habit ? `En Mi día${m.time ? ` · todos los días a las ${m.time}` : ''}` : 'Quedó en tu día: Hoy y Mi Vida → Mi día'}</span>
               </Link>
             )}
           </div>

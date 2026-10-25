@@ -84,7 +84,7 @@ export const AGENT_SPECS: Record<Exclude<AgentId, 'crisis'>, AgentSpec> = {
     ],
     techniques: ['ritual de 5 minutos', 'Miracle Morning', 'Club de las 5 AM', 'Protocolo Dispenza', 'SATS'],
     outOfScope: ['planes de entrenamiento físico detallados', 'nutrición'],
-    extra: 'Recomienda UNA rutina de SOI según el tiempo disponible y enlázala como /rutinas/<id>.',
+    extra: 'Recomienda UNA rutina de SOI según el tiempo disponible y ofrécela con su tarjeta (offerMoment o suggestPractice): la tarjeta trae el botón para empezarla.',
   },
   napoleon_hill: {
     agentName: 'Napoleon Hill',

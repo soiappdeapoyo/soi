@@ -22,6 +22,7 @@ import { forkOfficial, getMoment } from '@/lib/moments/server';
 import { isNearDuplicate } from '@/lib/moments/reuse';
 import { polishMoment } from '@/lib/moments/polish';
 import { DayItemsSchema, partOfDay, placeInDay } from '@/lib/day-plan';
+import { addToMyDay } from '@/lib/day-plan-server';
 import { hourInTz, todayISO } from '@/lib/utils';
 import { BeliefInput } from '@/lib/beliefs';
 import { registerBelief } from '@/lib/beliefs-server';
@@ -240,10 +241,15 @@ PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, gu
         };
         const proposal = (id: string, minutes: number, extra: Record<string, unknown> = {}) => {
           linkHabit(id, `m:${id}`);
+          // Todo Moment que SOI diseña queda en Mi día (Hoy y Mi Vida): nunca se pierde. El hábito ya lo pone con su hora.
+          if (!m.habit) {
+            const place = () => addToMyDay(supabase, userId, id).then(() => undefined);
+            try { after(place); } catch { void place(); }
+          }
           return {
             ok: true as const, id, title: m.title, kind, reason: m.reason, minutes,
             blocks: blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })), locked: access.routines === false,
-            ...(m.habit ? { habit: true, addedToDay, time: m.habit.time } : {}), ...extra,
+            ...(m.habit ? { habit: true, addedToDay, time: m.habit.time } : { addedToDay: true }), ...extra,
           };
         };
         // Ajustar uno existente: nueva versión del mismo Moment (propio) o tu copia de un oficial.

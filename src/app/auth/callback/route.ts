@@ -7,6 +7,7 @@ import { authFailureReason } from '@/lib/auth-errors';
 import { createAdminClient } from '@/lib/supabase/server';
 import { ipCountry, rememberGeoCountry } from '@/lib/geo-country';
 import { onPersonsSignup } from '@/lib/persons/referrals';
+import { claimVisitorDrafts } from '@/lib/moments/drafts';
 import { countryName, geoFromHeaders, VISITOR_COOKIE, visitorFrom } from '@/lib/analytics/funnel';
 import { isAdminEmail } from '@/lib/admin/auth';
 import { notifyAdmins } from '@/lib/admin/notify';
@@ -87,13 +88,19 @@ export async function GET(request: Request) {
     }
   });
 
+  // El Moment que diseñó en la landing se vuelve suyo aunque haya entrado por otro botón (no solo con Comenzar):
+  // queda en Mi día y el chat abre mostrándolo.
+  const claimed = role !== 'persons' && !safeNext?.startsWith('/m/borrador/')
+    ? await claimVisitorDrafts(supabase, u.id, visitor).catch((e: unknown) => { console.error('[drafts] al entrar', e instanceof Error ? e.message : e); return [] as string[]; })
+    : [];
+
   // Sin formulario previo: SOI conoce a la persona conversando desde el primer mensaje.
   // Solo el consentimiento legal (términos, aviso y mayoría de edad) va antes, y luego a donde iba.
   // Primera vez de verdad (sin mensajes ni Moments): su primer paso es contarle a SOI cómo llega, no un Hoy vacío.
   const dest = role === 'persons'
     ? (safeNext?.startsWith('/persons') ? safeNext : '/persons')
     : safeNext?.startsWith('/persons') && !isAdminEmail(u.email) ? '/persons'
-    : safeNext ?? ((await isBrandNewUser(supabase, data.user.id)) ? '/chat?nueva=1' : '/hoy');
+    : safeNext ?? (claimed.length || (await isBrandNewUser(supabase, data.user.id)) ? '/chat?nueva=1' : '/hoy');
   const { state } = await getConsentState(data.user.id);
   if (state !== 'ok') return NextResponse.redirect(`${origin}/consentimiento?next=${encodeURIComponent(dest)}`);
   return NextResponse.redirect(`${origin}${dest}`);

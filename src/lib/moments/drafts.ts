@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { parseBlocks } from '@/config/actions';
 import { remember } from '@/lib/ai/rag';
 import { scheduleAutoCover } from '@/lib/moments/auto-cover';
+import { addToMyDay } from '@/lib/day-plan-server';
+import { coverUrl } from '@/lib/moments/types';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -36,6 +38,8 @@ export async function claimDraft(supabase: SupabaseClient, userId: string, token
   }
   const id = data.id as string;
   await admin.from('moment_drafts').update({ moment_id: id }).eq('id', token);
+  // Queda en Mi día (Hoy y Mi Vida → Mi día) y el chat lo muestra al entrar: nunca "desaparece".
+  await addToMyDay(supabase, userId, id);
 
   scheduleAutoCover(id, { title: draft.title, objective: draft.objective, kind: draft.kind, blocks, context: draft.context, part: draft.part });
   const later = async () => {
@@ -51,4 +55,36 @@ export async function claimDraft(supabase: SupabaseClient, userId: string, token
   };
   try { after(later); } catch { void later(); }
   return id;
+}
+
+/**
+ * Al entrar a la app (cualquier camino, no solo el botón Comenzar): los Moments que diseñó en la landing con este
+ * navegador (cookie de visitante, 14 días) y que nadie reclamó se vuelven suyos. Devuelve los ids.
+ */
+export async function claimVisitorDrafts(supabase: SupabaseClient, userId: string, visitor: string | null): Promise<string[]> {
+  if (!visitor) return [];
+  const { data } = await createAdminClient().from('moment_drafts').select('id').eq('visitor_id', visitor).is('claimed_by', null)
+    .gte('created_at', new Date(Date.now() - 14 * 86_400_000).toISOString()).order('created_at', { ascending: false }).limit(3);
+  const ids: string[] = [];
+  for (const d of data ?? []) {
+    const id = await claimDraft(supabase, userId, d.id as string, visitor).catch(() => null);
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
+export type LandingMoment = { id: string; title: string; minutes: number; cover: string | null };
+
+/** El Moment de la landing que aún no vive (3 días): el chat abre mostrándolo, con su botón para empezar. */
+export async function pendingLandingMoment(supabase: SupabaseClient, userId: string): Promise<LandingMoment | null> {
+  const { data: draft } = await createAdminClient().from('moment_drafts').select('moment_id').eq('claimed_by', userId).not('moment_id', 'is', null)
+    .gte('claimed_at', new Date(Date.now() - 3 * 86_400_000).toISOString()).order('claimed_at', { ascending: false }).limit(1).maybeSingle();
+  const id = draft?.moment_id as string | undefined;
+  if (!id) return null;
+  const [{ count }, { data: m }] = await Promise.all([
+    supabase.from('moment_runs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('moment_id', id),
+    supabase.from('soi_blueprints').select('id, title, required_minutes, cover_path, status').eq('id', id).maybeSingle(),
+  ]);
+  if (count || !m || m.status === 'archived') return null;
+  return { id, title: m.title as string, minutes: (m.required_minutes as number) || 1, cover: coverUrl(m.cover_path as string | null) };
 }
