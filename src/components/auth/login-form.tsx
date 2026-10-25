@@ -32,6 +32,9 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
     const q = new URLSearchParams();
     if (next) q.set('next', next);
     if (role) q.set('rol', role);
+    // Invitación de /persons: el código del link viaja hasta el registro.
+    const ref = params.get('ref');
+    if (role === 'persons' && ref && /^[a-z0-9]{8}$/.test(ref)) q.set('ref', ref);
     const qs = q.toString();
     return `${window.location.origin}/auth/callback${qs ? `?${qs}` : ''}`;
   };

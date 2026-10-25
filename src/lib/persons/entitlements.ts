@@ -48,3 +48,24 @@ export const GATE_COPY: Record<'person_limit' | 'generation_limit' | 'daily_limi
   daily_limit: 'Por hoy fue suficiente práctica. Descansa y retoma mañana: así se aprende mejor.',
   exhausted: 'Tus mensajes del plan Free se terminaron. Tu conversación está guardada.',
 };
+
+// ── Prueba e invitaciones ────────────────────────────────────────────────────────────────────────────────────────
+
+/** La prueba de /persons dura menos que la de SOI: 3 días con todo. */
+export const PERSONS_TRIAL_DAYS = 3;
+/** Días que gana quien invita por su primera invitación activa, y por cada una después. */
+export const REFERRAL_FIRST_DAYS = 7;
+export const REFERRAL_NEXT_DAYS = 2;
+/** Una invitación cuenta cuando la persona invitada ya practicó: sus primeros mensajes a un personaje. */
+export const REFERRAL_ACTIVATION_MESSAGES = 3;
+/** Tope de invitaciones con premio (contra el abuso). */
+export const REFERRAL_MAX_REWARDED = 30;
+
+/** Días por la siguiente invitación activa (igual que `activate_referral` en la base). */
+export function referralReward(rewardedSoFar: number) {
+  if (rewardedSoFar >= REFERRAL_MAX_REWARDED) return 0;
+  return rewardedSoFar === 0 ? REFERRAL_FIRST_DAYS : REFERRAL_NEXT_DAYS;
+}
+
+/** Código de invitación válido (lo que llega en ?ref=). */
+export const REFERRAL_CODE_RE = /^[a-z0-9]{8}$/;

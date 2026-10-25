@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Described, SpecDiff } from '@/lib/persons/spec';
 import type { PersonaPreset } from '@/config/persons-presets';
@@ -15,11 +15,13 @@ const DIFFICULTY = ['', 'Fácil', 'Media', 'Difícil'];
 
 type Generated = { described: Described; sourceDescription: string; diff: SpecDiff | null };
 
-async function post<T>(url: string, body: unknown, method = 'POST'): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+type Fail = { ok: false; error: string; suggestion?: string | null; why?: string | null };
+
+async function post<T>(url: string, body: unknown, method = 'POST'): Promise<{ ok: true; data: T } | Fail> {
   try {
     const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-    return res.ok ? { ok: true, data } : { ok: false, error: data.error ?? 'Algo falló. Intenta de nuevo.' };
+    const data = (await res.json().catch(() => ({}))) as T & { error?: string; suggestion?: string | null; why?: string | null };
+    return res.ok ? { ok: true, data } : { ok: false, error: data.error ?? 'Algo falló. Intenta de nuevo.', suggestion: data.suggestion, why: data.why };
   } catch {
     return { ok: false, error: 'Sin conexión. Intenta de nuevo.' };
   }
@@ -53,6 +55,8 @@ export function CreatePersona({ presets = [], adjust }: { presets?: PersonaPrese
   const [delta, setDelta] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Si la descripción no pasa las reglas: la versión aceptable más cercana, lista para usar.
+  const [suggestion, setSuggestion] = useState<{ text: string; why: string | null } | null>(null);
   const [result, setResult] = useState<Generated | null>(null);
   const [tweak, setTweak] = useState('');
   const hue = adjust?.hue ?? 160;
@@ -60,9 +64,14 @@ export function CreatePersona({ presets = [], adjust }: { presets?: PersonaPrese
   async function generate(desc: string) {
     setBusy('generate');
     setError(null);
+    setSuggestion(null);
     const r = await post<Generated>('/api/persons/generate', adjust ? { personaId: adjust.personaId, delta: desc } : { description: desc, name: name.trim() || undefined });
     setBusy(null);
-    if (!r.ok) { setError(r.error); return; }
+    if (!r.ok) {
+      setError(r.error);
+      if (r.suggestion) setSuggestion({ text: r.suggestion, why: r.why ?? null });
+      return;
+    }
     setResult(r.data);
   }
 
@@ -156,6 +165,23 @@ export function CreatePersona({ presets = [], adjust }: { presets?: PersonaPrese
           </>
         )}
         {error && <p role="alert" className="text-sm text-soi-danger">{error}</p>}
+        {suggestion && (
+          <div className="rounded-xl border border-[#008069]/25 bg-[#E7F3EF] p-3 text-sm" aria-live="polite">
+            <p className="flex items-center gap-1.5 font-semibold text-[#005C4B]"><Sparkles className="h-4 w-4" aria-hidden="true" />Así sí la puedo crear</p>
+            <p className="mt-1.5 text-[15px] leading-relaxed text-[#111B21] [overflow-wrap:anywhere]">{suggestion.text}</p>
+            {suggestion.why && <p className="mt-1.5 text-soi-muted">{suggestion.why}</p>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" size="sm" disabled={busy !== null} className="bg-[#008069] hover:bg-[#006E5A]"
+                onClick={() => { const t = suggestion.text.slice(0, MAX); if (adjust) setDelta(t); else setDescription(t); void generate(t); }}>
+                Usar esta y generar
+              </Button>
+              <Button type="button" size="sm" variant="outline" disabled={busy !== null}
+                onClick={() => { const t = suggestion.text.slice(0, MAX); if (adjust) setDelta(t); else setDescription(t); setSuggestion(null); setError(null); }}>
+                Editarla
+              </Button>
+            </div>
+          </div>
+        )}
         <Button type="submit" disabled={busy !== null || (adjust ? delta.trim().length < 4 : description.trim().length < MIN)} className="bg-[#008069] hover:bg-[#006E5A]">
           {busy === 'generate' ? 'Generando…' : 'Generar'}
         </Button>

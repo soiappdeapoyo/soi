@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v3';
 import { createAdminClient } from '@/lib/supabase/server';
-import { BLOCK_COPY, checkDescription, diffSpecs } from '@/lib/persons/spec';
-import { generateDescribed } from '@/lib/persons/ai';
+import { BLOCK_COPY, checkDescription, diffSpecs, REWRITE_WHY } from '@/lib/persons/spec';
+import { generateDescribed, suggestRewrite } from '@/lib/persons/ai';
 import { regionFor } from '@/config/regionalisms';
 import { loadPersona, personsApiSession } from '@/lib/persons/server';
 import { canGenerate, GATE_COPY } from '@/lib/persons/entitlements';
@@ -37,7 +37,9 @@ export async function POST(req: Request) {
   const blocked = checkDescription(`${input} ${name ?? ''}`);
   if (blocked) {
     await db.from('persona_generations').insert({ user_id: s.userId, kind, blocked_reason: blocked, description_hash: descriptionHash });
-    return Response.json({ error: BLOCK_COPY[blocked], reason: blocked }, { status: 422 });
+    // No solo "no se puede": la versión aceptable más cercana, lista para usar.
+    const suggestion = await suggestRewrite(input, blocked);
+    return Response.json({ error: BLOCK_COPY[blocked], reason: blocked, suggestion, why: suggestion ? REWRITE_WHY[blocked] : null }, { status: 422 });
   }
 
   const { count } = await db.from('persona_generations').select('id', { count: 'exact', head: true })
@@ -50,7 +52,10 @@ export async function POST(req: Request) {
   try {
     const result = await generateDescribed({ description: input, name, base: base?.spec, delta, region: regionFor(s.region) });
     await db.from('persona_generations').insert({ user_id: s.userId, kind, blocked_reason: result ? null : 'output', description_hash: descriptionHash });
-    if (!result) return Response.json({ error: BLOCK_COPY.real_person, reason: 'output' }, { status: 422 });
+    if (!result) {
+      const suggestion = await suggestRewrite(input, 'real_person');
+      return Response.json({ error: BLOCK_COPY.real_person, reason: 'output', suggestion, why: suggestion ? REWRITE_WHY.real_person : null }, { status: 422 });
+    }
     return Response.json({
       described: result.described,
       sourceDescription: base ? `${base.spec.sourceDescription}\nAjuste: ${input}`.slice(-600) : input,

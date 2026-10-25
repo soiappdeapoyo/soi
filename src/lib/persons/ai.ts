@@ -1,6 +1,6 @@
 import { z } from 'zod/v3';
 import { objectWithFallback, CHAT_ORDER, FAST_ORDER, type ProviderName } from '@/lib/ai/fallback';
-import { DescribedSchema, normalizeDescribed, checkDescription, personaLine, type Described, type PersonSpec } from './spec';
+import { DescribedSchema, normalizeDescribed, checkDescription, personaLine, rewritable, rewriteByRules, type BlockReason, type Described, type PersonSpec } from './spec';
 import { expressionGuide, ignoredGuide, REACTIONS, type EmotionLabel, type EmotionState } from './emotion';
 import { MEETINGS } from './meeting';
 import type { Presence } from './presence';
@@ -238,4 +238,35 @@ export async function coachAnswer(spec: PersonSpec, lines: PracticeLine[], chat:
     maxOutputTokens: 500,
   });
   return { messages: trimAll((object as z.infer<typeof CoachChatSchema>).messages), provider };
+}
+
+// ── Reescribir una descripción que no pasa las reglas ────────────────────────────────────────────────────────────
+
+const RewriteSchema = z.object({ description: z.string().min(30).max(280) });
+
+/**
+ * Cuando una descripción no se puede usar (persona real, menor, sexual), en vez de solo decir que no, propone la
+ * versión aceptable más cercana a lo que la persona quería practicar. La revisión vuelve a pasar por las reglas; si
+ * la IA no responde o lo propuesto tampoco pasa, la reescritura por reglas. Menor + sexual nunca se reescribe.
+ */
+export async function suggestRewrite(text: string, reason: BlockReason): Promise<string | null> {
+  if (!rewritable(text)) return null;
+  const why = {
+    real_person: 'menciona o imita a una persona real (una ex, un jefe, un famoso, una cuenta). Conviértela en un arquetipo con la misma forma de ser y la misma situación para practicar, sin nombres reales ni detalles que la identifiquen',
+    minor: 'describe a alguien menor de edad. Hazla adulta (19 años o más) con lo demás igual',
+    sexual: 'tiene contenido sexual o de sumisión. Quítalo y deja la personalidad, los intereses y la forma de hablar',
+  }[reason];
+  try {
+    const { object } = await objectWithFallback({
+      schema: RewriteSchema,
+      instructions: `Reescribes descripciones de personajes ficticios para una app donde se practican conversaciones (citas, amistad, trabajo). La descripción ${why}. Mantén todo lo demás (profesión, ciudad, gustos, carácter, lo que se quiere practicar) y el mismo tono informal. Una sola descripción de 1 o 2 frases, en español, en tercera persona, de 30 a 260 caracteres.`,
+      prompt: `Descripción original: «${text.slice(0, 400)}»`,
+      order: FAST_ORDER,
+      timeoutMs: 10_000,
+      maxOutputTokens: 200,
+    });
+    const out = (object as z.infer<typeof RewriteSchema>).description.trim();
+    if (out.length >= 30 && !checkDescription(out)) return out;
+  } catch { /* reglas */ }
+  return rewriteByRules(text);
 }

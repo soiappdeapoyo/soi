@@ -6,6 +6,7 @@ import { isBrandNew } from '@/lib/journey';
 import { authFailureReason } from '@/lib/auth-errors';
 import { createAdminClient } from '@/lib/supabase/server';
 import { ipCountry, rememberGeoCountry } from '@/lib/geo-country';
+import { onPersonsSignup } from '@/lib/persons/referrals';
 import { countryName, geoFromHeaders, VISITOR_COOKIE, visitorFrom } from '@/lib/analytics/funnel';
 import { isAdminEmail } from '@/lib/admin/auth';
 import { notifyAdmins } from '@/lib/admin/notify';
@@ -52,6 +53,10 @@ export async function GET(request: Request) {
     }
     const { data: p } = await db.from('user_profiles').select('app_role').eq('user_id', u.id).maybeSingle();
     role = (p?.app_role as string | undefined) ?? null;
+    // Cuenta nueva de /persons: prueba de 3 días y, si llegó con un link de invitación, queda ligada a quien la invitó.
+    if (personsSignup && fresh && role === 'persons') {
+      await onPersonsSignup(u.id, u.created_at, searchParams.get('ref')).catch((e: unknown) => console.error('[persons] registro', e instanceof Error ? e.message : e));
+    }
   }
   // País de origen por la IP (una sola vez). En /persons también es el país del perfil (sin ajuste para elegirlo).
   {

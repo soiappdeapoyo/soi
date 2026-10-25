@@ -33,7 +33,10 @@ export default async function PersonsAccountPage() {
           <p className="font-semibold">{p.display_name ?? s.email}</p>
           <p className="text-sm text-soi-muted">{s.email}</p>
           <p className="mt-3 text-sm">Plan: <span className="font-medium">{planLine}</span></p>
-          {s.plan !== 'soi_plus' && <Link href="/persons/planes" className={buttonClass('primary', 'sm', 'mt-3 bg-[#008069] hover:bg-[#006E5A]')}>Ver Plus</Link>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {s.plan !== 'soi_plus' && <Link href="/persons/planes" className={buttonClass('primary', 'sm', 'bg-[#008069] hover:bg-[#006E5A]')}>Ver Plus</Link>}
+            <Link href="/persons/invitar" className={buttonClass('outline', 'sm')}>Invita y gana días</Link>
+          </div>
         </section>
         {p.stripe_customer_id && (
           <section className="rounded-2xl bg-white p-5 shadow-soft">

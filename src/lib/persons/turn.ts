@@ -11,9 +11,10 @@ import { followupAt, paceFor, planDelivery } from './scheduler';
 import { humanizeItems, quirksFor } from './humanize';
 import { scheduleChatPhoto } from './images';
 import { scheduleFirstTip } from './coach-server';
+import { scheduleReferralCheck } from './referrals';
 import { blockNotice, checkTurn } from './moderation';
 import { actorReply, personaRegion, type ChatLine } from './ai';
-import { canSendToday } from './entitlements';
+import { canSendToday, REFERRAL_ACTIVATION_MESSAGES } from './entitlements';
 import type { PersonaMessageRow, PersonaRow, PersonsSession } from './server';
 
 /**
@@ -169,6 +170,8 @@ export async function sendTurn(s: PersonsSession, persona: PersonaRow, text: str
   }
   // Tu coach no escribe a cada rato: solo una idea (sin IA) en tu primera plática, y el feedback al terminarla.
   if ((userTurns ?? 0) + 1 === 3) scheduleFirstTip(s.userId, persona);
+  // Si llegó invitada, con sus primeros mensajes la invitación cuenta y quien la invitó gana días.
+  if ((userTurns ?? 0) + 1 <= REFERRAL_ACTIVATION_MESSAGES) scheduleReferralCheck(s.userId);
   await db.from('personas').update({ emotion: next, emotion_at: nowIso, last_message_at: nowIso, updated_at: nowIso }).eq('id', persona.id);
   return { ok: true, messageId: inserted.id as string };
 }

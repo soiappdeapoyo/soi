@@ -112,6 +112,82 @@ export const BLOCK_COPY: Record<BlockReason, string> = {
   sexual: 'Aquí se practican conversaciones con respeto: no se crean personajes sexualizados ni sumisos. Describe su personalidad, sus intereses y su forma de hablar.',
 };
 
+/** Por qué se cambió, en una frase (acompaña la descripción reescrita). */
+export const REWRITE_WHY: Record<BlockReason, string> = {
+  real_person: 'La convertí en un arquetipo: misma forma de ser, sin ser una persona real.',
+  minor: 'La hice adulta (todos los personajes tienen 18 años o más), con lo demás igual.',
+  sexual: 'Quité lo sexual y dejé su personalidad, sus intereses y su forma de hablar.',
+};
+
+/** Menor + sexual juntos: nunca se reescribe ni se envía a la IA. */
+export function rewritable(text: string) {
+  const t = strip(text);
+  return !(MINOR.test(t) && SEXUAL.test(t));
+}
+
+const GENERIC_SUGGESTION = 'Persona de 30 años, trabaja en diseño, curiosa y directa, le gusta el café de especialidad y salir a caminar; ocupada entre semana.';
+
+/**
+ * Sin IA: la misma descripción con lo que no se puede cambiado por algo aceptable (una persona real → un arquetipo,
+ * un menor → alguien de 19, lo sexual → fuera). Si aún no pasa, una descripción de ejemplo. Respaldo de `suggestRewrite`.
+ */
+const ACCENTS: Record<string, string> = { a: 'á', e: 'é', i: 'í', o: 'ó', u: 'úü', n: 'ñ' };
+
+/** La misma expresión, pero que acepte acentos y mayúsculas (para reescribir sobre el texto original). */
+function folded(re: RegExp | string): RegExp {
+  const src = typeof re === 'string' ? re : re.source;
+  let out = '';
+  let inClass = false;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i]!;
+    if (c === '\\') {
+      // \p{…} va entero; cualquier otro escape (\b, \s…), con su letra tal cual.
+      const end = /[pP]/.test(src[i + 1] ?? '') && src[i + 2] === '{' ? src.indexOf('}', i) : i + 1;
+      out += src.slice(i, end + 1);
+      i = end;
+      continue;
+    }
+    if (c === '[') inClass = true;
+    else if (c === ']') inClass = false;
+    const extra = ACCENTS[c];
+    out += extra ? (inClass ? c + extra : `[${c}${extra}]`) : c;
+  }
+  return new RegExp(out, 'giu');
+}
+
+const RULES: [RegExp, string | ((...m: string[]) => string)][] = [
+  [folded(/\bmenor de edad\b/), 'de 19 años'],
+  [folded(/\b(tiene|de|con) (1[0-7]|[1-9]) anos\b/), '$1 19 años'],
+  [folded(/\b(adolescente|teen|chiquill[ao])\b/), 'joven de 19 años'],
+  [folded(/\bes una? nin([oa])\b/), (_m, g) => `es un${g === 'a' ? 'a' : ''} joven`],
+  [folded(/\b(colegiala|de secundaria)\b/), 'universitaria'],
+  [folded(/\blolita\b/), ''],
+  [folded(/\bsumis([ao])s?\b/), 'tranquil$1'],
+  [folded(/\bobediente\b/), 'tranquila'],
+  [folded(/\bsexy\b/), 'con estilo'],
+  [folded(/\b(sexual(es)?|esclav[ao]|nudes?|nsfw)\b|\b(desnud|porno|erotic|cachond|fetich)\p{L}*/u), ''],
+  [folded(/\bmi (ex|novi[oa]|espos[oa]|pareja|marido|mujer|crush)\b/), 'alguien'],
+  [folded(/\bmi (jef[ea]|compan[eo]r[oa]|amig[oa]|vecin[oa]|prim[oa]|herman[oa]|maestr[oa]|profe(sor|sora)?)\b/), (_m, w) => `${/a$/i.test(w) ? 'una' : 'un'} ${w}`],
+  [folded(/\b(que se parezca a|identic[oa] a|igualit[oa] a|basad[oa] en)\s+[^,.;]+/), ''],
+  [folded(/\b(la|el) (actriz|actor|cantante|influencer|youtuber|streamer|modelo) \p{Lu}\p{L}+( \p{Lu}\p{L}+)?/u), '$1 $2'],
+  [folded(CELEBRITIES), ''],
+  [folded(/\b(como|tipo|estilo)\s*(?=,|\.|$)/), ''],
+  [/@[a-z0-9_.]{3,}/giu, ''],
+];
+
+/**
+ * Sin IA: la misma descripción con lo que no se puede cambiado por algo aceptable (una persona real → un arquetipo,
+ * un menor → alguien de 19, lo sexual → fuera), con sus acentos y mayúsculas. Si aún no pasa, una descripción de
+ * ejemplo. Respaldo de `suggestRewrite`.
+ */
+export function rewriteByRules(text: string): string {
+  let t = text.trim();
+  for (const [re, to] of RULES) t = t.replace(re, to as string);
+  t = t.replace(/\s+([,.;])/g, '$1').replace(/([,;])\s*([,;.])/g, '$2').replace(/\s{2,}/g, ' ').replace(/^[\s,.;]+|[\s,;]+$/g, '').trim();
+  if (t.length < 30 || checkDescription(t)) return GENERIC_SUGGESTION;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 // ── Coherencia (determinista) ────────────────────────────────────────────────────────────────────────────────────
 
 const FALLBACK_NAMES: Record<Gender, string[]> = {

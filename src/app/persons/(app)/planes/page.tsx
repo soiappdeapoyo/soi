@@ -40,6 +40,12 @@ export default async function PersonsPlansPage() {
             </section>
           ))}
         </div>
+        {s.plan !== 'soi_plus' && (
+          <Link href="/persons/invitar" className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-soft">
+            <span><span className="block font-semibold">¿Prefieres no pagar todavía?</span><span className="block text-sm text-soi-muted">Invita a alguien a practicar y gana días de prueba con todo desbloqueado.</span></span>
+            <span className="shrink-0 text-sm font-semibold text-[#005C4B]">Invitar</span>
+          </Link>
+        )}
         <p className="mt-4 text-xs text-soi-muted">El cobro aparece como SOI+ (la misma suscripción).</p>
       </div>
     </main>
