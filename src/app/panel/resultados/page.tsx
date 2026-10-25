@@ -31,7 +31,7 @@ export default async function OutcomesPage() {
   return (
     <>
       <h1 className="text-2xl font-semibold">Resultados</h1>
-      <p className="mt-1 text-sm text-soi-muted">{o.signups} registros en los últimos 120 días (sin cuentas demo).</p>
+      <p className="mt-1 text-sm text-soi-muted">{o.signups} registros de SOI en los últimos 120 días (sin cuentas demo ni de Háblame, que tiene su propia pestaña).</p>
       {groups.map((g) => (
         <section key={g.title} className="mt-6">
           <h2 className="text-lg font-semibold">{g.title}</h2>

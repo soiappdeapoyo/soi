@@ -13,6 +13,7 @@ const NAV = [
   { href: '/panel/analytics', label: 'Analytics' },
   { href: '/panel/analyticsAI', label: 'Analytics IA' },
   { href: '/panel/resultados', label: 'Resultados' },
+  { href: '/panel/hablame', label: 'Háblame' },
   { href: '/panel/ajustes', label: 'Ajustes' },
   { href: '/panel/terminos', label: 'Términos' },
   { href: '/panel/auditoria', label: 'Auditoría' },

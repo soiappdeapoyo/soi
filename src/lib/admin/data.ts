@@ -1,6 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { computeOutcomes } from '@/lib/admin/outcomes';
 import { wellbeingOutcomes, type UserHistory, type WeeklyEstimate } from '@/lib/wellbeing';
+import { analyzeHablame, type HAccount, type HDebrief, type HFunnel, type HMessage, type HReferral } from '@/lib/admin/hablame';
+import { isAdminEmail } from '@/lib/admin/auth';
+import type { EmotionSnapshot } from '@/lib/persons/emotion';
 
 /** Datos del panel (service role). Solo se llaman tras comprobar que quien pide es administrador. */
 const DAY = 86_400_000;
@@ -11,15 +14,17 @@ const isDemoEmail = (e: string | null | undefined) => Boolean(e && /\.demo@soi\.
 export async function overview() {
   const a = createAdminClient();
   const count = async (q: PromiseLike<{ count: number | null }>) => (await q).count ?? 0;
-  const [{ data: auth }, { data: profiles }, runs7, crisis7, { data: msgs7 }] = await Promise.all([
+  const [{ data: auth }, { data: allProfiles }, runs7, crisis7, { data: msgs7 }] = await Promise.all([
     a.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-    a.from('user_profiles').select('user_id, plan, created_at').limit(5000),
+    a.from('user_profiles').select('user_id, plan, created_at, app_role').limit(5000),
     count(a.from('moment_runs').select('id', { count: 'exact', head: true }).not('completed_at', 'is', null).gte('completed_at', since(7))),
     count(a.from('agent_knowledge').select('id', { count: 'exact', head: true }).eq('category', 'crisis_log').gte('created_at', since(7))),
     a.from('messages').select('user_id, role, tokens_used, created_at').gte('created_at', since(7)).limit(20_000),
   ]);
-  // Sin las cuentas demo (*.demo@soi.app).
+  // Sin las cuentas demo (*.demo@soi.app). Las de Háblame (/persons) se cuentan aparte: su análisis está en /panel/hablame.
   const demo = new Set((auth?.users ?? []).filter((u) => isDemoEmail(u.email)).map((u) => u.id));
+  const hablame = (allProfiles ?? []).filter((p) => p.app_role === 'persons' && !demo.has(p.user_id as string)).length;
+  const profiles = (allProfiles ?? []).filter((p) => p.app_role !== 'persons');
   const real = (profiles ?? []).filter((p) => !demo.has(p.user_id as string));
   const by = (plan: string) => real.filter((p) => p.plan === plan).length;
   const total = real.length, trial = by('trial'), free = by('free'), plus = by('soi_plus');
@@ -27,7 +32,7 @@ export async function overview() {
   const rows = ((msgs7 ?? []) as { user_id: string; role: string; tokens_used: number | null; created_at: string }[]).filter((m) => !demo.has(m.user_id));
   const today = rows.filter((m) => Date.now() - Date.parse(m.created_at) < DAY);
   return {
-    users: { total, trial, free, plus, new7 },
+    users: { total, trial, free, plus, new7, hablame },
     active7: new Set(rows.filter((m) => m.role === 'user').map((m) => m.user_id)).size,
     messages7: rows.filter((m) => m.role === 'user').length,
     messagesToday: today.filter((m) => m.role === 'user').length,
@@ -114,15 +119,18 @@ export async function auditLog(limit = 150) {
 export async function outcomes() {
   const a = createAdminClient();
   const from = since(120);
-  const [{ data: auth }, { data: msgs }, { data: runs }, { data: maps }, { data: assess }, { data: wb }] = await Promise.all([
+  const [{ data: auth }, { data: msgs }, { data: runs }, { data: maps }, { data: assess }, { data: wb }, { data: roles }] = await Promise.all([
     a.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     a.from('messages').select('user_id, created_at').eq('role', 'user').gte('created_at', from).limit(50_000),
     a.from('moment_runs').select('user_id, completed_at').not('completed_at', 'is', null).gte('completed_at', from).limit(50_000),
     a.from('life_maps').select('user_id, focus_areas').limit(5000),
     a.from('life_assessments').select('user_id, kind, scores, created_at').limit(20_000),
     a.from('wellbeing_estimates').select('user_id, week_end, score, confidence').limit(50_000),
+    a.from('user_profiles').select('user_id').eq('app_role', 'persons').limit(10_000),
   ]);
-  const users = (auth?.users ?? []).filter((u) => !isDemoEmail(u.email) && Date.parse(u.created_at) >= Date.parse(from)).map((u) => ({ id: u.id, created_at: u.created_at }));
+  // Solo cuentas de SOI: las de Háblame no usan el chat ni los Moments y bajarían la activación (ver /panel/hablame).
+  const hablame = new Set((roles ?? []).map((r) => r.user_id as string));
+  const users = (auth?.users ?? []).filter((u) => !isDemoEmail(u.email) && !hablame.has(u.id) && Date.parse(u.created_at) >= Date.parse(from)).map((u) => ({ id: u.id, created_at: u.created_at }));
   const real = new Set((auth?.users ?? []).filter((u) => !isDemoEmail(u.email)).map((u) => u.id));
   const activity = [
     ...(msgs ?? []).map((m) => ({ user_id: m.user_id as string, at: m.created_at as string, kind: 'message' as const })),
@@ -137,4 +145,49 @@ export async function outcomes() {
   for (const r of wb ?? []) if (real.has(r.user_id as string)) wbBy.set(r.user_id as string, [...(wbBy.get(r.user_id as string) ?? []), r as unknown as WeeklyEstimate]);
   const histories: UserHistory[] = [...wbBy].map(([user_id, history]) => ({ user_id, history }));
   return { ...computeOutcomes(users, activity, mapRows), signups: users.length, wellbeing: wellbeingOutcomes(histories) };
+}
+
+/**
+ * Háblame (/persons): de dónde llegan, si practican, si vuelven y si conversan mejor (120 días; sin demo ni
+ * administración; nunca el texto de los mensajes: solo eventos y emoción calculados por reglas). Ver `analyzeHablame`.
+ */
+export async function hablame() {
+  const a = createAdminClient();
+  const from = since(120);
+  const count = async (q: PromiseLike<{ count: number | null }>) => (await q).count ?? 0;
+  const [{ data: auth }, { data: profiles }, { data: funnel }, { data: personas }, { data: msgs }, { data: debriefs }, { data: asks }, { data: refs }, { data: reacted }, voiceHeard, crisis, blockedDescriptions, blockedTurns] = await Promise.all([
+    a.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    a.from('user_profiles').select('user_id, app_role, plan, created_at').gte('created_at', from).limit(10_000),
+    a.from('funnel_events').select('event, detail, visitor_id, user_id').in('event', ['landing_view', 'login_view', 'signup']).gte('at', from).limit(100_000),
+    a.from('personas').select('user_id').gte('created_at', from).limit(20_000),
+    a.from('persona_messages').select('user_id, created_at, emotion').eq('role', 'user').is('meta->blocked', null).gte('created_at', from).order('created_at', { ascending: true }).limit(100_000),
+    a.from('persona_debriefs').select('user_id, created_at, scores:report->scores, source:report->>source').gte('created_at', from).limit(20_000),
+    a.from('persona_coach_messages').select('user_id').eq('role', 'user').gte('created_at', from).limit(50_000),
+    a.from('persons_referrals').select('referrer_id, activated_at, reward_days').gte('created_at', from).limit(10_000),
+    a.from('persona_messages').select('user_id').eq('role', 'persona').not('meta->user_reaction', 'is', null).gte('created_at', from).limit(50_000),
+    count(a.from('persona_messages').select('id', { count: 'exact', head: true }).eq('kind', 'voice').not('heard_at', 'is', null).gte('created_at', from)),
+    count(a.from('agent_knowledge').select('id', { count: 'exact', head: true }).eq('category', 'crisis_log').in('metadata->>source', ['persons', 'persons_coach']).gte('created_at', from)),
+    count(a.from('persona_generations').select('id', { count: 'exact', head: true }).not('blocked_reason', 'is', null).gte('created_at', from)),
+    count(a.from('persona_messages').select('id', { count: 'exact', head: true }).eq('role', 'user').not('meta->blocked', 'is', null).gte('created_at', from)),
+  ]);
+  const skip = new Set((auth?.users ?? []).filter((u) => isDemoEmail(u.email) || isAdminEmail(u.email)).map((u) => u.id));
+  const keep = <T extends { user_id: string | null }>(rows: T[] | null) => (rows ?? []).filter((r) => !r.user_id || !skip.has(r.user_id));
+  const accounts: HAccount[] = keep(profiles as { user_id: string; app_role: string | null; plan: string; created_at: string }[] | null)
+    .map((p) => ({ id: p.user_id, role: p.app_role === 'persons' ? 'persons' : 'soi', createdAt: p.created_at, plan: p.plan }));
+  const messages: HMessage[] = keep(msgs as { user_id: string; created_at: string; emotion: EmotionSnapshot | null }[] | null)
+    .map((m) => ({ user_id: m.user_id, at: m.created_at, events: m.emotion?.events ?? [], openness: m.emotion?.openness ?? null }));
+  const reactors = keep(reacted as { user_id: string }[] | null);
+  return analyzeHablame({
+    accounts,
+    funnel: keep(funnel as HFunnel[] | null),
+    personas: keep(personas as { user_id: string }[] | null),
+    messages,
+    debriefs: keep(debriefs as { user_id: string; created_at: string; scores: HDebrief['scores']; source: string | null }[] | null)
+      .map((d) => ({ user_id: d.user_id, at: d.created_at, scores: d.scores, source: d.source })),
+    coachAsks: keep(asks as { user_id: string }[] | null),
+    referrals: ((refs ?? []) as HReferral[]).filter((r) => !skip.has(r.referrer_id)),
+    reactions: reactors.length,
+    reactors: new Set(reactors.map((r) => r.user_id)).size,
+    voiceHeard, crisis, blockedDescriptions, blockedTurns,
+  });
 }

@@ -8,7 +8,8 @@ export default async function PanelHome() {
   await requireAdmin();
   const o = await overview();
   const tiles = [
-    { k: 'Cuentas', v: o.users.total, d: `${n(o.users.new7)} nuevas en 7 días` },
+    { k: 'Cuentas de SOI', v: o.users.total, d: `${n(o.users.new7)} nuevas en 7 días` },
+    { k: 'Cuentas de Háblame', v: o.users.hablame, d: 'su análisis está en Háblame' },
     { k: 'En prueba', v: o.users.trial }, { k: 'Free', v: o.users.free }, { k: 'SOI+', v: o.users.plus },
     { k: 'Activas (7 días)', v: o.active7, d: 'escribieron en el chat' },
     { k: 'Mensajes hoy', v: o.messagesToday, d: `${n(o.messages7)} en 7 días` },
@@ -28,7 +29,7 @@ export default async function PanelHome() {
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-xs text-soi-muted">Sin las cuentas demo (*.demo@soi.app).</p>
+      <p className="mt-3 text-xs text-soi-muted">Sin las cuentas demo (*.demo@soi.app). Planes, actividad y tokens son de SOI; las cuentas de Háblame (/persons) se miden en su propia pestaña.</p>
     </>
   );
 }
