@@ -3,19 +3,15 @@ import { unstable_cache } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
 
 /**
- * Consentimiento legal: sin ventana aparte. La leyenda va junto al botón de entrar («Al continuar con Google…») y
- * al entrar se registra la constancia. Si se publica una versión nueva de los términos o del aviso, se vuelve a
- * pedir con la misma leyenda y un solo botón (`/consentimiento`).
+ * Consentimiento legal sin ventana aparte: una casilla (sin marcar de inicio) encima del botón de entrar. Nombra
+ * los datos sensibles de cada app (consentimiento expreso, LFPDPPP). Al entrar se registra la constancia. Si se
+ * publica una versión nueva de los términos o del aviso, se vuelve a pedir con la misma casilla (`/consentimiento`).
  */
 
-/** Texto exacto de cada leyenda: se guarda tal cual en la constancia. */
-export const CONSENT_STATEMENTS = {
-  login: 'Al continuar con Google, aceptas los Términos y condiciones, declaras que leíste el Aviso de privacidad y que eres mayor de 18 años.',
-  update: 'Al tocar «Continuar», aceptas los Términos y condiciones, declaras que leíste el Aviso de privacidad y que eres mayor de 18 años.',
-} as const;
+export { CONSENT_STATEMENTS, type ConsentKind } from '@/lib/consent-text';
 
-/** El login lo manda a /auth/callback: la leyenda estaba junto al botón que tocó. */
-export const LEGEND_PARAM = 'legal';
+/** El login lo manda a /auth/callback solo con la casilla marcada. */
+export const CONSENT_PARAM = 'legal';
 
 export const LEGAL_TAG = 'legal';
 

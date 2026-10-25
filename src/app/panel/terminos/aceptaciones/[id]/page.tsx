@@ -55,9 +55,9 @@ export default async function AcceptanceRecord({ params }: { params: Promise<{ i
 
         <section className="mt-6">
           <h2 className="font-semibold">Declaraciones aceptadas</h2>
-          <p className="mt-1 text-xs text-soi-muted">Texto exacto que la persona aceptó: la leyenda junto al botón que tocó («Continuar con Google» al entrar o «Continuar» al actualizarse los documentos). Las constancias anteriores a la leyenda son las casillas que marcó.</p>
+          <p className="mt-1 text-xs text-soi-muted">Texto exacto de la casilla que la persona marcó antes de tocar «Continuar con Google» (al entrar) o «Continuar» (al actualizarse los documentos).</p>
           <ul className="mt-2 flex flex-col gap-1.5 text-sm">
-            {row.statements.map((s) => <li key={s}>✓ {s}</li>)}
+            {row.statements.map((s) => <li key={s}>☑ {s}</li>)}
           </ul>
         </section>
 

@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { authFailureMessage } from '@/lib/auth-errors';
 import { trackFunnel } from '@/lib/analytics/funnel-client';
-import { ConsentLegend } from '@/components/legal/consent-legend';
+import { ConsentCheck } from '@/components/legal/consent-check';
 
 function GoogleLogo() {
   return (
@@ -25,6 +25,10 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   const next = params.get('next') ?? (role === 'persons' ? '/persons' : '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(authFailureMessage(params.get('error')));
+  // Consentimiento en la misma pantalla: una casilla sin marcar; el botón no se apaga, pero sin ella no avanza.
+  const [accepted, setAccepted] = useState(false);
+  const [missing, setMissing] = useState(false);
+  const check = useRef<HTMLInputElement>(null);
 
   // Embudo: llegó a la pantalla de entrar (desde la landing o directo).
   useEffect(() => { trackFunnel('login_view', role ?? (params.get('error') ? 'tras_error' : undefined)); }, [params, role]);
@@ -32,7 +36,7 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   const redirectTo = () => {
     const q = new URLSearchParams();
     if (next) q.set('next', next);
-    // La leyenda del consentimiento estaba junto al botón: el callback registra la constancia sin otra pantalla.
+    // Marcó la casilla: el callback registra la constancia sin otra pantalla.
     q.set('legal', '1');
     if (role) q.set('rol', role);
     // Invitación de /persons: el código del link viaja hasta el registro.
@@ -45,6 +49,7 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   async function google() {
     // Un solo inicio a la vez: un segundo toque reemplazaría la verificación del primero y fallaría.
     if (loading) return;
+    if (!accepted) { setMissing(true); check.current?.focus(); return; }
     setLoading(true);
     setError(null);
     trackFunnel('auth_start', 'google');
@@ -57,11 +62,12 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
 
   return (
     <div className="flex flex-col gap-4">
+      <ConsentCheck ref={check} kind={role ?? 'soi'} checked={accepted} missing={missing}
+        onChange={(v) => { setAccepted(v); if (v) setMissing(false); }} />
       <Button onClick={google} variant="outline" size="lg" disabled={loading} className="w-full">
         <GoogleLogo /> {loading ? 'Conectando…' : 'Continuar con Google'}
       </Button>
       {error && <p role="alert" className="text-center text-sm text-soi-danger">{error}</p>}
-      <ConsentLegend />
     </div>
   );
 }

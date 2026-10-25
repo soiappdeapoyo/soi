@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getConsentState, safeNext } from '@/lib/consent';
+import { getProfile } from '@/lib/billing/check-access';
 import { ConsentForm } from '@/components/legal/consent-form';
 import { NavTracker } from '@/components/analytics/nav-tracker';
 import { Suspense } from 'react';
@@ -9,12 +10,12 @@ import { Suspense } from 'react';
 export const metadata: Metadata = { title: 'Consentimiento legal', robots: { index: false, follow: false } };
 export const dynamic = 'force-dynamic';
 
-/** Solo si cambiaron los términos o el aviso (o se entró sin la leyenda del login): la leyenda y un botón. */
+/** Solo si cambiaron los términos o el aviso (o se entró sin la casilla del login): la casilla y un botón. */
 export default async function ConsentPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { user } = await getSessionUser();
   const next = safeNext((await searchParams).next);
   if (!user) redirect(`/login?next=${encodeURIComponent(next)}`);
-  const { state } = await getConsentState(user.id);
+  const [{ state }, profile] = await Promise.all([getConsentState(user.id), getProfile(user.id)]);
   if (state === 'ok') redirect(next);
 
   return (
@@ -29,7 +30,7 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
             ? 'Actualizamos nuestros términos y el aviso de privacidad.'
             : 'Un último paso antes de entrar.'}
         </p>
-        <ConsentForm next={next} />
+        <ConsentForm next={next} kind={profile?.app_role === 'persons' ? 'persons' : 'soi'} />
         <form action="/auth/signout" method="post" className="mt-6 text-sm text-soi-muted">
           ¿No eres tú? <button type="submit" className="font-medium text-soi-ink underline underline-offset-2">Cerrar sesión</button>
         </form>

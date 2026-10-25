@@ -6,7 +6,7 @@ import { CONSENT_STATEMENTS, recordAcceptance } from '@/lib/consent';
 const Body = z.object({ accept: z.literal(true) });
 
 /**
- * Registra la aceptación cuando cambian los términos o el aviso («Continuar» junto a la leyenda). Al entrar por
+ * Registra la aceptación cuando cambian los términos o el aviso (la casilla y «Continuar»). Al entrar por
  * primera vez se registra en /auth/callback, sin esta pantalla.
  */
 export async function POST(req: Request) {
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     userId: user.id,
     email: user.email ?? null,
     displayName: profile?.display_name ?? (user.user_metadata?.full_name as string | undefined) ?? null,
-    statement: CONSENT_STATEMENTS.update,
+    statement: CONSENT_STATEMENTS[profile?.app_role === 'persons' ? 'persons' : 'soi'],
     headers: req.headers,
   });
   if (!ok) return Response.json({ ok: false, message: 'No pudimos guardar tu aceptación. Intenta de nuevo.' }, { status: 500 });

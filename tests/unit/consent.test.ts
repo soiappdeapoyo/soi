@@ -36,4 +36,14 @@ describe('consentimiento legal', () => {
     expect(safeNext('/consentimiento')).toBe('/hoy');
     expect(safeNext(undefined)).toBe('/hoy');
   });
+
+  it('la casilla nombra los dos documentos, los datos sensibles de cada app y la mayoría de edad', async () => {
+    const { CONSENT_STATEMENTS } = await import('@/lib/consent-text');
+    for (const [kind, text] of Object.entries(CONSENT_STATEMENTS)) {
+      expect(text).toContain('Términos y condiciones');
+      expect(text).toContain('Aviso de privacidad');
+      expect(text).toContain('mayor de 18 años');
+      expect(text).toMatch(kind === 'persons' ? /conversaciones de práctica/ : /datos de bienestar/);
+    }
+  });
 });
