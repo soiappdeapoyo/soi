@@ -14,9 +14,11 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next');
+  // Registro desde /persons/entrar: la cuenta nueva es de /persons (otro tipo de usuario, mismos planes).
+  const personsSignup = searchParams.get('rol') === 'persons';
   const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
   const back = (reason: string) => {
-    const url = new URL('/login', origin);
+    const url = new URL(personsSignup ? '/persons/entrar' : '/login', origin);
     url.searchParams.set('error', reason);
     if (safeNext) url.searchParams.set('next', safeNext);
     return NextResponse.redirect(url);
@@ -37,8 +39,21 @@ export async function GET(request: Request) {
     return back(authFailureReason(`${error?.code ?? ''} ${error?.message ?? ''}`));
   }
 
-  // Embudo y aviso de registro, después de responder (no retrasa la entrada).
   const u = data.user;
+  // El rol se fija solo al crearse la cuenta: una cuenta de SOI que entra por /persons sigue siendo de SOI.
+  let role: string | null = null;
+  {
+    const db = createAdminClient();
+    const fresh = Date.now() - Date.parse(u.created_at) < 10 * 60_000;
+    if (personsSignup && fresh) {
+      const { error: e } = await db.from('user_profiles').update({ app_role: 'persons' }).eq('user_id', u.id).eq('app_role', 'soi');
+      if (e) console.error('[auth] no se pudo marcar la cuenta de persons', e.message);
+    }
+    const { data: p } = await db.from('user_profiles').select('app_role').eq('user_id', u.id).maybeSingle();
+    role = (p?.app_role as string | undefined) ?? null;
+  }
+
+  // Embudo y aviso de registro, después de responder (no retrasa la entrada).
   const geo = geoFromHeaders(request.headers);
   const visitor = visitorFrom((await cookies()).get(VISITOR_COOKIE)?.value);
   after(async () => {
@@ -56,14 +71,17 @@ export async function GET(request: Request) {
     if (e) console.error('[funnel] no se pudo anotar la entrada', e.message);
     if (isSignup && !isAdminEmail(u.email) && !/\.demo@soi\.app$/i.test(u.email ?? '')) {
       const where = [geo.city, geo.country ? countryName(geo.country) : null].filter(Boolean).join(', ');
-      await notifyAdmins({ title: 'Nuevo registro en SOI', body: `${u.email ?? 'Una persona'}${where ? ` · ${where}` : ''}`, url: '/panel/notificaciones' });
+      await notifyAdmins({ title: role === 'persons' ? 'Nuevo registro en /persons' : 'Nuevo registro en SOI', body: `${u.email ?? 'Una persona'}${where ? ` · ${where}` : ''}`, url: '/panel/notificaciones' });
     }
   });
 
   // Sin formulario previo: SOI conoce a la persona conversando desde el primer mensaje.
   // Solo el consentimiento legal (términos, aviso y mayoría de edad) va antes, y luego a donde iba.
   // Primera vez de verdad (sin mensajes ni Moments): su primer paso es contarle a SOI cómo llega, no un Hoy vacío.
-  const dest = safeNext ?? ((await isBrandNewUser(supabase, data.user.id)) ? '/chat?nueva=1' : '/hoy');
+  const dest = role === 'persons'
+    ? (safeNext?.startsWith('/persons') ? safeNext : '/persons')
+    : safeNext?.startsWith('/persons') && !isAdminEmail(u.email) ? '/persons'
+    : safeNext ?? ((await isBrandNewUser(supabase, data.user.id)) ? '/chat?nueva=1' : '/hoy');
   const { state } = await getConsentState(data.user.id);
   if (state !== 'ok') return NextResponse.redirect(`${origin}/consentimiento?next=${encodeURIComponent(dest)}`);
   return NextResponse.redirect(`${origin}${dest}`);

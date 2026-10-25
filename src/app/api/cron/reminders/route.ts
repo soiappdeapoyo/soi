@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   const now = new Date();
   const { data: profiles, error } = await db.from('user_profiles')
     .select('user_id, display_name, timezone, reminder_time, streak_current, push_subscription, plan, trial_ends_at, free_queries_remaining, is_paywalled')
-    .eq('reminders_enabled', true).not('push_subscription', 'is', null).limit(2000);
+    .eq('reminders_enabled', true).not('push_subscription', 'is', null).neq('app_role', 'persons').limit(2000);
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
   // Recordatorios pedidos en el chat (scheduleReminder), de todos a la vez.

@@ -32,6 +32,8 @@ export type UserProfile = {
   reminders_enabled?: boolean;
   /** Cuándo vio o saltó la introducción de bienvenida (null = mostrarla). */
   tour_seen_at?: string | null;
+  /** Tipo de cuenta (0041): 'soi' o 'persons' (el gimnasio de conversación de /persons). */
+  app_role?: 'soi' | 'persons';
   country: string;
   available_minutes: number | null;
   weakest_link: Eslabon | null;

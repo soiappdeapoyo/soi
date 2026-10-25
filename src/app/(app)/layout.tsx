@@ -24,6 +24,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   // Sin consentimiento legal vigente (términos, aviso de privacidad y mayoría de edad), primero eso.
   if (consent.state !== 'ok') redirect('/consentimiento');
+  // Las cuentas de /persons son otro tipo de usuario: no ven SOI.
+  if (profile?.app_role === 'persons') redirect('/persons');
 
   const plan = profile ? effectivePlan(profile) : 'free';
 

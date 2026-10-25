@@ -14,6 +14,15 @@ export function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isProtected = PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
 
+  // /persons es otro tipo de cuenta, con su propia pantalla de entrada.
+  if (!hasSession && (path === '/persons' || path.startsWith('/persons/')) && path !== '/persons/entrar') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/persons/entrar';
+    url.search = '';
+    if (path !== '/persons') url.searchParams.set('next', path);
+    return NextResponse.redirect(url);
+  }
+
   if (!hasSession && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';

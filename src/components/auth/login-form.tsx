@@ -18,16 +18,23 @@ function GoogleLogo() {
   );
 }
 
-export function LoginForm() {
+/** `role="persons"`: registro desde /persons/entrar (la cuenta nueva es de /persons y vuelve ahí). */
+export function LoginForm({ role }: { role?: 'persons' } = {}) {
   const params = useSearchParams();
-  const next = params.get('next') ?? '';
+  const next = params.get('next') ?? (role === 'persons' ? '/persons' : '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(authFailureMessage(params.get('error')));
 
   // Embudo: llegó a la pantalla de entrar (desde la landing o directo).
-  useEffect(() => { trackFunnel('login_view', params.get('error') ? 'tras_error' : undefined); }, [params]);
+  useEffect(() => { trackFunnel('login_view', role ?? (params.get('error') ? 'tras_error' : undefined)); }, [params, role]);
 
-  const redirectTo = () => `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`;
+  const redirectTo = () => {
+    const q = new URLSearchParams();
+    if (next) q.set('next', next);
+    if (role) q.set('rol', role);
+    const qs = q.toString();
+    return `${window.location.origin}/auth/callback${qs ? `?${qs}` : ''}`;
+  };
 
   async function google() {
     // Un solo inicio a la vez: un segundo toque reemplazaría la verificación del primero y fallaría.

@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     return new Response('No autorizado', { status: 401 });
   }
   const db = createAdminClient();
-  const { data: users } = await db.from('user_profiles').select('*').eq('plan', 'soi_plus').limit(500);
+  const { data: users } = await db.from('user_profiles').select('*').eq('plan', 'soi_plus').neq('app_role', 'persons').limit(500);
 
   let generated = 0;
   for (const p of (users ?? []) as UserProfile[]) {

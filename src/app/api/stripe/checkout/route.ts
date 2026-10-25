@@ -9,7 +9,9 @@ export async function POST(req: Request) {
   const { user } = await getSessionUser();
   if (!user) return new Response('No autorizado', { status: 401 });
 
-  const { plan } = (await req.json()) as { plan: PlanKey };
+  // `from: 'persons'`: misma suscripción (mismos precios), pero vuelve a /persons.
+  const { plan, from } = (await req.json()) as { plan: PlanKey; from?: string };
+  const persons = from === 'persons';
   const cfg = PLANS[plan];
   if (!cfg) return new Response('Plan inválido', { status: 400 });
   const settings = await getSettings();
@@ -25,8 +27,8 @@ export async function POST(req: Request) {
     metadata: { user_id: user.id },
     subscription_data: { metadata: { user_id: user.id } },
     allow_promotion_codes: true,
-    success_url: appUrl('/checkout/success?session_id={CHECKOUT_SESSION_ID}'),
-    cancel_url: appUrl('/planes'),
+    success_url: appUrl(`/checkout/success?session_id={CHECKOUT_SESSION_ID}${persons ? '&from=persons' : ''}`),
+    cancel_url: appUrl(persons ? '/persons/planes' : '/planes'),
     locale: 'es-419',
   });
 

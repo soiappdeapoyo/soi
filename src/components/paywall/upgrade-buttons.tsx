@@ -6,7 +6,8 @@ import { PLANS, type PlanKey } from '@/config/plans';
 import { track } from '@/components/providers/analytics';
 
 /** prices: tarifas vigentes (panel); si no llegan, las de siempre. */
-export function UpgradeButtons({ prices }: { prices?: Partial<Record<PlanKey, number>> } = {}) {
+/** `from`: de dónde viene ("persons" vuelve a /persons al pagar o cancelar). `labels`: nombres de los planes. */
+export function UpgradeButtons({ prices, from, labels }: { prices?: Partial<Record<PlanKey, number>>; from?: 'persons'; labels?: Partial<Record<PlanKey, string>> } = {}) {
   const [loading, setLoading] = useState<PlanKey | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,7 +15,7 @@ export function UpgradeButtons({ prices }: { prices?: Partial<Record<PlanKey, nu
     setLoading(plan);
     setError(null);
     track('checkout_started', { plan });
-    const res = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan }) });
+    const res = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan, from }) });
     if (!res.ok) { setError('No pudimos iniciar el pago. Intenta de nuevo.'); setLoading(null); return; }
     const { url } = (await res.json()) as { url: string };
     window.location.href = url;
@@ -31,7 +32,7 @@ export function UpgradeButtons({ prices }: { prices?: Partial<Record<PlanKey, nu
         return (
           <div key={k} className={`relative rounded-[20px] bg-white p-5 ${yearly ? 'shadow-[0_0_0_2px_var(--color-soi-gold),0_8px_24px_rgb(0_0_0/0.05)]' : 'shadow-soft'}`}>
             {off > 0 && <span className="nums absolute -top-3 right-4 rounded-md bg-soi-gold px-2.5 py-1 text-xs font-semibold text-soi-ink">{off}% dto.</span>}
-            <p className="font-semibold">{p.label}</p>
+            <p className="font-semibold">{labels?.[k] ?? p.label}</p>
             <p className="nums mt-1 text-3xl font-semibold">${price}<span className="text-base font-normal text-soi-muted"> USD/{yearly ? 'año' : 'mes'}</span></p>
             {yearly && <p className="nums text-sm text-soi-muted">≈ ${(price / 12).toFixed(2)} USD al mes</p>}
             <Button variant={yearly ? 'gold' : 'primary'} className="mt-4 w-full" onClick={() => go(k)} disabled={loading !== null} aria-busy={loading === k}>

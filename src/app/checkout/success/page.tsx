@@ -22,9 +22,21 @@ async function confirmCheckout(sessionId: string | undefined): Promise<boolean> 
   }
 }
 
-export default async function CheckoutSuccessPage({ searchParams }: { searchParams: Promise<{ session_id?: string }> }) {
-  const { session_id } = await searchParams;
+export default async function CheckoutSuccessPage({ searchParams }: { searchParams: Promise<{ session_id?: string; from?: string }> }) {
+  const { session_id, from } = await searchParams;
   const active = await confirmCheckout(session_id);
+
+  if (from === 'persons') {
+    return (
+      <main id="main" className="mx-auto max-w-md px-5 py-16 text-center">
+        <h1 className="text-3xl font-semibold">Ya tienes Plus</h1>
+        <p className="mt-3 text-soi-muted">
+          {active ? 'Tu suscripción está activa: personas ilimitadas, notas de voz y modo ciego.' : 'Recibimos tu pago. Tu suscripción puede tardar unos segundos en reflejarse.'}
+        </p>
+        <div className="mt-8 flex justify-center"><Link href="/persons" className={buttonClass('primary')}>Volver a los chats</Link></div>
+      </main>
+    );
+  }
 
   return (
     <main id="main" className="mx-auto max-w-md px-5 py-16 text-center">

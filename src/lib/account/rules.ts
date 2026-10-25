@@ -6,6 +6,10 @@
 /** Tabla → columnas que la hacen de la persona. Sin tablas de administración (auditoría, ajustes, términos). */
 export const USER_TABLES: Record<string, readonly string[]> = {
   user_profiles: ['user_id'],
+  personas: ['user_id'],
+  persona_messages: ['user_id'],
+  persona_debriefs: ['user_id'],
+  persona_generations: ['user_id'],
   conversations: ['user_id'],
   messages: ['user_id'],
   agent_knowledge: ['user_id'],
