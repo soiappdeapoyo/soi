@@ -368,7 +368,7 @@ async function DayTab({ supabase, userId }: { supabase: Sb; userId: string }) {
         <h2 id="sit-h" className="px-1 pb-1 text-xs font-medium text-soi-muted">¿Necesitas una rutina para…?</h2>
         <p className="px-1 pb-3 text-sm text-soi-muted">SOI la diseña contigo, con tu tiempo y lo que te funciona.</p>
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {SITUATIONS.map((x) => (
+          {SITUATIONS.filter((x) => !('door' in x)).map((x) => (
             <li key={x.id}>
               <Link href={`/chat?nueva=1&rutina=${x.id}`} className="press tap-target flex items-center gap-2 rounded-[14px] bg-white px-3 py-3 text-[15px] font-medium shadow-ring hover:shadow-soft">
                 <Icon name={x.icon} className="h-4 w-4 text-soi-accent" />{x.label}

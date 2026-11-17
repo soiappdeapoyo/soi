@@ -11,6 +11,7 @@ import { claimVisitorDrafts } from '@/lib/moments/drafts';
 import { countryName, geoFromHeaders, VISITOR_COOKIE, visitorFrom } from '@/lib/analytics/funnel';
 import { isAdminEmail } from '@/lib/admin/auth';
 import { notifyAdmins } from '@/lib/admin/notify';
+import { isDoorId } from '@/config/doors';
 
 /** Callback de Google OAuth y magic link. */
 export async function GET(request: Request) {
@@ -54,6 +55,18 @@ export async function GET(request: Request) {
     }
     const { data: p } = await db.from('user_profiles').select('app_role').eq('user_id', u.id).maybeSingle();
     role = (p?.app_role as string | undefined) ?? null;
+    // SOI por puertas: toda cuenta nueva de SOI entra a la app enfocada, con la puerta que eligió en la landing
+    // (si llegó sin elegir, Hoy le pide elegir). Las cuentas anteriores siguen en SOI Full.
+    const puerta = searchParams.get('puerta');
+    if (!personsSignup && role !== 'persons') {
+      if (fresh) {
+        const { error: e } = await db.from('user_profiles').update({ ui_mode: 'door', ...(isDoorId(puerta) ? { door: puerta } : {}) }).eq('user_id', u.id);
+        if (e) console.error('[doors] no se pudo marcar la puerta', e.message);
+      } else if (isDoorId(puerta)) {
+        // Ya tenía cuenta en la app enfocada sin puerta: toma la que eligió ahora.
+        await db.from('user_profiles').update({ door: puerta }).eq('user_id', u.id).eq('ui_mode', 'door').is('door', null);
+      }
+    }
     // Cuenta nueva de /persons: prueba de 3 días y, si llegó con un link de invitación, queda ligada a quien la invitó.
     if (personsSignup && fresh && role === 'persons') {
       await onPersonsSignup(u.id, u.created_at, searchParams.get('ref')).catch((e: unknown) => console.error('[persons] registro', e instanceof Error ? e.message : e));

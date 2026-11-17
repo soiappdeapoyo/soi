@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { Plus, Settings, Flame, Shield } from 'lucide-react';
 import { AGENTS, PRACTICE_AGENTS } from '@/config/agents';
-import { CREATE_LINKS, MY_LIFE, PRIMARY_TABS } from '@/config/navigation';
+import { CREATE_LINKS, DOOR_TABS, MY_LIFE, PRIMARY_TABS } from '@/config/navigation';
 import { Icon } from '@/components/ui/icon';
 import { buttonClass } from '@/components/ui/button';
 import { NavLink } from './nav-link';
@@ -16,6 +16,8 @@ export type SidebarData = {
   plan: 'trial' | 'free' | 'soi_plus';
   trialDaysLeft: number;
   conversations: { id: string; title: string }[];
+  /** App enfocada: su puerta (nombre y color). Sin Mi Vida, agentes ni Crear: solo Hablar · Hoy · Tú. */
+  door?: { app: string; accent: string } | null;
 };
 
 /**
@@ -33,8 +35,10 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 text-soi-ink">
-      <Link href="/hoy" className={cn('press px-2.5 pt-1 text-lg font-medium tracking-tight', compact && 'px-0 text-center')} aria-label="SOI, inicio">
-        SOI.
+      <Link href="/hoy" className={cn('press flex items-center gap-2 px-2.5 pt-1 text-lg font-medium tracking-tight', compact && 'justify-center px-0')} aria-label={`${data.door?.app ?? 'SOI'}, inicio`}>
+        {data.door ? (
+          <><span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: data.door.accent }} /><span className={hide}>{data.door.app}</span></>
+        ) : 'SOI.'}
       </Link>
 
       <Link
@@ -49,7 +53,7 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
         <Suspense>
           {!hidePrimary && (
             <ul className="flex flex-col gap-0.5 pb-1">
-              {PRIMARY_TABS.map((t) => (
+              {(data.door ? DOOR_TABS : PRIMARY_TABS).map((t) => (
                 <li key={t.id} data-tour={t.id}>
                   <NavLink href={t.href} match={t.match} className={item} activeClassName={active} title={t.label}>
                     <Icon name={t.icon} className="h-4 w-4 shrink-0" />
@@ -59,6 +63,7 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
               ))}
             </ul>
           )}
+          {!data.door && (<>
           <p className={cn(section, 'pt-2')}>Mi Vida</p>
           <ul className="flex flex-col gap-0.5">
             {MY_LIFE.map((s) => (
@@ -96,6 +101,8 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
               </li>
             ))}
           </ul>
+
+          </>)}
 
           {!compact && data.conversations.length > 0 && (
             <>

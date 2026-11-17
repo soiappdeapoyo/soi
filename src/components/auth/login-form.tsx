@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { authFailureMessage } from '@/lib/auth-errors';
 import { trackFunnel } from '@/lib/analytics/funnel-client';
 import { ConsentCheck } from '@/components/legal/consent-check';
+import { InAppNotice } from '@/components/auth/in-app-notice';
+import { isDoorId } from '@/config/doors';
 
 function GoogleLogo() {
   return (
@@ -29,6 +31,8 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   const [accepted, setAccepted] = useState(false);
   const [missing, setMissing] = useState(false);
   const check = useRef<HTMLInputElement>(null);
+  // Dentro de TikTok o Instagram: primero abrir en el navegador; Google queda como segunda opción.
+  const [inApp, setInApp] = useState(false);
 
   // Embudo: llegó a la pantalla de entrar (desde la landing o directo).
   useEffect(() => { trackFunnel('login_view', role ?? (params.get('error') ? 'tras_error' : undefined)); }, [params, role]);
@@ -42,6 +46,9 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
     // Invitación de /persons: el código del link viaja hasta el registro.
     const ref = params.get('ref');
     if (role === 'persons' && ref && /^[a-z0-9]{8}$/.test(ref)) q.set('ref', ref);
+    // La puerta que eligió en la landing (amor, ansiedad, dinero, constancia): la cuenta nueva entra a esa app.
+    const puerta = params.get('puerta');
+    if (!role && isDoorId(puerta)) q.set('puerta', puerta);
     const qs = q.toString();
     return `${window.location.origin}/auth/callback${qs ? `?${qs}` : ''}`;
   };
@@ -62,10 +69,11 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
 
   return (
     <div className="flex flex-col gap-4">
+      <InAppNotice onDetect={setInApp} />
       <ConsentCheck ref={check} kind={role ?? 'soi'} checked={accepted} missing={missing}
         onChange={(v) => { setAccepted(v); if (v) setMissing(false); }} />
-      <Button onClick={google} variant="outline" size="lg" disabled={loading} className="w-full">
-        <GoogleLogo /> {loading ? 'Conectando…' : 'Continuar con Google'}
+      <Button onClick={google} variant={inApp ? 'ghost' : 'outline'} size="lg" disabled={loading} className="w-full">
+        <GoogleLogo /> {loading ? 'Conectando…' : inApp ? 'Intentar con Google aquí' : 'Continuar con Google'}
       </Button>
       {error && <p role="alert" className="text-center text-sm text-soi-danger">{error}</p>}
     </div>

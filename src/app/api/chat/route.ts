@@ -29,6 +29,7 @@ import { timeContextPrompt } from '@/lib/time-of-day';
 import { loadHillMemory } from '@/lib/ai/hill-memory';
 import { loadHabits } from '@/lib/ai/habit-memory';
 import { loadNorth } from '@/lib/north';
+import { doorPrompt } from '@/config/doors';
 import { detectEnemies } from '@/config/enemies';
 import { recordEnemy } from '@/lib/battles';
 
@@ -184,6 +185,8 @@ export async function POST(req: Request) {
         .map((r) => ({ id: r.id, kind: r.kind, title: r.title, author: r.author, status: r.status, externalId: r.external_id })),
     }),
     director,
+    // La puerta por la que entró (amor, ansiedad, dinero, constancia): su foco y sus límites. Nunca en crisis.
+    agent === 'crisis' ? '' : doorPrompt(profile),
     agent === 'crisis' ? '' : PROPOSAL_RULE[ritmo],
     agent === 'crisis' || !canPropose ? '' : VIDEO_RULE[video],
     isCreator && agent !== 'crisis' ? CREATOR_CHAT_RULE : '',

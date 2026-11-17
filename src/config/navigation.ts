@@ -18,6 +18,16 @@ export const PRIMARY_TABS: readonly PrimaryTab[] = IMPULSO_ENABLED ? ALL_TABS : 
   .filter((t) => t.id !== 'impulso')
   .map((t) => (t.id === 'mi-vida' ? { ...t, match: [...t.match, '/m', '/momentos', '/blueprints'] } : t));
 
+/**
+ * App enfocada (entró por una puerta, src/config/doors.ts): tres pestañas. El reproductor de Moments cuenta como Hoy.
+ * Mismos ids que las de SOI Full (data-tour, íconos especiales de la barra).
+ */
+export const DOOR_TABS: readonly PrimaryTab[] = [
+  { id: 'soi', href: '/chat', label: 'Hablar', icon: 'MessageCircle', match: ['/chat'] },
+  { id: 'hoy', href: '/hoy', label: 'Hoy', icon: 'Sun', match: ['/hoy', '/ritual', '/m', '/mi-vida'] },
+  { id: 'yo', href: '/yo', label: 'Tú', icon: 'User', match: ['/yo', '/perfil', '/ajustes', '/planes', '/evidencias'] },
+];
+
 export function isTabActive(pathname: string, tab: { match: readonly string[] }) {
   return tab.match.some((m) => pathname === m || pathname.startsWith(m.endsWith('/') ? m : `${m}/`));
 }
