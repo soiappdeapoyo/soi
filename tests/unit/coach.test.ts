@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  asksForMoment, cadenceDays, chatVoiceNote, closeness, daySeed, isEditRequest, learnStyle, proactiveVoice, pushBody,
+  asksForMoment, cadenceDays, coachSlotNow, chatVoiceNote, closeness, daySeed, isEditRequest, learnStyle, proactiveVoice, pushBody,
   responsiveBoost, ruleMessage, shouldWriteToday, unansweredStreak, validCoachMessage, VOICE_NOTES_PER_DAY,
 } from '@/lib/coach/proactive';
 import { staleIds, withoutArchived, type StaleCandidate } from '@/lib/moments/stale';
@@ -103,5 +103,20 @@ describe('Moments: pedir, cambiar y no saturar', () => {
       { ...base, id: 'new', created_at: '2026-11-15T12:00:00Z', updated_at: '2026-11-15T12:00:00Z' }, { ...base, id: 'copy', parent_id: 'p' }];
     expect(staleIds(c, new Set(['lived']), new Set(['timed']), now)).toEqual(['a']);
     expect(withoutArchived([{ id: '1', ref: 'm:a' }, { id: '2', ref: 'm:a', time: '08:00' }, { id: '3', ref: 's:x' }], new Set(['a'])).map((i) => i.id)).toEqual(['2', '3']);
+  });
+});
+
+describe('siempre mañana y noche', () => {
+  it('la mañana a su hora (si es de mañana) o a las 09:00, la noche a las 21:00', () => {
+    expect(coachSlotNow(9 * 60 + 3, null)).toBe('manana');
+    expect(coachSlotNow(7 * 60 + 30, '07:30')).toBe('manana');
+    expect(coachSlotNow(9 * 60, '18:00')).toBe('manana');
+    expect(coachSlotNow(21 * 60 + 10, null)).toBe('noche');
+    expect(coachSlotNow(15 * 60, null)).toBeNull();
+  });
+  it('la noche cierra el día (sin la pregunta de la mañana)', () => {
+    const m = ruleMessage({ name: 'Ana', seed: 5, recent: [], slot: 'noche', about: 'Hoy me acordé de tu meta: «x». ¿Cómo la sientes?' });
+    expect(m).not.toMatch(/tu meta/);
+    expect(m).toMatch(/\?$/);
   });
 });

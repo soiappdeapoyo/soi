@@ -17,6 +17,33 @@ export const VOICE_GAP_TURNS = 3;
 
 export type CoachPlan = 'trial' | 'plus' | 'free';
 
+export type CoachSlot = 'manana' | 'noche';
+/** La noche: a las 21:00 locales (cerrar el día). */
+export const NIGHT_AT = 21 * 60;
+const DEFAULT_MORNING = 9 * 60;
+
+/**
+ * Siempre dos mensajes al día: en la mañana (su hora de recordatorio si es de mañana, si no 09:00) y en la noche
+ * (21:00). Devuelve cuál toca ahora (dentro de la ventana del programador) o null.
+ */
+export function coachSlots(reminderTime: string | null): { slot: CoachSlot; at: number }[] {
+  const m = reminderTime?.match(/^(\d{1,2}):(\d{2})/);
+  const chosen = m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  const morning = chosen != null && chosen >= 5 * 60 && chosen < 12 * 60 ? chosen : DEFAULT_MORNING;
+  return [{ slot: 'manana', at: morning }, { slot: 'noche', at: NIGHT_AT }];
+}
+
+export function coachSlotNow(localMinutes: number, reminderTime: string | null, windowMin = 15): CoachSlot | null {
+  for (const s of coachSlots(reminderTime)) {
+    const diff = (localMinutes - s.at + 24 * 60) % (24 * 60);
+    if (diff < windowMin) return s.slot;
+  }
+  return null;
+}
+
+/** Si acaba de platicar con SOI (menos de esto), ese mensaje no se manda: no se interrumpe una plática. */
+export const BUSY_MS = 90 * 60_000;
+
 /** Mensajes de SOI seguidos sin respuesta (del más reciente hacia atrás) → cada cuántos días escribe. */
 export function cadenceDays(unansweredStreak: number): number {
   if (unansweredStreak >= 14) return 7;
@@ -164,6 +191,20 @@ export const MOTIVATION = [
   'Tu calma también es una forma de fuerza.',
 ] as const;
 
+/** Para la noche: cerrar el día con cariño (sin tareas). */
+export const NIGHT_LINES = [
+  'Lo que hiciste hoy alcanza; descansar también es parte del camino.',
+  'Antes de dormir, quédate con una cosa buena del día, aunque sea pequeña.',
+  'Hoy hiciste lo que pudiste con lo que tenías, y eso cuenta.',
+  'Suelta lo que pesó hoy; mañana es otra oportunidad de elegirte.',
+  'Que tu última idea del día sea amable contigo.',
+  'Mereces cerrar el día en paz, tal como estás.',
+  'Lo que no salió hoy no borra todo lo que sí estás construyendo.',
+  'Respira hondo: el día ya hizo su parte, ahora te toca descansar.',
+] as const;
+const NIGHT_HOW = ['¿cómo te fue hoy?', '¿qué tal estuvo tu día?', '¿cómo cierras el día?', '¿cómo te sientes esta noche?'] as const;
+const NIGHT_Q = ['¿Qué fue lo mejor de tu día?', '¿Qué te gustaría soltar antes de dormir?', '¿Hubo algo que te hizo sonreír hoy?', 'Cuéntame, ¿cómo estuvo?'] as const;
+
 const GREETINGS = ['Hola', 'Holaa', 'Hey', 'Hola, hola', 'Buenas'] as const;
 const HOW = ['¿cómo sigues?', '¿cómo vas?', '¿cómo te sientes hoy?', '¿cómo amaneciste?', '¿qué tal tu día?', '¿cómo va todo?'] as const;
 const QUESTIONS = ['¿Cómo te ha ido?', '¿Qué tal te sientes con eso?', 'Cuéntame, ¿cómo vas?', '¿Qué traes hoy?'] as const;
@@ -200,13 +241,14 @@ function pick<T extends string>(list: readonly T[], seed: number, used: string[]
  * Mensaje por reglas (sin IA): «Hola Mimy, ¿cómo sigues? <frase que motiva> <pregunta>», distinto cada vez.
  * `about` = algo concreto que puede nombrar (ya con sus palabras), opcional.
  */
-export function ruleMessage(i: { name: string; seed: number; recent: string[]; about?: string | null; crisisRecent?: boolean }): string {
+export function ruleMessage(i: { name: string; seed: number; recent: string[]; about?: string | null; crisisRecent?: boolean; slot?: CoachSlot }): string {
+  const night = i.slot === 'noche';
   const hi = pick(GREETINGS, i.seed, []);
-  const how = pick(HOW, i.seed >> 1, i.recent);
+  const how = pick(night ? NIGHT_HOW : HOW, i.seed >> 1, i.recent);
   const greet = `${hi}${i.name ? ` ${i.name}` : ''}, ${how}`;
   if (i.crisisRecent) return `${greet} Me quedé pensando en ti. Aquí sigo, sin prisa, para cuando quieras platicar.`;
-  const line = pick(MOTIVATION, i.seed >> 2, i.recent);
-  const q = i.about ? `${i.about}` : pick(QUESTIONS, i.seed >> 3, i.recent);
+  const line = pick(night ? NIGHT_LINES : MOTIVATION, i.seed >> 2, i.recent);
+  const q = i.about && !night ? `${i.about}` : pick(night ? NIGHT_Q : QUESTIONS, i.seed >> 3, i.recent);
   return `${greet} ${line} ${q}`.replace(/\s+/g, ' ').trim();
 }
 

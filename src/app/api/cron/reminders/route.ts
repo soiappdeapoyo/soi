@@ -11,6 +11,7 @@ import type { PushSubscription } from 'web-push';
 import { reviewWeek } from '@/lib/life-plan';
 import { loadOsToday } from '@/lib/life-plan-server';
 import { sendCoachMessage } from '@/lib/coach/proactive-server';
+import { coachSlotNow } from '@/lib/coach/proactive';
 
 export const maxDuration = 60;
 
@@ -59,16 +60,32 @@ export async function GET(req: Request) {
         ? { title: first.title, href: first.href, at: localMinutesIn(tz, new Date(first.completedAt)) } : null;
       const scheduled = (asked ?? []).filter((a) => a.user_id === p.user_id && scheduledDue(String((a.metadata as { remind_at?: string } | null)?.remind_at ?? ''), tz, now))
         .map((a) => ({ id: a.id as string, title: String(a.content).slice(0, 160) }));
-      const nudgeNow = inWindow(local, nudgeAt(p.reminder_time, dayTwo).at);
+      const coachOn = p.coach_messages_enabled;
+      // Con «SOI me escribe», la invitación del día la reemplazan sus dos mensajes: mañana y noche.
+      const nudgeNow = !coachOn && inWindow(local, nudgeAt(p.reminder_time, dayTwo).at);
+      const slot = coachOn ? coachSlotNow(local, p.reminder_time) : null;
       const pushOn = Boolean(p.push_subscription && p.reminders_enabled);
-      // Sin avisos al teléfono solo importa el mensaje de SOI (a la hora de la invitación): no se carga nada más.
-      if (!pushOn && !(p.coach_messages_enabled && nudgeNow)) continue;
+      const localDate = todayISO(tz);
+
+      // SOI te escribe (mañana y noche): mensaje en el chat + notificación con la frase. Aunque no tenga avisos.
+      if (slot && Date.now() - started <= COACH_BUDGET_MS) {
+        // Primero se anota (uno por momento del día): si dos ejecuciones se cruzan, solo una escribe.
+        const { data: claimed } = await db.from('notification_log')
+          .upsert({ user_id: p.user_id, kind: 'nudge', ref: `coach-${slot}`, local_date: localDate }, { onConflict: 'user_id,kind,ref,local_date', ignoreDuplicates: true })
+          .select('id');
+        if (claimed?.length) {
+          const r = await sendCoachMessage(db, { ...p, push_subscription: pushOn ? p.push_subscription : null }, now, slot)
+            .catch((e: unknown) => { console.error('[coach]', p.user_id, e instanceof Error ? e.message : e); return { result: 'skip' as const }; });
+          if (r.result !== 'skip') coach++;
+          if (r.result === 'gone') { gone++; continue; }
+        }
+      }
+
+      if (!pushOn) continue;
       const plan = await loadDayPlan(db, p.user_id, tz);
       const momentNow = plan.items.some((i) => !i.done && toMinutes(i.time) != null && inWindow(local, toMinutes(i.time)!));
       if (!nudgeNow && !momentNow && !scheduled.length) continue;
-      const coachOn = p.coach_messages_enabled;
 
-      const localDate = todayISO(tz);
       const since = startOfTodayISO(tz);
       const [{ data: log }, runsToday, msgsToday, journey, os] = await Promise.all([
         db.from('notification_log').select('kind, ref').eq('user_id', p.user_id).eq('local_date', localDate),
@@ -82,9 +99,7 @@ export async function GET(req: Request) {
         localMinutes: local,
         items: plan.items.filter((i) => i.moment).map((i) => ({ id: i.id, time: i.time, title: i.moment!.title, minutes: i.moment!.required_minutes, href: playHref(i.moment!), done: i.done })),
         reminderTime: p.reminder_time,
-        // Con «SOI me escribe», el mensaje del día llega aunque ya haya vivido un Moment (puede celebrarlo);
-        // solo se omite si hoy ya platicó con SOI.
-        activeToday: coachOn ? (msgsToday.count ?? 0) > 0 : (runsToday.count ?? 0) > 0 || (msgsToday.count ?? 0) > 0,
+        activeToday: (runsToday.count ?? 0) > 0 || (msgsToday.count ?? 0) > 0,
         sent: new Set((log ?? []).map((l) => `${l.kind}:${l.ref}`)),
         step: journey ? nextStep(journey, now.getTime()) : { kind: 'routine', title: '', detail: '', cta: '', href: '/hoy' },
         streak: p.streak_current ?? 0,
@@ -95,22 +110,11 @@ export async function GET(req: Request) {
       });
 
       for (const n of notices) {
-        // Sin avisos al teléfono: solo el mensaje de SOI (las alarmas necesitan la suscripción).
-        if (!pushOn && !(coachOn && n.kind === 'nudge')) continue;
-        if (coachOn && n.kind === 'nudge' && Date.now() - started > COACH_BUDGET_MS) continue; // sale en la siguiente
         // Primero se anota (único por día): si dos ejecuciones se cruzan, solo una envía.
         const { data: claimed } = await db.from('notification_log')
           .upsert({ user_id: p.user_id, kind: n.kind, ref: n.ref.slice(0, 80), local_date: localDate }, { onConflict: 'user_id,kind,ref,local_date', ignoreDuplicates: true })
           .select('id');
         if (!claimed?.length) continue;
-        // La invitación del día la da SOI escribiéndole como un amigo (mensaje en el chat + notificación con la frase).
-        if (coachOn && n.kind === 'nudge') {
-          const r = await sendCoachMessage(db, { ...p, push_subscription: pushOn ? p.push_subscription : null }, now)
-            .catch((e: unknown) => { console.error('[coach]', p.user_id, e instanceof Error ? e.message : e); return { result: 'skip' as const }; });
-          if (r.result !== 'skip') coach++;
-          if (r.result === 'gone') { gone++; break; }
-          continue;
-        }
         if (!p.push_subscription) continue;
         const url = `${n.url}${n.url.includes('?') ? '&' : '?'}from=push`;
         const speech = reminderSpeech({ name: firstName(p.display_name), kind: n.kind, title: n.title, body: n.body, localMinutes: local });
