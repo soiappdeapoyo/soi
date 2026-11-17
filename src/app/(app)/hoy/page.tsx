@@ -3,8 +3,7 @@ import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ArrowRight, BookOpen, CalendarCheck, Check, Compass, Flag, ListPlus, Map as MapIcon, Play, Repeat } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
-import { getAccessMap, getProfile } from '@/lib/billing/check-access';
-import { DoorToday } from '@/components/doors/door-today';
+import { getAccessMap } from '@/lib/billing/check-access';
 import { loadToday } from '@/lib/today';
 import { greetingForHour } from '@/lib/opener';
 import { loadDayPlan, partOfDay, playHref } from '@/lib/day-plan';
@@ -50,9 +49,6 @@ function BlockIcons({ m }: { m: MomentFlow }) {
 export default async function HoyPage() {
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
-  // App enfocada (entró por una puerta): su propia pantalla, más simple.
-  const focusedProfile = await getProfile(user.id);
-  if (focusedProfile?.ui_mode === 'door') return <DoorToday supabase={supabase} userId={user.id} profile={focusedProfile} />;
   const { profile, access } = await getAccessMap(user.id);
   const tz = profile?.timezone ?? 'America/Mexico_City';
   const [today, plan, north, journey, os] = await Promise.all([

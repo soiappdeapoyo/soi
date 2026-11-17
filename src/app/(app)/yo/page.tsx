@@ -3,8 +3,7 @@ import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ArrowRight, Award, Flame, Lock, Settings, Shield } from 'lucide-react';
 import { getSessionUser } from '@/lib/supabase/server';
-import { getAccessMap, getProfile } from '@/lib/billing/check-access';
-import { DoorYou } from '@/components/doors/door-you';
+import { getAccessMap } from '@/lib/billing/check-access';
 import { loadMomentum } from '@/lib/momentum-server';
 import { loadEvolution } from '@/lib/social/evolution';
 import { computeAchievements } from '@/lib/achievements';
@@ -56,9 +55,6 @@ export default async function YoPage({ searchParams }: { searchParams: Promise<{
   const { tab: tabParam, destacado } = await searchParams;
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
-  // App enfocada (entró por una puerta): su propia pantalla, más simple.
-  const focusedProfile = await getProfile(user.id);
-  if (focusedProfile?.ui_mode === 'door') return <DoorYou supabase={supabase} userId={user.id} profile={focusedProfile} />;
   const [{ profile, access }, card, { data: creator }] = await Promise.all([
     getAccessMap(user.id),
     loadProfileCard(supabase, user.id),

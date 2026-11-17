@@ -10,15 +10,12 @@ import { dateInTz, startOfTodayISO, todayISO } from '@/lib/utils';
 import type { PushSubscription } from 'web-push';
 import { reviewWeek } from '@/lib/life-plan';
 import { loadOsToday } from '@/lib/life-plan-server';
-import { activeDoor, coachLine, COACH_NIGHT_TIME, dayNumberOf } from '@/config/doors';
-import type { Coach } from '@/lib/reminders';
 
 export const maxDuration = 60;
 
 type Row = AccessProfile & {
   user_id: string; display_name: string | null; timezone: string | null; reminder_time: string | null; streak_current: number | null;
   push_subscription: PushSubscription;
-  door: string | null; extra_doors: string[] | null; ui_mode: string | null;
 };
 
 /**
@@ -32,7 +29,7 @@ export async function GET(req: Request) {
   const db = createAdminClient();
   const now = new Date();
   const { data: profiles, error } = await db.from('user_profiles')
-    .select('user_id, display_name, timezone, reminder_time, streak_current, push_subscription, plan, trial_ends_at, free_queries_remaining, is_paywalled, door, extra_doors, ui_mode')
+    .select('user_id, display_name, timezone, reminder_time, streak_current, push_subscription, plan, trial_ends_at, free_queries_remaining, is_paywalled')
     .eq('reminders_enabled', true).not('push_subscription', 'is', null).neq('app_role', 'persons').limit(2000);
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
@@ -58,17 +55,9 @@ export async function GET(req: Request) {
       const plan = await loadDayPlan(db, p.user_id, tz);
       const nudgeNow = inWindow(local, nudgeAt(p.reminder_time, dayTwo).at);
       const momentNow = plan.items.some((i) => !i.done && toMinutes(i.time) != null && inWindow(local, toMinutes(i.time)!));
-      // App enfocada: el coach de su puerta le escribe en la mañana y en la noche.
-      const door = activeDoor(p);
-      const localDate = todayISO(tz);
-      const coach: Coach | null = door ? {
-        nightAt: toMinutes(COACH_NIGHT_TIME)!,
-        manana: { title: door.app, body: coachLine(door, 'manana', dayNumberOf(localDate)), url: '/chat?nueva=1&coach=manana' },
-        noche: { title: door.app, body: coachLine(door, 'noche', dayNumberOf(localDate)), url: '/chat?nueva=1&coach=noche' },
-      } : null;
-      const nightNow = Boolean(coach && inWindow(local, coach.nightAt));
-      if (!nudgeNow && !momentNow && !nightNow && !scheduled.length) continue;
+      if (!nudgeNow && !momentNow && !scheduled.length) continue;
 
+      const localDate = todayISO(tz);
       const since = startOfTodayISO(tz);
       const [{ data: log }, runsToday, msgsToday, journey, os] = await Promise.all([
         db.from('notification_log').select('kind, ref').eq('user_id', p.user_id).eq('local_date', localDate),
@@ -90,7 +79,6 @@ export async function GET(req: Request) {
         scheduled,
         reviewDue: Boolean(os?.reviewDue),
         dayTwo,
-        coach,
       });
 
       for (const n of notices) {

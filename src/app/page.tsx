@@ -9,15 +9,14 @@ import { JsonLd } from '@/components/emotions/site-header';
 import type { FilmScript } from '@/config/emotions';
 import { FunnelBeacon } from '@/components/landing/funnel-beacon';
 import { LandingChat } from '@/components/landing/landing-chat';
+import { HeroQuestions } from '@/components/landing/hero-questions';
 import { CHALLENGE_SLUGS } from '@/config/official-challenges';
 import { officialMoment } from '@/config/official-moments';
 import type { MomentFlow } from '@/lib/moments/types';
-import { DoorCards } from '@/components/landing/door-cards';
-import { isDoorId } from '@/config/doors';
 
 export const metadata: Metadata = {
-  title: 'SOI · Tu mejor versión a un clic',
-  description: 'Amor, ansiedad, dinero o constancia: elige lo que más te pesa y SOI te acompaña cada día, por la mañana y por la noche, con prácticas guiadas por voz en español. 7 días sin tarjeta.',
+  title: 'SOI · Cuéntale qué te pasa. Te diseña tu práctica ahora.',
+  description: 'Cuéntale a SOI qué te pasa y te diseña una práctica de minutos, guiada por voz y en español, con las técnicas de Neville Goddard, Brian Tracy y Napoleon Hill.',
 };
 
 const signup = (next?: string) => `/login${next ? `?next=${encodeURIComponent(next)}` : ''}`;
@@ -112,13 +111,8 @@ const OPEN_FIRST: LandingOffer['key'] = 'neville';
  * aparece en la app al terminar la prueba. Persuasión ética: identificación, una elección de un toque, el valor
  * completo a la vista, autoridad con fuentes y respuesta a las dudas. Sin cifras ni testimonios inventados, sin imágenes de los autores.
  */
-export default async function LandingPage({ searchParams }: { searchParams: Promise<{ puerta?: string }> }) {
-  // El anuncio de cada puerta (`?puerta=amor`) la pone primero.
-  const { puerta } = await searchParams;
-  const first = isDoorId(puerta) ? puerta : null;
+export default async function LandingPage() {
   const FAQ = [
-    { q: '¿Me cobran algo por probar?', a: 'No. La prueba de 7 días trae todo abierto y no pide tarjeta. Si después quieres SOI+, lo eliges tú y lo cancelas con un toque. Lo que escribes nunca se borra, pagues o no.' },
-    { q: '¿Qué es cada puerta?', a: 'Amor, Ansiedad, Dinero y Constancia son la misma SOI enfocada en lo que más te pesa: tu práctica del día, un botón para el momento difícil y un mensaje en la mañana y en la noche. Puedes sumar otra cuando quieras.' },
     { q: '¿Tengo que saber meditar?', a: 'No. SOI te guía por voz paso a paso, como si alguien te acompañara. Si prefieres, también puedes leerlo.' },
     { q: '¿Cuánto tiempo necesito al día?', a: CHALLENGES.map(({ m }) => `${m.title}: unos ${m.required_minutes} min`).join(' · ') + '.' },
     { q: '¿Y si un día no puedo?', a: 'No pasa nada. El reto no se reinicia ni te castiga: al volver, sigues en el día donde ibas.' },
@@ -142,21 +136,9 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* El halo de respiración: la única expresividad de la página (estático con movimiento reducido). */}
         <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-24 -z-10 h-[28rem] w-[28rem] -translate-x-1/2 animate-breathe rounded-full bg-soi-accent-fill/25 blur-3xl" />
 
-        <div id="puertas" className="mx-auto max-w-2xl scroll-mt-4 px-5 pb-12 pt-6 sm:pb-16 sm:pt-12">
-          <h1 className="text-balance text-center text-4xl font-semibold tracking-tight sm:text-5xl">Tu mejor versión a un clic.</h1>
-          <p className="mx-auto mt-3 max-w-md text-pretty text-center text-lg text-white/75">Elige lo que más te pesa hoy. SOI te acompaña cada día, por la mañana y por la noche.</p>
-          <div className="mt-7"><DoorCards where="hero" first={first} dark /></div>
-          <ul className="mt-5 flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-sm text-white/70">
-            {['7 días con todo abierto, sin tarjeta', 'Cancelas con un toque', 'Lo tuyo nunca se borra'].map((t) => (
-              <li key={t} className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />{t}</li>
-            ))}
-          </ul>
-        </div>
-
-        <div id="crea" className="mx-auto max-w-2xl scroll-mt-4 border-t border-white/10 px-5 pb-14 pt-12 text-center sm:pb-20">
-          {/* ¿No sabes por dónde? Cuéntale qué te pasa y te diseña tu práctica (sin cuenta). */}
-          <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">¿No sabes por dónde empezar?</h2>
-          <p className="mx-auto mt-2 max-w-md text-pretty text-white/70">Cuéntale a SOI qué te pasa y te diseña tu práctica ahora, sin cuenta.</p>
+        <div id="crea" className="mx-auto max-w-2xl scroll-mt-4 px-5 pb-14 pt-6 text-center sm:pb-20 sm:pt-14">
+          {/* Preguntas que rotan con la respuesta de SOI debajo (el título fijo queda para lectores y buscadores). */}
+          <HeroQuestions title="Cuéntale a SOI qué te pasa. Te diseña tu práctica ahora." />
           <div className="mt-5 text-left sm:mt-7">
             <LandingChat />
           </div>
@@ -252,7 +234,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
                 </li>
               ))}
             </ol>
-            <a href="#puertas" className={buttonClass('primary', 'lg', 'mt-8 w-full sm:w-auto')}>Elegir mi puerta</a>
+            <a href="#elige" className={buttonClass('primary', 'lg', 'mt-8 w-full sm:w-auto')}>Elegir mi reto</a>
           </div>
         </div>
       </section>
@@ -325,9 +307,9 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
       {/* ---------- Cierre: elegir otra vez, abajo de todo ---------- */}
       <section className="bg-soi-ink px-5 py-16 text-white sm:py-20" aria-labelledby="cierre">
         <div className="mx-auto max-w-xl">
-          <h2 id="cierre" className="text-balance text-center text-3xl font-black uppercase leading-tight tracking-tight sm:text-5xl">Tu mejor versión empieza hoy.</h2>
-          <p className="mx-auto mt-3 max-w-md text-center text-white/75">Elige tu puerta. 7 días con todo abierto y sin tarjeta: si no sientes nada distinto, no pierdes nada.</p>
-          <div className="mt-8"><DoorCards where="cierre" first={first} dark /></div>
+          <h2 id="cierre" className="text-balance text-center text-3xl font-black uppercase leading-tight tracking-tight sm:text-5xl">Tu día 1 empieza hoy.</h2>
+          <p className="mx-auto mt-3 max-w-md text-center text-white/75">Elige al autor de tu video. Si al terminar el día 1 no sientes nada distinto, no pierdes nada.</p>
+          <div className="mt-8"><AuthorPicker offers={OFFERS} where="cierre" /></div>
         </div>
       </section>
 

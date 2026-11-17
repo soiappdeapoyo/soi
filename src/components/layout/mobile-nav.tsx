@@ -21,13 +21,7 @@ export function MobileNav({ data }: { data: SidebarData }) {
   return (
     <Drawer.Root open={open} onOpenChange={setOpen} direction="right">
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-soi-canvas/90 pl-4 pr-1 shadow-[0_1px_0_rgb(0_0_0/0.06)] backdrop-blur md:hidden">
-        {data.door ? (
-          <Link href="/hoy" className="press flex items-center gap-2 text-lg font-medium tracking-tight" aria-label={`${data.door.app}, inicio`}>
-            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ background: data.door.accent }} />{data.door.app}
-          </Link>
-        ) : (
-          <Link href="/hoy" className="press text-xl font-medium tracking-tight" aria-label="SOI, inicio">SOI.</Link>
-        )}
+        <Link href="/hoy" className="press text-xl font-medium tracking-tight" aria-label="SOI, inicio">SOI.</Link>
         <Drawer.Trigger aria-label="Más opciones" className="press flex h-11 w-11 items-center justify-center rounded-lg hover:bg-black/[0.04]">
           <Menu className="h-6 w-6" aria-hidden="true" />
         </Drawer.Trigger>

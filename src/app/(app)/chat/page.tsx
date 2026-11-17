@@ -16,7 +16,6 @@ import { loadThread } from '@/lib/opener-thread';
 import { todayISO } from '@/lib/utils';
 import { pendingLandingMoment } from '@/lib/moments/drafts';
 import { addToMyDay } from '@/lib/day-plan-server';
-import { activeDoor, coachLine, dayNumberOf } from '@/config/doors';
 
 export const metadata: Metadata = { title: 'Chat' };
 
@@ -32,8 +31,8 @@ function hourIn(timeZone: string) {
  * Sin fricción: no hay formulario de bienvenida ni bloques. SOI abre la conversación con un saludo
  * agéntico: celebra tu avance, anticipa cómo llegas, te propone un Moment concreto y deja respuestas rápidas.
  */
-export default async function ChatPage({ searchParams }: { searchParams: Promise<{ agent?: string; run?: string; rutina?: string; coach?: string }> }) {
-  const { agent: agentParam, run: runParam, rutina, coach } = await searchParams;
+export default async function ChatPage({ searchParams }: { searchParams: Promise<{ agent?: string; run?: string; rutina?: string }> }) {
+  const { agent: agentParam, run: runParam, rutina } = await searchParams;
   // Rutina por situación (Mi día): abre con su agente y un toque para empezar a diseñarla.
   const situation = situationById(rutina);
   const { supabase, user } = await getSessionUser();
@@ -89,7 +88,7 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
   const first = base.name.trim().split(/\s+/)[0] ?? '';
   const firstName = base.name.trim().split(/\s+/)[0] ?? '';
   const landingOpener: Opener | null = landing ? {
-    text: `${greetingForHour(base.hour)}${firstName ? `, ${firstName}` : ''}. Aquí está el Moment que diseñamos juntos: «${landing.title}». ${profile?.ui_mode === 'door' ? 'Ya quedó en Hoy.' : 'Ya quedó en tu día: lo encuentras en Hoy y en Mi Vida → Mi día.'} ¿Lo vivimos ahora?`,
+    text: `${greetingForHour(base.hour)}${firstName ? `, ${firstName}` : ''}. Aquí está el Moment que diseñamos juntos: «${landing.title}». Ya quedó en tu día: lo encuentras en Hoy y en Mi Vida → Mi día. ¿Lo vivimos ahora?`,
     practice: null,
     proposal: { id: landing.id, title: landing.title, minutes: landing.minutes, cover: landing.cover, why: 'El que diseñamos en la página', label: 'Empezar' },
     replies: [{ label: 'Ahora no', text: 'Ahora no, lo hago más tarde.' }, { label: 'Ajustarlo', text: 'Quiero ajustar ese Moment antes de hacerlo.' }],
@@ -97,20 +96,8 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
   } : null;
   // Si aún no estaba en Mi día (lo reclamó antes de este cambio), se agrega ahora.
   if (landing) { const uid = user.id; try { after(() => addToMyDay(supabase, uid, landing.id).then(() => undefined)); } catch { /* fuera de una petición */ } }
-  // App enfocada (entró por una puerta): la primera vez se presenta su puerta; desde el aviso del coach, su mensaje.
-  const door = activeDoor(profile);
-  const hi = `${greetingForHour(base.hour)}${firstName ? `, ${firstName}` : ''}.`;
-  const coachPart = coach === 'manana' || coach === 'noche' ? coach : null;
-  const doorOpener: Opener | null = door && !situation && !ranMoment && !landing
-    ? coachPart
-      ? { text: `${hi} ${coachLine(door, coachPart, dayNumberOf(base.today))}`, practice: null, proposal: null, links: [], kind: 'agent',
-        replies: [{ label: door.sos.label, href: `/chat?nueva=1&rutina=${door.sos.situation}` }, { label: 'Solo quiero hablar', text: 'Hoy solo quiero hablar.' }] }
-      : firstTime
-      ? { text: `${hi} Soy SOI. ${door.welcome}`, practice: null, proposal: null, links: [], kind: 'first', replies: door.replies }
-      : null
-    : null;
-  const opener: Opener = landingOpener ?? doorOpener ?? (situation
-    ? { ...ruled, text: 'quick' in situation && situation.quick ? situation.opener : `${situation.opener} Primero te haré una o dos preguntas para que sea tuya. ¿Empezamos?`, practice: null, proposal: null, links: [],
+  const opener: Opener = landingOpener ?? (situation
+    ? { ...ruled, text: `${situation.opener} Primero te haré una o dos preguntas para que sea tuya. ¿Empezamos?`, practice: null, proposal: null, links: [],
       replies: [{ label: 'Empezar', text: situation.message }, { label: 'Otra cosa', text: 'Prefiero hablar de otra cosa.' }] }
     : prepared && !firstTime
     ? { ...ruled, text: `${greetingForHour(base.hour)}${first ? `, ${first}` : ''}. ${prepared.text}`, replies: prepared.replies.length ? prepared.replies : ruled.replies, kind: 'ai' }
@@ -125,7 +112,7 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
 
   return (
     <ChatView
-      key={ranMoment ? `run-${runId}` : situation ? `rutina-${situation.id}` : coachPart ? `coach-${coachPart}` : agent ?? 'auto'}
+      key={ranMoment ? `run-${runId}` : situation ? `rutina-${situation.id}` : agent ?? 'auto'}
       agent={agent}
       opener={opener}
       paywalled={!access.chat}

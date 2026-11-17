@@ -11,8 +11,6 @@ import { SubscriptionSection } from '@/components/settings/subscription-section'
 import { AccountData } from '@/components/settings/account-data';
 import { loadSubscription, subscriptionView } from '@/lib/billing/subscription';
 import { buttonClass } from '@/components/ui/button';
-import { doorById } from '@/config/doors';
-import { DoorAction } from '@/components/doors/door-action';
 
 export const metadata: Metadata = { title: 'Ajustes' };
 
@@ -29,15 +27,6 @@ export default async function AjustesPage() {
     <div className="mx-auto max-w-xl px-5 py-8">
       <h1 className="text-3xl font-semibold">Ajustes</h1>
       <p className="mb-6 text-soi-muted">Plan actual: <strong>{plan === 'soi_plus' ? 'SOI+' : plan === 'trial' ? 'Prueba gratis' : 'Free'}</strong> · {user.email}</p>
-      {/* Entró por una puerta y abrió SOI Full: puede volver a su app enfocada. */}
-      {profile?.ui_mode === 'full' && doorById(profile.door) && (
-        <section className="mb-6 rounded-[20px] bg-white p-5 shadow-soft">
-          <h2 className="text-lg font-semibold">Volver a {doorById(profile.door)!.app}</h2>
-          <p className="mt-1 text-sm text-soi-muted">La versión simple: Hablar, Hoy y Tú. Lo tuyo se queda igual.</p>
-          <DoorAction body={{ action: 'mode', mode: 'door' }} to="/hoy" className={buttonClass('outline', 'sm', 'mt-3')}>Volver a mi puerta</DoorAction>
-        </section>
-      )}
-      {profile?.ui_mode !== 'door' && (
       <section className="mb-6 rounded-[20px] bg-white p-5 shadow-soft">
         <h2 className="text-lg font-semibold">Cómo funciona SOI</h2>
         <p className="mt-1 text-sm text-soi-muted">Repasa en un minuto qué es SOI y dónde está cada cosa.</p>
@@ -45,7 +34,6 @@ export default async function AjustesPage() {
           <Compass className="h-4 w-4" aria-hidden="true" /> Ver la introducción
         </Link>
       </section>
-      )}
       <section className="mb-6 rounded-[20px] bg-white p-5 shadow-soft">
         <h2 className="mb-3 text-lg font-semibold">Hora local</h2>
         <TimezoneField country={profile?.country ?? null} timezone={profile?.timezone ?? null} auto={profile?.timezone_auto ?? true} />

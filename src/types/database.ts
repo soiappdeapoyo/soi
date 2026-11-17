@@ -35,10 +35,6 @@ export type UserProfile = {
   feedback_prompted_at?: string | null;
   /** Tipo de cuenta (0041): 'soi' o 'persons' (el gimnasio de conversación de /persons). */
   app_role?: 'soi' | 'persons';
-  /** Puerta por la que entró (src/config/doors.ts) y las que sumó; ui_mode 'door' = app enfocada, 'full' = SOI Full. */
-  door?: string | null;
-  extra_doors?: string[] | null;
-  ui_mode?: 'full' | 'door' | null;
   country: string;
   /** 0043: país detectado por la IP la primera vez que entró (solo servidor). */
   geo_country?: string | null;

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PRIMARY_TABS, hidesBottomNav, isTabActive, type PrimaryTab } from '@/config/navigation';
+import { PRIMARY_TABS, hidesBottomNav, isTabActive } from '@/config/navigation';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
 import { isPlainClick, setPendingNav, splitHref, usePendingNav } from './pending-nav';
@@ -18,7 +18,7 @@ import { isPlainClick, setPendingNav, splitHref, usePendingNav } from './pending
  * - Activo = ícono en tinta con trazo más grueso + cápsula de fondo (no solo color).
  * - Respeta el área segura del iPhone.
  */
-export function BottomNav({ avatarUrl, name, tabs = PRIMARY_TABS }: { avatarUrl: string | null; name: string; tabs?: readonly PrimaryTab[] }) {
+export function BottomNav({ avatarUrl, name }: { avatarUrl: string | null; name: string }) {
   const pathname = usePathname();
   const pending = usePendingNav();
   if (hidesBottomNav(pathname)) return null;
@@ -28,8 +28,8 @@ export function BottomNav({ avatarUrl, name, tabs = PRIMARY_TABS }: { avatarUrl:
       aria-label="Navegación principal"
       className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 mx-auto max-w-md rounded-[22px] bg-white/85 shadow-[0_0_0_1px_rgb(11_11_11/0.06),0_8px_24px_rgb(11_11_11/0.12)] backdrop-blur-xl backdrop-saturate-150 md:hidden"
     >
-      <ul className={cn('grid h-14 px-1.5', tabs.length === 3 ? 'grid-cols-3' : tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-5')}>
-        {tabs.map((tab) => {
+      <ul className={cn('grid h-14 px-1.5', PRIMARY_TABS.length === 4 ? 'grid-cols-4' : 'grid-cols-5')}>
+        {PRIMARY_TABS.map((tab) => {
           // Al tocar, la pestaña se marca activa en el acto (no cuando el servidor termina de responder).
           const active = isTabActive(pending ? splitHref(pending).path : pathname, tab);
           return (

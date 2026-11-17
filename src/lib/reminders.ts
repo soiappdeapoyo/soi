@@ -45,15 +45,7 @@ export type ReminderInput = {
   reviewDue?: boolean;
   /** Su primer Moment fue ayer (fecha local): título, minutos locales en que lo terminó y cómo volver a vivirlo. */
   dayTwo?: DayTwo | null;
-  /**
-   * App enfocada (entró por una puerta): el coach le escribe en la mañana (en lugar de la invitación genérica, a su
-   * hora) y en la noche (`nightAt`, minutos locales). Cada mensaje abre el chat con ese mensaje esperándola.
-   */
-  coach?: Coach | null;
 };
-
-export type Coach = { manana: CoachText; noche: CoachText; nightAt: number };
-type CoachText = Omit<Notice, 'kind' | 'ref' | 'alarm'>;
 
 export type DayTwo = { title: string; at: number; href: string };
 
@@ -132,14 +124,7 @@ export function dueReminders(i: ReminderInput): Notice[] {
   const ref = dayTwo ? 'day2' : 'daily';
   const allowed = chosen || !quiet(i.localMinutes);
   if (allowed && !i.activeToday && inWindow(i.localMinutes, at) && fresh('nudge', ref) && !out.some((n) => n.kind === 'moment')) {
-    // Con coach, la de la mañana es su mensaje, salvo que tenga algo a medias o sea su día 2 (eso manda).
-    const text = dayTwo ? dayTwoNudge(i.step, dayTwo) : i.coach && i.step.kind !== 'resume' ? i.coach.manana : nudgeFor(i.step, i);
-    out.push({ kind: 'nudge', ref, alarm: false, ...text });
-  }
-
-  // 4) El coach de la noche: una vez, a su hora, nunca de madrugada ni junto a una alarma de Moment.
-  if (i.coach && !quiet(i.coach.nightAt) && inWindow(i.localMinutes, i.coach.nightAt) && fresh('nudge', 'coach_noche') && !out.some((n) => n.kind === 'moment')) {
-    out.push({ kind: 'nudge', ref: 'coach_noche', alarm: false, ...i.coach.noche });
+    out.push({ kind: 'nudge', ref, alarm: false, ...(dayTwo ? dayTwoNudge(i.step, dayTwo) : nudgeFor(i.step, i)) });
   }
   return out;
 }
