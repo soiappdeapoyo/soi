@@ -31,12 +31,18 @@ function hourIn(timeZone: string) {
  * Sin fricción: no hay formulario de bienvenida ni bloques. SOI abre la conversación con un saludo
  * agéntico: celebra tu avance, anticipa cómo llegas, te propone un Moment concreto y deja respuestas rápidas.
  */
-export default async function ChatPage({ searchParams }: { searchParams: Promise<{ agent?: string; run?: string; rutina?: string }> }) {
-  const { agent: agentParam, run: runParam, rutina } = await searchParams;
+export default async function ChatPage({ searchParams }: { searchParams: Promise<{ agent?: string; run?: string; rutina?: string; nueva?: string }> }) {
+  const { agent: agentParam, run: runParam, rutina, nueva } = await searchParams;
   // Rutina por situación (Mi día): abre con su agente y un toque para empezar a diseñarla.
   const situation = situationById(rutina);
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
+  // SOI te escribió y no lo has leído: la pestaña SOI abre esa conversación (como abrir un chat con mensaje nuevo).
+  if (!agentParam && !runParam && !rutina && !nueva) {
+    const { data: unread } = await supabase.from('conversations').select('id').eq('user_id', user.id).gt('unread_count', 0)
+      .not('proactive_at', 'is', null).order('proactive_at', { ascending: false }).limit(1).maybeSingle();
+    if (unread?.id) redirect(`/chat/${unread.id as string}`);
+  }
   const [{ profile, access }, { data: last, error: lastError }, journey] = await Promise.all([
     getAccessMap(user.id),
     supabase.from('conversations').select('title').eq('user_id', user.id).eq('is_archived', false)

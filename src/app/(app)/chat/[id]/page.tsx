@@ -19,11 +19,11 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
 
-  const { data: conv } = await supabase.from('conversations').select('id, agent_category').eq('id', id).eq('user_id', user.id).maybeSingle();
+  const { data: conv } = await supabase.from('conversations').select('id, agent_category, unread_count').eq('id', id).eq('user_id', user.id).maybeSingle();
   if (!conv) notFound();
 
   const [{ data: rows }, { profile, access }] = await Promise.all([
-    supabase.from('messages').select('id, role, content, tool_results, created_at')
+    supabase.from('messages').select('id, role, content, tool_results, meta, created_at')
       .eq('conversation_id', id).in('role', ['user', 'assistant']).order('created_at', { ascending: true }).limit(200),
     getAccessMap(user.id),
   ]);
@@ -39,9 +39,17 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     ],
   })).filter((m) => m.parts.length);
 
+  // Leído: la burbuja de la pestaña SOI se apaga (lo escribe el dueño de la conversación, RLS).
+  const wasUnread = ((conv.unread_count as number | null) ?? 0) > 0;
+  if (wasUnread) await supabase.from('conversations').update({ unread_count: 0 }).eq('id', id);
+  // Las notas de voz de SOI (meta.voice) se ven y se escuchan como audio.
+  const voiceIds = (rows ?? []).filter((r) => r.role === 'assistant' && (r.meta as { voice?: boolean } | null)?.voice).map((r) => r.id as string);
+
   return (
     <ChatView
       conversationId={id}
+      voiceIds={voiceIds}
+      wasUnread={wasUnread}
       initialMessages={initialMessages}
       agent={isAgentId(conv.agent_category) && conv.agent_category !== 'crisis' ? conv.agent_category : undefined}
       paywalled={!access.chat}

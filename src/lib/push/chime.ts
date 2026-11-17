@@ -40,3 +40,28 @@ export async function playChime(times = 3) {
     setTimeout(() => void ctx.close(), (times * 0.9 + 0.3) * 1000);
   } catch { /* sin audio */ }
 }
+
+/** Tono de mensaje nuevo de SOI (dos notas suaves que suben), como el de una app de mensajes. */
+export async function playMessageTone() {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended') await ctx.resume();
+    const start = ctx.currentTime + 0.03;
+    ([[740, 0], [988, 0.14]] as const).forEach(([freq, delay]) => {
+      const t = start + delay;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.2, t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+      o.connect(g).connect(ctx.destination);
+      o.start(t);
+      o.stop(t + 0.35);
+    });
+    setTimeout(() => void ctx.close(), 700);
+  } catch { /* sin audio */ }
+}

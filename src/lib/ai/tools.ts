@@ -23,7 +23,7 @@ import { isNearDuplicate } from '@/lib/moments/reuse';
 import { polishMoment } from '@/lib/moments/polish';
 import { DayItemsSchema, partOfDay, placeInDay } from '@/lib/day-plan';
 import { addToMyDay } from '@/lib/day-plan-server';
-import { hourInTz, todayISO } from '@/lib/utils';
+import { hourInTz, startOfTodayISO, todayISO } from '@/lib/utils';
 import { BeliefInput } from '@/lib/beliefs';
 import { registerBelief } from '@/lib/beliefs-server';
 import { LearningInput, OUTCOMES } from '@/lib/learning';
@@ -45,6 +45,8 @@ type Ctx = {
   creator?: boolean;
   /** false = escuchar o pedir permiso: sin herramientas que proponen (ver proposalMode). */
   proposals?: boolean;
+  /** La persona pidió un Moment (o cambiar uno): se permite crear aunque ya haya uno nuevo hoy. */
+  explicitAsk?: boolean;
   /** Llega con ansiedad: el Moment empieza regulando. */
   anxiety?: boolean;
   /** Zona horaria (la portada se elige según la hora del chat). */
@@ -53,6 +55,9 @@ type Ctx = {
 
 /** Herramientas que generan contenido: una cuenta de creador no las tiene (todo su contenido es suyo). */
 export const CONTENT_TOOLS = ['createMoment', 'createGuidedContent'] as const;
+
+/** Moments nuevos que SOI diseña por día sin que la persona los pida (ajustar uno no cuenta). */
+export const NEW_MOMENTS_PER_DAY = 1;
 
 export function buildTools(ctx: Ctx): ReturnType<typeof allTools> {
   const tools = allTools(ctx);
@@ -63,7 +68,7 @@ export function buildTools(ctx: Ctx): ReturnType<typeof allTools> {
   return Object.fromEntries(Object.entries(tools).filter(([k]) => !off.has(k))) as ReturnType<typeof allTools>;
 }
 
-function allTools({ supabase, userId, authorName, access, video = 'quick', anxiety, timeZone }: Ctx) {
+function allTools({ supabase, userId, authorName, access, video = 'quick', anxiety, timeZone, explicitAsk }: Ctx) {
   // Un solo video por respuesta: lo que se muestre primero cierra la puerta al otro.
   let videoShown = false;
   // Perfil para personalizar el contenido de los agentes (con el cliente de esta conversación; si falla, sin perfil).
@@ -268,6 +273,14 @@ PERSONAL: el título nombra SU situación (no "Calma"); cada texto (pregunta, gu
           .order('updated_at', { ascending: false }).limit(40);
         const twin = (mine ?? []).map(toMomentFlow).find((x) => isNearDuplicate({ title: m.title, objective: m.objective, blocks }, x));
         if (twin) return { ...proposal(twin.id, twin.required_minutes, { reused: true, cover: twin.cover }), title: twin.title, blocks: twin.blocks.map((b) => ({ type: b.type, title: b.title, minutes: b.minutes })) };
+        // Que no se sature de Moments: uno NUEVO al día (salvo que lo pida). Lo demás se guía aquí en el chat o se reusa.
+        if (!explicitAsk) {
+          const { count: today } = await supabase.from('soi_blueprints').select('id', { count: 'exact', head: true }).eq('creator_id', userId)
+            .is('parent_id', null).gte('created_at', startOfTodayISO(timeZone ?? 'America/Mexico_City'));
+          if ((today ?? 0) >= NEW_MOMENTS_PER_DAY) {
+            return { ok: false as const, errors: ['Hoy ya diseñaste un Moment nuevo para esta persona. No crees otro: guíala aquí mismo en el chat, paso a paso (una indicación a la vez, esperando su respuesta), u ofrécele uno que ya tiene con offerMoment.'] };
+          }
+        }
         const { data, error } = await supabase.from('soi_blueprints').insert({
           creator_id: userId, title: m.title, objective: m.objective, kind, source: m.source,
           blocks, steps: [], status: 'private', ...(m.kind === 'challenge' && m.durationDays && m.durationDays >= 2 ? { duration_days: Math.min(30, m.durationDays) } : {}),

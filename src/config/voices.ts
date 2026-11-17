@@ -25,6 +25,7 @@ export const VOICE_STYLES = {
   energy: 'Eres una entrenadora amable que habla español latinoamericano neutro. Voz clara, con energía positiva y motivadora, ritmo ágil pero sin gritar. Celebra el esfuerzo.',
   wake: 'Eres SOI y despiertas con cariño a alguien que quieres, en español latinoamericano neutro. Empieza casi en un susurro al decir su nombre, despacio y con ternura; luego, al saludar, tu voz se vuelve cálida, luminosa y tranquila. Nunca suenes a alarma, a anuncio ni con prisa.',
   chat: 'Eres SOI, una compañera que habla español latinoamericano neutro. Tono conversacional, cálido y natural, como una amiga que acompaña.',
+  note: 'Eres SOI y le mandas una nota de voz a alguien que quieres, en español latinoamericano neutro. Habla como en un audio de WhatsApp a una amistad: cercana, cálida, con una sonrisa en la voz, ritmo de plática y nunca leído. Respira de forma natural y audible: una inhalación suave antes de empezar y respiraciones ligeras entre ideas, con pausas breves en las comas y los puntos suspensivos. Nada de tono de anuncio ni de locutora.',
 } as const;
 export type VoiceStyle = keyof typeof VOICE_STYLES;
 

@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import { archiveStaleMoments } from '@/lib/moments/stale';
 
 export async function GET(req: Request) {
   if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -18,6 +19,8 @@ export async function GET(req: Request) {
   // Moments diseñados en el chat de la landing: 14 días sin reclamar, 30 tras guardarse.
   const { error: draftsError } = await admin.rpc('purge_moment_drafts');
   if (draftsError) console.error('[cron] purge_moment_drafts', draftsError.message);
+  // Que no se sature de Moments: lo propuesto y no vivido en 7 días se archiva (no se borra; se recupera).
+  const archived = await archiveStaleMoments(admin).catch((e: unknown) => { console.error('[cron] archivar Moments', e instanceof Error ? e.message : e); return 0; });
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, archived });
 }

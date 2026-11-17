@@ -6,6 +6,7 @@ import { PRIMARY_TABS, hidesBottomNav, isTabActive } from '@/config/navigation';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
 import { isPlainClick, setPendingNav, splitHref, usePendingNav } from './pending-nav';
+import { UnreadBadge } from '@/components/chat/unread-badge';
 
 /**
  * Barra de navegación inferior (móvil < 768 px), estilo Instagram / Substack: un rectángulo flotante con esquinas
@@ -47,14 +48,18 @@ export function BottomNav({ avatarUrl, name }: { avatarUrl: string | null; name:
               >
                 <span className="sr-only">{tab.label}</span>
                 {tab.id === 'soi' ? (
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'flex h-7 items-center rounded-lg px-2.5 text-[13px] font-semibold tracking-tight',
-                      active ? 'bg-soi-ink text-white' : 'text-soi-ink shadow-[inset_0_0_0_1.5px_rgb(11_11_11/0.18)]',
-                    )}
-                  >
-                    SOI
+                  <span className="relative">
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'flex h-7 items-center rounded-lg px-2.5 text-[13px] font-semibold tracking-tight',
+                        active ? 'bg-soi-ink text-white' : 'text-soi-ink shadow-[inset_0_0_0_1.5px_rgb(11_11_11/0.18)]',
+                      )}
+                    >
+                      SOI
+                    </span>
+                    {/* Mensaje nuevo de SOI: el punto con número, como en una app de mensajes. */}
+                    <UnreadBadge className="absolute -right-2.5 -top-2" />
                   </span>
                 ) : tab.id === 'yo' && avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element

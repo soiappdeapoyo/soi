@@ -18,9 +18,14 @@ import type { Opener } from '@/lib/opener';
 import { unlockAudio } from '@/lib/voice/player';
 import { DictationButton } from './dictation';
 import { DICTATION_ENABLED } from '@/config/features';
+import { refreshUnread } from '@/lib/coach/unread-store';
 
 type Props = {
   conversationId?: string;
+  /** Mensajes de SOI que son notas de voz (se ven y escuchan como audio). */
+  voiceIds?: string[];
+  /** La conversación tenía mensajes de SOI sin leer: al abrirla se actualiza la burbuja. */
+  wasUnread?: boolean;
   initialMessages?: UIMessage[];
   agent?: AgentId;
   opener?: Opener;
@@ -43,7 +48,7 @@ function forgetActiveChat() { try { sessionStorage.removeItem(ACTIVE_KEY); } cat
  * - El agente que responde se elige solo (router) y se muestra discretamente; el del sidebar se respeta.
  * - El mensaje del usuario aparece al instante; el streaming no anima tokens; "pensando" es un pulso de opacidad.
  */
-export function ChatView({ conversationId: initialId, initialMessages = [], agent, opener, paywalled: initialPaywalled, ttsAllowed }: Props) {
+export function ChatView({ conversationId: initialId, initialMessages = [], agent, opener, paywalled: initialPaywalled, ttsAllowed, voiceIds = [], wasUnread }: Props) {
   const router = useRouter();
   const convRef = useRef<string | undefined>(initialId);
   const [paywalled, setPaywalled] = useState(initialPaywalled);
@@ -59,6 +64,11 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
   );
 
   const [input, setInput] = useState('');
+  // Notas de voz: las guardadas y la respuesta que llega como audio (x-soi-voice), que suena sola tras enviar.
+  const [voices, setVoices] = useState<Set<string>>(() => new Set(voiceIds));
+  const voiceNext = useRef(false);
+  const [autoVoice, setAutoVoice] = useState<string | null>(null);
+  useEffect(() => { if (wasUnread) void refreshUnread(); }, [wasUnread]);
   // Medición (PostHog): qué saludo se mostró, cómo llega el primer mensaje (chip, escrito, dictado) y cuánto tardó.
   const openedAt = useRef(Date.now());
   const firstSent = useRef(false);
@@ -92,6 +102,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
         window.history.replaceState(null, '', `/chat/${id}`);
         rememberActiveChat(id);
       }
+      voiceNext.current = res.headers.get('x-soi-voice') === '1';
       const a = res.headers.get('x-soi-agent');
       if (isAgentId(a)) setActiveAgent(a);
       return res;
@@ -105,6 +116,16 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
       if (e.message.includes(PAYWALL_MESSAGE) || e.message.includes('queries_exhausted')) setPaywalled(true);
     },
   });
+
+  // Cuando termina una respuesta que va como nota de voz, ese mensaje se vuelve audio y suena (la persona acaba de tocar Enviar).
+  useEffect(() => {
+    if (status !== 'ready' || !voiceNext.current) return;
+    const lastA = messages.at(-1);
+    if (lastA?.role !== 'assistant') return;
+    voiceNext.current = false;
+    setVoices((v) => new Set(v).add(lastA.id));
+    setAutoVoice(lastA.id);
+  }, [status, messages]);
 
   /** El servidor responde JSON con `error` en fallos conocidos (503, 402): mostramos ese texto. */
   const errorText = useMemo(() => {
@@ -172,6 +193,7 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
   function submit(e?: React.FormEvent) {
     e?.preventDefault();
     if (!canSubmit) return;
+    unlockAudio(); // dentro del toque: si SOI contesta con nota de voz, puede sonar sola (iOS)
     stickRef.current = true;
     track('chat_message_sent', { agent: agent ?? 'auto' });
     firstMessage(dictated.current ? 'voice' : 'typed');
@@ -203,6 +225,8 @@ export function ChatView({ conversationId: initialId, initialMessages = [], agen
             <MessageBubble
               key={m.id}
               message={m}
+              voice={voices.has(m.id)}
+              autoPlay={autoVoice === m.id}
               ttsAllowed={ttsAllowed}
               onSpeak={speakText}
               practice={m.id === OPENER_ID ? opener?.practice : null}

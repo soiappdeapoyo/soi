@@ -19,6 +19,8 @@ export type PushPayload = {
   alarm?: boolean;
   /** Lo que SOI dice en voz alta en lugar de una alarma (src/lib/voice/greeting.ts). */
   speech?: string;
+  /** 'coach': un mensaje de SOI en el chat (con la app abierta suena como mensaje y suma a la burbuja). */
+  kind?: 'coach';
 };
 
 /** 'sent' | 'gone' (la suscripción ya no existe: hay que borrarla) | 'failed' (reintentar otro día) | 'disabled' (sin claves). */

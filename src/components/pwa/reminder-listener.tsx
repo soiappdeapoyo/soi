@@ -4,7 +4,8 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { track } from '@/components/providers/analytics';
-import { playChime, soundEnabled } from '@/lib/push/chime';
+import { playChime, playMessageTone, soundEnabled } from '@/lib/push/chime';
+import { bumpUnread } from '@/lib/coach/unread-store';
 import { playWake, primeWakeAudio } from '@/lib/voice/wake';
 
 /** Lo que el service worker guardó al tocar el aviso (public/sw.js). */
@@ -64,8 +65,17 @@ export function ReminderListener() {
 
     if (!('serviceWorker' in navigator)) return () => window.removeEventListener('pointerdown', prime, { capture: true });
     const onMessage = (e: MessageEvent) => {
-      const d = e.data as { type?: string; title?: string; body?: string; url?: string; alarm?: boolean; speech?: string | null } | null;
+      const d = e.data as { type?: string; kind?: string | null; title?: string; body?: string; url?: string; alarm?: boolean; speech?: string | null } | null;
       if (d?.type !== 'soi-reminder' || !d.title) return;
+      // SOI te escribió con la app abierta: suena como mensaje, sube la burbuja y se puede responder de un toque.
+      if (d.kind === 'coach') {
+        if (soundEnabled()) void playMessageTone();
+        if ('vibrate' in navigator) navigator.vibrate?.([120, 60, 120]);
+        bumpUnread();
+        track('notification_in_app', { kind: 'coach' });
+        toast('SOI', { description: d.body, duration: 10_000, action: d.url ? { label: 'Responder', onClick: () => router.push(d.url!) } : undefined });
+        return;
+      }
       if (d.speech) void say(d.speech, 'in_app');
       else if (soundEnabled()) void playChime(d.alarm ? 3 : 1);
       if (d.alarm && 'vibrate' in navigator) navigator.vibrate?.([300, 150, 300, 150, 600]);

@@ -6,6 +6,7 @@ import { GuidedCreate } from '@/components/library/guided-create';
 import { GUIDED_LABEL, type GuidedKind } from '@/lib/guided';
 import { getSessionUser } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/billing/check-access';
+import { ArchivedMoments } from '@/components/moments/archived-moments';
 import { loadMyMoments, filterMyMoments, MY_FILTERS, type MyMomentsFilter } from '@/lib/moments/mine';
 import { ProfileTabs, type ProfileTab } from '@/components/profile/profile-tabs';
 import { MomentFlowCard } from '@/components/moments/moment-flow-card';
@@ -88,15 +89,19 @@ async function MapTabLoader({ supabase, userId }: { supabase: Sb; userId: string
 
 async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; userId: string; filter: MyMomentsFilter; tidy: boolean }) {
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const [data, { data: legacy }, { data: runs }, profile] = await Promise.all([
+  const [data, { data: legacy }, { data: runs }, profile, { data: archivedRows }] = await Promise.all([
     loadMyMoments(supabase, userId),
     supabase.from('blueprint_implementations').select('id, status, completed_steps, adapted_steps, blueprint:soi_blueprints(title)')
       .eq('user_id', userId).order('last_activity_at', { ascending: false }).limit(5),
     supabase.from('moment_runs').select('moment_id, moment_slug, started_at, completed_at, mood_before, mood_after, helped')
       .eq('user_id', userId).gte('started_at', since).order('started_at', { ascending: false }).limit(200),
     getProfile(userId),
+    // Archivados (se recuperan): lo que SOI propuso y no se vivió en 7 días, o lo que la persona archivó.
+    supabase.from('soi_blueprints').select('id, title, required_minutes').eq('creator_id', userId).eq('status', 'archived')
+      .order('updated_at', { ascending: false }).limit(30),
   ]);
   const list = filterMyMoments(data, filter);
+  const archived = (archivedRows ?? []).map((r) => ({ id: r.id as string, title: String(r.title), minutes: (r.required_minutes as number | null) ?? 0 }));
   const progress = summarizeRuns((runs ?? []) as RunRow[], profile?.streak_current ?? 0);
 
   // Moments propios que llevan 3+ semanas sin vivirse (y existen hace más de una semana).
@@ -168,6 +173,8 @@ async function MomentsTab({ supabase, userId, filter, tidy }: { supabase: Sb; us
           </p>
         )}
       </section>
+
+      {filter === 'todos' && <ArchivedMoments items={archived} />}
 
       {older.length > 0 && filter === 'todos' && (
         <section aria-labelledby="old">

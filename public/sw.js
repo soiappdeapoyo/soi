@@ -1,5 +1,5 @@
 /* SOI Service Worker — recordatorios (push con alarma) + caché mínima offline */
-const CACHE = 'soi-v3';
+const CACHE = 'soi-v4';
 /* El saludo hablado del último aviso tocado: la app lo lee al abrirse (/__soi/saludo) y lo dice en voz alta. */
 const GREETING_CACHE = 'soi-greeting';
 const GREETING_URL = '/__soi/saludo';
@@ -33,7 +33,7 @@ self.addEventListener('push', (e) => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const visible = wins.find((w) => w.visibilityState === 'visible');
     if (visible) {
-      visible.postMessage({ type: 'soi-reminder', title: data.title, body: data.body, url, alarm: Boolean(data.alarm), speech: data.speech || null });
+      visible.postMessage({ type: 'soi-reminder', kind: data.kind || null, title: data.title, body: data.body, url, alarm: Boolean(data.alarm), speech: data.speech || null });
       return;
     }
     await self.registration.showNotification(data.title, {
@@ -41,7 +41,7 @@ self.addEventListener('push', (e) => {
       tag: data.tag || undefined, renotify: Boolean(data.tag), silent: false,
       requireInteraction: Boolean(data.alarm),
       vibrate: data.alarm ? [300, 150, 300, 150, 600] : [200, 100, 200],
-      actions: [{ action: 'open', title: data.alarm ? 'Empezar' : 'Abrir SOI' }],
+      actions: [{ action: 'open', title: data.kind === 'coach' ? 'Responder' : data.alarm ? 'Empezar' : 'Abrir SOI' }],
     });
   })());
 });

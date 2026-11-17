@@ -11,7 +11,7 @@ import { buildTools } from '@/lib/ai/tools';
 
 const supabase = {
   from: () => ({
-    select: () => { const q: Record<string, unknown> = { eq: () => q, neq: () => q, order: () => q, limit: () => q, then: (r: (v: unknown) => void) => r({ data: [] }) }; return q; },
+    select: () => { const q: Record<string, unknown> = { eq: () => q, neq: () => q, is: () => q, gte: () => q, order: () => q, limit: () => q, then: (r: (v: unknown) => void) => r({ data: [] }) }; return q; },
     insert: (row: { blocks: unknown[] }) => ({ select: () => ({ single: async () => ({ data: { id: 'x', required_minutes: row.blocks.length }, error: null }) }) }) }),
 } as never;
 const opts = { toolCallId: 't', messages: [] } as never;

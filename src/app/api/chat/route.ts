@@ -31,6 +31,13 @@ import { loadHabits } from '@/lib/ai/habit-memory';
 import { loadNorth } from '@/lib/north';
 import { detectEnemies } from '@/config/enemies';
 import { recordEnemy } from '@/lib/battles';
+import { proactiveContext, proactiveRule, voiceUsage, coachPlan } from '@/lib/coach/proactive-server';
+import { asksForMoment, chatVoiceNote, isEditRequest } from '@/lib/coach/proactive';
+
+/** La respuesta va como nota de voz: se escribe para escucharse. */
+/** Pidió cambiar un Moment: se edita con SUS instrucciones (nueva versión del mismo), sin preguntar de más. */
+const EDIT_RULE = 'LA PERSONA PIDE CAMBIAR UN MOMENT: aplica exactamente lo que pidió con createMoment y basedOn = el id de ese Moment (está en esta conversación o en su biblioteca), conservando todo lo que no pidió cambiar. No preguntes de más: si algo no queda claro, haz el cambio más razonable y dile en una frase qué cambiaste.';
+const VOICE_NOTE_RULE = 'ESTA RESPUESTA SE ENVÍA COMO NOTA DE VOZ (con tu voz): escríbela como se habla a un amigo o amiga por audio, cálida y cercana, 2 a 4 frases, con pausas naturales (comas y puntos suspensivos); sin listas, títulos, emojis ni Markdown. No digas que es un audio.';
 
 export const maxDuration = 60;
 
@@ -115,6 +122,13 @@ export async function POST(req: Request) {
     // Primera sesión (ningún Moment vivido): vía rápida al primer Moment. Ante un error, el ritmo normal.
     isCrisis ? Promise.resolve(false) : supabase.from('moment_runs').select('id', { count: 'exact', head: true }).eq('user_id', user.id).not('completed_at', 'is', null)
       .then((r) => !r.error && (r.count ?? 0) === 0, () => false),
+    // SOI empezó esta conversación (te escribió primero): amiga primero, el Moment solo si fluye.
+    isCrisis ? Promise.resolve(null) : proactiveContext(supabase, body.conversationId).catch(() => null),
+    // Notas de voz de hoy (tope diario) y hace cuántas respuestas fue la última en esta conversación.
+    isCrisis || !body.conversationId ? Promise.resolve(null) : Promise.all([
+      voiceUsage(supabase, user.id, profile?.timezone ?? 'America/Mexico_City'),
+      supabase.from('messages').select('meta').eq('conversation_id', body.conversationId).eq('role', 'assistant').order('created_at', { ascending: false }).limit(8),
+    ]).catch(() => null),
   ]);
 
   // 2) Conversación (crea si no existe). El saludo con el que SOI abrió la conversación se guarda primero.
@@ -141,7 +155,7 @@ export async function POST(req: Request) {
     // No bloquea la respuesta.
     void supabase.from('user_profiles').update({ weakest_link: route.weakestLink }).eq('user_id', user.id).then(() => undefined, () => undefined);
   }
-  const [isCreator, memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }, pastTalks, reusable, firstSession] = await contextPromise;
+  const [isCreator, memories, yt, ev, rt, ri, momentum, methods, , checkin, { data: libraryRows }, pastTalks, reusable, firstSession, proactive, voiceInfo] = await contextPromise;
 
   const toolAccess = { youtube: yt.allowed, evidence: ev.allowed, routines: rt.allowed, ritual: ri.allowed };
   // Si SOI abrió la conversación, el saludo va como contexto (algunos proveedores exigen que el historial empiece por el usuario).
@@ -167,7 +181,17 @@ export async function POST(req: Request) {
     // Solo si puede vivirlo (prueba o SOI+): en Free el primer paso es conversar.
     firstSession: firstSession && rt.allowed,
   });
-  const canPropose = ritmo === 'propose' || ritmo === 'prepare' || ritmo === 'soothe';
+  // Pedir cambiar un Moment ("más corto", "sin escribir") siempre se atiende: se edita con sus instrucciones.
+  const editing = isEditRequest(text);
+  // Si SOI escribió primero, las primeras respuestas son de amiga: nada de propuestas hasta que fluya.
+  const holdProposals = Boolean(proactive) && userTurns < 2 && !editing;
+  const canPropose = !holdProposals && (editing || ritmo === 'propose' || ritmo === 'prepare' || ritmo === 'soothe');
+  // Nota de voz: en una plática que ya fluye, de vez en cuando (prueba y SOI+, máx. 3 al día).
+  const sinceVoice = voiceInfo ? (voiceInfo[1].data ?? []).findIndex((m) => (m.meta as { voice?: boolean } | null)?.voice === true) : -1;
+  const asVoice = Boolean(voiceInfo) && agent !== 'crisis' && profile != null && chatVoiceNote({
+    plan: coachPlan(profile), usedToday: voiceInfo?.[0].usedToday ?? 0, userTurns,
+    turnsSinceVoice: sinceVoice === -1 ? null : sinceVoice, crisis: isCrisis,
+  });
   // Video rápido o dentro del Moment (nunca los dos), según cómo llega.
   const video = videoPolicy(state ? STATE_INTERVENTION[state] : null, text);
   const time = timeContextPrompt(profile?.timezone ?? 'America/Mexico_City');
@@ -184,7 +208,9 @@ export async function POST(req: Request) {
         .map((r) => ({ id: r.id, kind: r.kind, title: r.title, author: r.author, status: r.status, externalId: r.external_id })),
     }),
     director,
-    agent === 'crisis' ? '' : PROPOSAL_RULE[ritmo],
+    agent === 'crisis' ? '' : editing ? EDIT_RULE : PROPOSAL_RULE[holdProposals ? 'listen' : ritmo],
+    agent === 'crisis' || !proactive ? '' : proactiveRule(proactive, userTurns),
+    asVoice ? VOICE_NOTE_RULE : '',
     agent === 'crisis' || !canPropose ? '' : VIDEO_RULE[video],
     isCreator && agent !== 'crisis' ? CREATOR_CHAT_RULE : '',
     agent === 'crisis' ? '' : continuityPrompt(pastTalks, profile?.timezone ?? 'America/Mexico_City'),
@@ -211,13 +237,14 @@ export async function POST(req: Request) {
     stream = await streamWithFallback(
       system,
       await convertToModelMessages(modelMessages),
-      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video, creator: isCreator, proposals: canPropose, anxiety: state === 'anxiety', timeZone: profile?.timezone ?? 'America/Mexico_City' }),
+      agent === 'crisis' ? undefined : buildTools({ supabase, userId: user.id, authorName: profile?.display_name, access: toolAccess, video, creator: isCreator, proposals: canPropose, explicitAsk: asksForMoment(text), anxiety: state === 'anxiety', timeZone: profile?.timezone ?? 'America/Mexico_City' }),
       async ({ text: out, provider, tokens, toolCalls, toolResults }) => {
         await userSaved;
         await supabase.from('messages').insert({
           conversation_id: conversationId, user_id: user.id, role: 'assistant', content: out || '…',
           agent_category: agent, provider, tokens_used: tokens,
           tool_calls: toolCalls ?? null, tool_results: toolResults ?? null,
+          ...(asVoice ? { meta: { voice: true } } : {}),
         });
         const { count } = await supabase.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', conversationId);
         await supabase.from('conversations')
@@ -262,6 +289,7 @@ export async function POST(req: Request) {
       'x-soi-agent': agent,
       'x-soi-conversation': conversationId ?? '',
       'x-soi-weakest-link': route.weakestLink ?? '',
+      ...(asVoice ? { 'x-soi-voice': '1' } : {}),
     },
   });
 }

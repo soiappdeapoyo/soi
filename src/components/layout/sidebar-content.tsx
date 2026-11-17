@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Plus, Settings, Flame, Shield } from 'lucide-react';
 import { AGENTS, PRACTICE_AGENTS } from '@/config/agents';
 import { CREATE_LINKS, MY_LIFE, PRIMARY_TABS } from '@/config/navigation';
+import { UnreadBadge } from '@/components/chat/unread-badge';
 import { Icon } from '@/components/ui/icon';
 import { buttonClass } from '@/components/ui/button';
 import { NavLink } from './nav-link';
@@ -52,8 +53,12 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
               {PRIMARY_TABS.map((t) => (
                 <li key={t.id} data-tour={t.id}>
                   <NavLink href={t.href} match={t.match} className={item} activeClassName={active} title={t.label}>
-                    <Icon name={t.icon} className="h-4 w-4 shrink-0" />
+                    <span className="relative inline-flex">
+                      <Icon name={t.icon} className="h-4 w-4 shrink-0" />
+                      {t.id === 'soi' && compact && <UnreadBadge className="absolute -right-3 -top-2.5" />}
+                    </span>
                     <span className={hide}>{t.label}</span>
+                    {t.id === 'soi' && !compact && <UnreadBadge className="ml-auto" />}
                   </NavLink>
                 </li>
               ))}

@@ -11,17 +11,21 @@ import { Suspense } from 'react';
 import { ReminderListener } from '@/components/pwa/reminder-listener';
 import { WelcomeTour } from '@/components/onboarding/welcome-tour';
 import { FeedbackBubble } from '@/components/feedback/feedback-bubble';
+import { UnreadSync } from '@/components/chat/unread-badge';
+import { unreadCount } from '@/lib/coach/proactive-server';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
 
-  const [profile, { data: conversations }, consent] = await Promise.all([
+  const [profile, { data: conversations }, consent, unread] = await Promise.all([
     getProfile(user.id),
     supabase.from('conversations').select('id, title')
       .eq('user_id', user.id).eq('is_archived', false)
       .order('is_pinned', { ascending: false }).order('last_message_at', { ascending: false }).limit(8),
     getConsentState(user.id),
+    // Mensajes de SOI sin leer: la burbuja de la pestaña SOI.
+    unreadCount(supabase, user.id).catch(() => 0),
   ]);
   // Sin consentimiento legal vigente (términos, aviso de privacidad y mayoría de edad), primero eso.
   if (consent.state !== 'ok') redirect('/consentimiento');
@@ -43,6 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AnalyticsProvider userId={user.id} />
       <Suspense fallback={null}><NavTracker /></Suspense>
       <ReminderListener />
+      <UnreadSync initial={unread} />
       {/* Introducción de bienvenida: la primera vez y desde Ajustes (?tour=1). */}
       <Suspense fallback={null}><WelcomeTour seenAt={profile?.tour_seen_at ?? null} /></Suspense>
       {/* Tu opinión: burbuja discreta; se abre sola una vez, cuando ya tiene opinión (después de la bienvenida). */}

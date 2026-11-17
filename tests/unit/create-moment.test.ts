@@ -7,7 +7,7 @@ function fakeSupabase() {
   const client = {
     from: () => ({
       // Lecturas (Moments que ya tiene): ninguno.
-      select: () => { const q: Record<string, unknown> = { eq: () => q, neq: () => q, order: () => q, limit: () => q, then: (r: (v: unknown) => void) => r({ data: [] }) }; return q; },
+      select: () => { const q: Record<string, unknown> = { eq: () => q, neq: () => q, is: () => q, gte: () => q, order: () => q, limit: () => q, then: (r: (v: unknown) => void) => r({ data: [] }) }; return q; },
       insert: (row: Record<string, unknown>) => {
         inserts.push(row);
         return { select: () => ({ single: async () => ({ data: { id: 'm-1', required_minutes: 14 }, error: null }) }) };

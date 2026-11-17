@@ -3,6 +3,7 @@ import { AlarmClock, Lock, Play } from 'lucide-react';
 import { Icon } from '@/components/ui/icon';
 import { buttonClass } from '@/components/ui/button';
 import { TrackOnce } from './track-once';
+import { ChangeMoment } from './change-moment';
 import { ACTIONS, MOMENT_KINDS, type ActionType, type MomentKind } from '@/config/actions';
 
 export type MomentProposalResult = {
@@ -65,6 +66,7 @@ export function MomentProposal({ m, onSend }: { m: MomentProposalResult; onSend?
             <Link href={`/m/${m.id}/play`} className="press inline-flex h-8 items-center rounded-full bg-soi-accent-soft px-3 text-sm text-soi-accent">Sí, me sirve</Link>
             <button type="button" onClick={() => onSend(`Este Moment («${m.title}») no me hace sentido hoy. Diséñame otro distinto.`)}
               className="press inline-flex h-8 items-center rounded-full px-3 text-sm text-soi-ink shadow-ring">Hazme otro</button>
+            <ChangeMoment title={m.title} onSend={onSend} />
           </div>
         )}
       </div>

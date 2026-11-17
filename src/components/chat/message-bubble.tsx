@@ -8,6 +8,7 @@ import type { SoiVideo } from '@/components/media/soi-player';
 import type { Practice } from './practice-card';
 import type { ActionCardResult } from './action-card-view';
 import type { MomentProposalResult } from './moment-proposal';
+import { VoiceNote } from './voice-note';
 import type { GuidedResult } from './guided-card';
 
 // Bajo demanda: al abrir el chat solo hace falta el saludo (texto simple). El Markdown y las tarjetas
@@ -26,7 +27,7 @@ import type { OpenerProposal as OpenerProposalData } from '@/lib/opener';
 import { cn } from '@/lib/utils';
 
 type Reflect = (text: string, video: SoiVideo) => void;
-type Props = { message: UIMessage; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null; proposal?: OpenerProposalData | null; onReflected?: Reflect; onSend?: (text: string) => void; onDecline?: () => void };
+type Props = { message: UIMessage; voice?: boolean; autoPlay?: boolean; ttsAllowed: boolean; onSpeak: (t: string) => void; practice?: Practice | null; proposal?: OpenerProposalData | null; onReflected?: Reflect; onSend?: (text: string) => void; onDecline?: () => void };
 
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -101,7 +102,7 @@ function ToolResult({ part, onReflected, onSend }: { part: ToolPart; onReflected
  * Chat (DESIGN.md §4): el mensaje del usuario aparece al instante (sin animación de entrada);
  * el streaming del asistente no anima tokens: solo crece el texto.
  */
-export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal, onReflected, onSend, onDecline }: Props) {
+export function MessageBubble({ message, voice, autoPlay, ttsAllowed, onSpeak, practice, proposal, onReflected, onSend, onDecline }: Props) {
   const mine = message.role === 'user';
   const text = messageText(message);
   const tools = message.parts.filter((p) => p.type.startsWith('tool-') && (p as ToolPart).state === 'output-available') as ToolPart[];
@@ -110,6 +111,8 @@ export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal
       <div className={cn(mine ? 'max-w-[85%] rounded-[14px] bg-soi-tray px-3.5 py-2' : 'w-full max-w-full py-1')}>
         {mine ? (
           <p className="whitespace-pre-wrap">{text}</p>
+        ) : text && voice ? (
+          <VoiceNote text={text} autoPlay={autoPlay} />
         ) : text ? (
           <div className="prose max-w-none text-[15px] leading-relaxed text-soi-ink prose-p:my-2 prose-a:text-soi-accent prose-a:underline prose-strong:font-medium prose-strong:text-soi-ink">
             {NEEDS_MD.test(text) ? <Markdown text={text} /> : text.split(/\n{2,}/).map((p, i) => <p key={i} className="whitespace-pre-line">{p}</p>)}
@@ -121,7 +124,7 @@ export function MessageBubble({ message, ttsAllowed, onSpeak, practice, proposal
         {practice && <PracticeCard practice={practice} />}
         {proposal && <OpenerProposal p={proposal} onSend={onSend} onDecline={onDecline} />}
 
-        {!mine && ttsAllowed && text && (
+        {!mine && ttsAllowed && text && !voice && (
           <button type="button" onClick={() => onSpeak(text)} className="press tap-target mt-2 inline-flex items-center gap-1 rounded-md text-xs text-soi-muted hover:text-soi-ink" aria-label="Escuchar respuesta">
             <Volume2 className="h-4 w-4" aria-hidden="true" /> Escuchar
           </button>
