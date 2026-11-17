@@ -25,7 +25,7 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   const params = useSearchParams();
   const next = params.get('next') ?? (role === 'persons' ? '/persons' : '');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(authFailureMessage(params.get('error')));
+  const [error, setError] = useState<string | null>(params.get('reintentar') === '1' ? null : authFailureMessage(params.get('error')));
   // Consentimiento en la misma pantalla: una casilla sin marcar; el botón no se apaga, pero sin ella no avanza.
   const [accepted, setAccepted] = useState(false);
   const [missing, setMissing] = useState(false);
@@ -36,8 +36,9 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   // Embudo: llegó a la pantalla de entrar (desde la landing o directo).
   useEffect(() => { trackFunnel('login_view', role ?? (params.get('error') ? 'tras_error' : undefined)); }, [params, role]);
 
-  const redirectTo = () => {
+  const redirectTo = (retry = false) => {
     const q = new URLSearchParams();
+    if (retry) q.set('intento', '2');
     if (next) q.set('next', next);
     // Marcó la casilla: el callback registra la constancia sin otra pantalla.
     q.set('legal', '1');
@@ -49,16 +50,27 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
     return `${window.location.origin}/auth/callback${qs ? `?${qs}` : ''}`;
   };
 
-  async function google() {
+  // Se cortó el inicio (PKCE) y ya había marcado la casilla: se reintenta solo, una vez, sin que tenga que hacer nada.
+  const retrying = params.get('error') === 'interrupted' && params.get('reintentar') === '1';
+  const started = useRef(false);
+  useEffect(() => {
+    if (!retrying || started.current) return;
+    started.current = true;
+    setAccepted(true);
+    void google(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retrying]);
+
+  async function google(retry = false) {
     // Un solo inicio a la vez: un segundo toque reemplazaría la verificación del primero y fallaría.
     if (loading) return;
-    if (!accepted) { setMissing(true); check.current?.focus(); return; }
+    if (!accepted && !retry) { setMissing(true); check.current?.focus(); return; }
     setLoading(true);
     setError(null);
-    trackFunnel('auth_start', 'google');
+    trackFunnel('auth_start', retry ? 'google:reintento' : 'google');
     const { error: e } = await createClient().auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: redirectTo(), queryParams: { prompt: 'select_account' } },
+      options: { redirectTo: redirectTo(retry), queryParams: { prompt: 'select_account' } },
     });
     if (e) { setError(e.message); setLoading(false); }
   }
@@ -68,8 +80,8 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
       <InAppNotice onDetect={setInApp} />
       <ConsentCheck ref={check} kind={role ?? 'soi'} checked={accepted} missing={missing}
         onChange={(v) => { setAccepted(v); if (v) setMissing(false); }} />
-      <Button onClick={google} variant={inApp ? 'ghost' : 'outline'} size="lg" disabled={loading} className="w-full">
-        <GoogleLogo /> {loading ? 'Conectando…' : inApp ? 'Intentar con Google aquí' : 'Continuar con Google'}
+      <Button onClick={() => google()} variant={inApp ? 'ghost' : 'outline'} size="lg" disabled={loading} className="w-full">
+        <GoogleLogo /> {loading ? (retrying ? 'Reconectando con Google…' : 'Conectando…') : inApp ? 'Intentar con Google aquí' : 'Continuar con Google'}
       </Button>
       {error && <p role="alert" className="text-center text-sm text-soi-danger">{error}</p>}
     </div>

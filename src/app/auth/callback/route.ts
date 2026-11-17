@@ -24,6 +24,12 @@ export async function GET(request: Request) {
     const url = new URL(personsSignup ? '/persons/entrar' : '/login', origin);
     url.searchParams.set('error', reason);
     if (safeNext) url.searchParams.set('next', safeNext);
+    // Se cortó el PKCE (otra pestaña, otro navegador, doble toque) y ya había marcado la casilla: /login reintenta
+    // solo, una vez (el segundo intento llega con `intento=2` y ya no se repite).
+    if (reason === 'interrupted' && searchParams.get(CONSENT_PARAM) === '1' && !searchParams.get('intento')) {
+      url.searchParams.set('reintentar', '1');
+      if (searchParams.get('ref')) url.searchParams.set('ref', searchParams.get('ref')!);
+    }
     return NextResponse.redirect(url);
   };
 
@@ -37,12 +43,17 @@ export async function GET(request: Request) {
 
   const supabase = await createServerClient();
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error || !data.user) {
-    console.error('[auth] no se pudo canjear el código', error?.code ?? '', error?.status ?? '', error?.message ?? 'sin usuario');
-    return back(authFailureReason(`${error?.code ?? ''} ${error?.message ?? ''}`));
+  let u = data.user;
+  if (error || !u) {
+    // El mismo regreso llegó dos veces (doble toque, el navegador lo precargó, volver atrás): el primero ya abrió la
+    // sesión y el código ya no sirve. Si ya hay sesión, se sigue como si nada.
+    const { data: existing } = await supabase.auth.getUser();
+    if (!existing.user) {
+      console.error('[auth] no se pudo canjear el código', error?.code ?? '', error?.status ?? '', error?.message ?? 'sin usuario');
+      return back(authFailureReason(`${error?.code ?? ''} ${error?.message ?? ''}`));
+    }
+    u = existing.user;
   }
-
-  const u = data.user;
   // El rol se fija solo al crearse la cuenta: una cuenta de SOI que entra por /persons sigue siendo de SOI.
   let role: string | null = null;
   {
@@ -100,7 +111,7 @@ export async function GET(request: Request) {
   const dest = role === 'persons'
     ? (safeNext?.startsWith('/persons') ? safeNext : '/persons')
     : safeNext?.startsWith('/persons') && !isAdminEmail(u.email) ? '/persons'
-    : safeNext ?? (claimed.length || (await isBrandNewUser(supabase, data.user.id)) ? '/chat?nueva=1' : '/hoy');
+    : safeNext ?? (claimed.length || (await isBrandNewUser(supabase, u.id)) ? '/chat?nueva=1' : '/hoy');
   // Sin ventana aparte: marcó la casilla encima del botón de entrar, así que la constancia se guarda aquí (con el
   // texto de la pantalla por la que entró). Si no viene de ahí (un enlace viejo) o no se pudo guardar, /consentimiento.
   const { state } = await getConsentState(u.id);

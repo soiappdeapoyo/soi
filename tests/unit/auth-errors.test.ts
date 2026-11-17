@@ -12,7 +12,7 @@ describe('motivo de un inicio de sesión fallido', () => {
   });
   it('muestra un mensaje para cualquier código (y nada sin código)', () => {
     expect(authFailureMessage(null)).toBeNull();
-    expect(authFailureMessage('interrupted')).toMatch(/otra pestaña/);
+    expect(authFailureMessage('interrupted')).toMatch(/otra vez/);
     expect(authFailureMessage('lo-que-sea')).toBe('No pudimos iniciar sesión. Intenta de nuevo.');
   });
 });

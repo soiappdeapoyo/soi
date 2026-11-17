@@ -16,7 +16,7 @@ export function authFailureReason(raw: string): AuthFailure {
 
 export const AUTH_FAILURE_MESSAGE: Record<AuthFailure, string> = {
   cancelled: 'Se canceló el inicio con Google. Cuando quieras, vuelve a intentarlo.',
-  interrupted: 'El inicio de sesión se interrumpió (pasa si se abrió en otra pestaña o en otro navegador, o si tocaste el botón dos veces). Inténtalo de nuevo desde aquí.',
+  interrupted: 'Se cortó la conexión con Google (pasa si se abrió en otra pestaña u otro navegador). Toca «Continuar con Google» otra vez y listo.',
   expired: 'El enlace ya venció o ya se usó. Pide uno nuevo o entra con Google.',
   auth: 'No pudimos iniciar sesión. Intenta de nuevo.',
 };

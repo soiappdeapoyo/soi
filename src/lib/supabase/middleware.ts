@@ -7,6 +7,16 @@ import { PROTECTED_PREFIXES } from '@/config/navigation';
  * La validación real de la sesión ocurre en el servidor: src/app/(app)/layout.tsx.
  */
 export function updateSession(request: NextRequest) {
+  // Un solo dominio: si el inicio con Google empieza en www y vuelve a yosoi.app (o al revés), la cookie de
+  // verificación (PKCE) se queda en el otro dominio y el login "se interrumpe".
+  const host = request.headers.get('host') ?? '';
+  if (host.startsWith('www.')) {
+    const url = request.nextUrl.clone();
+    url.host = host.slice(4);
+    url.port = '';
+    return NextResponse.redirect(url, 308);
+  }
+
   const hasSession = request.cookies
     .getAll()
     .some((c) => c.name.startsWith('sb-') && c.name.includes('-auth-token'));
