@@ -1,9 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Check, ChevronDown, Mic } from 'lucide-react';
-import { buttonClass } from '@/components/ui/button';
-import { Cta } from '@/components/landing/cta';
-import { AuthorPicker, type LandingOffer } from '@/components/landing/author-picker';
+import { ChevronDown, Mic } from 'lucide-react';
 import { HowItWorksFilm } from '@/components/emotions/how-it-works-film';
 import { JsonLd } from '@/components/emotions/site-header';
 import type { FilmScript } from '@/config/emotions';
@@ -12,67 +9,13 @@ import { LandingChat } from '@/components/landing/landing-chat';
 import { HeroQuestions } from '@/components/landing/hero-questions';
 import { CHALLENGE_SLUGS } from '@/config/official-challenges';
 import { officialMoment } from '@/config/official-moments';
-import type { MomentFlow } from '@/lib/moments/types';
 
 export const metadata: Metadata = {
   title: 'SOI · Cuéntale qué te pasa. Te diseña tu práctica ahora.',
   description: 'Cuéntale a SOI qué te pasa y te diseña una práctica de minutos, guiada por voz y en español, con las técnicas de Neville Goddard, Brian Tracy y Napoleon Hill.',
 };
 
-const signup = (next?: string) => `/login${next ? `?next=${encodeURIComponent(next)}` : ''}`;
-
-/**
- * La oferta de cada autor: el reto de 7 días (src/config/official-challenges.ts) con su resultado concreto.
- * Al crear la cuenta, la persona entra directo al día 1.
- */
-const OFFER_COPY: Record<LandingOffer['key'], { promise: string; when: string }> = {
-  neville: { promise: 'Duérmete cada noche sintiendo tu deseo ya cumplido.', when: 'cada noche' },
-  tracy: { promise: 'Termina la semana con tu meta principal, tu plan y tu primer sapo comido.', when: 'cada mañana' },
-  hill: { promise: 'Convierte tu deseo en un propósito con cantidad, fecha, plan y declaración.', when: 'al día' },
-};
-
-const CHALLENGES = (Object.keys(CHALLENGE_SLUGS) as LandingOffer['key'][]).map((key) => ({ key, m: officialMoment(CHALLENGE_SLUGS[key])! }));
-
-const MIN_MINUTES = Math.min(...CHALLENGES.map(({ m }) => m.required_minutes));
-
-const OFFERS: LandingOffer[] = CHALLENGES.map(({ key, m }) => ({
-  key, author: m.author ?? '', title: m.title, promise: OFFER_COPY[key].promise,
-  when: `${m.required_minutes} min ${OFFER_COPY[key].when}`, cover: m.cover!, href: signup(`/m/${m.slug}/play`),
-}));
-
-/** Los 7 días de un reto: lo que se repite cada día y lo nuevo de cada día (sin la celebración final). */
-function weekOf(m: MomentFlow) {
-  const daily = m.blocks.filter((b) => !b.day).map((b) => b.title);
-  const days = Array.from({ length: 7 }, (_, i) => ({
-    day: i + 1,
-    titles: m.blocks.filter((b) => b.day === i + 1 && b.type !== 'celebration').map((b) => b.title),
-  }));
-  return { daily, days };
-}
-
-/** Lo que se reconoce de sí misma la persona que llega desde TikTok (identificación, sin culpa). */
-const PAINS = [
-  'Guardas el video. Nunca lo vuelves a abrir.',
-  'Te motivas a las 11 de la noche y a las 9 de la mañana ya se te olvidó.',
-  'Sabes lo que dice Neville, Tracy o Hill… pero no lo practicas.',
-  'Antes de dormir, tu mente no se calla.',
-];
-
-/** Lo que trae cualquier reto: el valor completo, no solo "una prueba". */
-const INCLUDED = [
-  ['La técnica real del autor', 'Cada paso cita su libro. Nada inventado.'],
-  ['Guiado por voz, en español', 'Cierras los ojos y SOI te lleva. También puedes leerlo.'],
-  ['Lo que escribes se queda', 'Tu deseo, tu meta y tu escena quedan guardados y SOI los recuerda.'],
-  ['Un aviso cada día, si quieres', 'A la hora que elijas, para que no se te pase.'],
-  ['Sin castigo si fallas un día', 'El reto no se reinicia: sigues donde ibas.'],
-  ['SOI te escucha', 'Si algo se mueve en ti, se lo cuentas y te acompaña.'],
-] as const;
-
-const STEPS = [
-  { n: '01', t: 'Elige al autor de tu video', d: 'Neville, Brian Tracy o Napoleon Hill. Cada uno con su reto de 7 días.' },
-  { n: '02', t: 'Vive tu día 1 hoy mismo', d: `Desde ${MIN_MINUTES} minutos, guiado por voz. Una cosa a la vez.` },
-  { n: '03', t: 'Un día por día', d: 'Cada día suma una enseñanza nueva del autor. Al día 7 ya no es un video: es tu práctica.' },
-];
+const CHALLENGES = (Object.keys(CHALLENGE_SLUGS) as (keyof typeof CHALLENGE_SLUGS)[]).map((key) => ({ key, m: officialMoment(CHALLENGE_SLUGS[key])! }));
 
 /** La animación de la landing: quien llega desde un video de Neville lo vive esa misma noche (SATS). */
 const FILM: FilmScript = {
@@ -102,9 +45,6 @@ const SOURCES = [
   'Napoleon Hill — Piense y hágase rico',
 ];
 
-/** Lanzamiento: la tarjeta de Neville abierta, que es la de la animación. */
-const OPEN_FIRST: LandingOffer['key'] = 'neville';
-
 /**
  * Landing para quien llega desde TikTok con un autor en la cabeza (Neville, Brian Tracy, Napoleon Hill).
  * Oferta: el reto de 7 días de ESE autor, con resultado concreto y el día 1 hoy. Sin precios ni planes: el pago
@@ -126,7 +66,7 @@ export default async function LandingPage() {
       <FunnelBeacon event="landing_view" />
       <JsonLd data={{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: FAQ.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })) }} />
 
-      {/* ---------- Héroe estilo chat de IA: texto grande, resumen corto y el chat. Debajo, los retos por autor. ---------- */}
+      {/* ---------- Héroe estilo chat de IA: texto grande, resumen corto y el chat. Debajo, la animación. ---------- */}
       <section className="relative isolate overflow-hidden bg-soi-ink text-white">
         <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
           <span className="text-2xl font-semibold">SOI.</span>
@@ -144,98 +84,9 @@ export default async function LandingPage() {
           </div>
         </div>
 
-        <div id="elige" className="mx-auto max-w-2xl scroll-mt-4 border-t border-white/10 px-5 pb-16 pt-12 sm:pb-20">
-          <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">¿Viste un video de Neville, Brian Tracy o Napoleon Hill?</h2>
-          <p className="mt-2 text-pretty text-white/70">Vive su reto de 7 días. Desde {MIN_MINUTES} minutos al día; tu día 1 empieza hoy.</p>
-          <div className="mt-5"><AuthorPicker offers={OFFERS} where="hero" /></div>
-          <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/60">
-            <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" aria-hidden="true" />En español</span>
-          </p>
-        </div>
-      </section>
-
-      {/* ---------- Identificación ---------- */}
-      <section className="mx-auto max-w-3xl px-5 py-16 sm:py-20" aria-labelledby="te-pasa">
-        <h2 id="te-pasa" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">¿Te pasa esto?</h2>
-        <ul className="mt-6 flex flex-col gap-2.5">
-          {PAINS.map((p) => (
-            <li key={p} className="rounded-[20px] bg-white px-5 py-4 text-[17px] shadow-ring">{p}</li>
-          ))}
-        </ul>
-        <p className="mt-6 text-pretty text-lg text-soi-muted">
-          No es falta de disciplina. Un video te inspira un minuto; <span className="font-medium text-soi-ink">una técnica cambia algo cuando la practicas varios días seguidos</span>.
-          Por eso son 7, y por eso SOI te acompaña en cada uno.
-        </p>
-      </section>
-
-      {/* ---------- La oferta completa: la semana de cada autor, día por día ---------- */}
-      <section className="bg-soi-sidebar py-16 sm:py-20" aria-labelledby="semana">
-        <div className="mx-auto max-w-3xl px-5">
-          <h2 id="semana" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Tu semana, día por día</h2>
-          <p className="mt-2 text-lg text-soi-muted">Cada día repites la práctica del autor y sumas una enseñanza suya.</p>
-          <div className="mt-6 flex flex-col gap-2.5">
-            {CHALLENGES.map(({ key, m }) => {
-              const w = weekOf(m);
-              return (
-                <details key={key} open={key === OPEN_FIRST} className="group rounded-[20px] bg-white shadow-ring">
-                  <summary className="press flex cursor-pointer list-none items-center gap-3 p-4 [&::-webkit-details-marker]:hidden">
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-medium text-soi-accent">{m.author}</span>
-                      <span className="block text-lg font-semibold leading-snug">{m.title}</span>
-                      <span className="mt-0.5 block text-[15px] text-soi-muted">{OFFER_COPY[key].promise}</span>
-                    </span>
-                    <ChevronDown className="h-5 w-5 shrink-0 text-soi-muted transition-transform duration-[var(--dur-base)] ease-[var(--ease-out-strong)] group-open:rotate-180" aria-hidden="true" />
-                  </summary>
-                  <div className="px-4 pb-4">
-                    <p className="rounded-[14px] bg-soi-tray px-3.5 py-2.5 text-sm"><span className="font-medium">Cada {key === 'neville' ? 'noche' : key === 'tracy' ? 'mañana' : 'día'}:</span> {w.daily.join(' · ')}</p>
-                    <ol className="mt-3 flex flex-col">
-                      {w.days.map((d) => (
-                        <li key={d.day} className="flex gap-3 border-b border-black/5 py-2.5 last:border-0">
-                          <span className="nums w-12 shrink-0 text-sm font-medium text-soi-muted">Día {d.day}</span>
-                          <span className="text-[15px]">{d.titles.join(' · ')}</span>
-                        </li>
-                      ))}
-                    </ol>
-                    <p className="mt-2 text-xs text-soi-muted">Fuente: {m.source}</p>
-                    <Cta href={signup(`/m/${m.slug}/play`)} where={`reto:${key}`} className={buttonClass('primary', 'lg', 'mt-4 w-full sm:w-auto')}>
-                      Empezar mi día 1
-                    </Cta>
-                  </div>
-                </details>
-              );
-            })}
-          </div>
-
-          <h3 className="mt-12 text-xl font-semibold">Incluido en tu reto</h3>
-          <ul className="mt-4 grid rounded-[20px] bg-white px-4 shadow-ring sm:grid-cols-2 sm:gap-x-6">
-            {INCLUDED.map(([t, d]) => (
-              <li key={t} className="flex gap-3 border-b border-black/5 py-3.5 last:border-0 sm:[&:nth-last-child(2)]:border-0">
-                <Check className="mt-0.5 h-5 w-5 shrink-0 text-soi-accent" aria-hidden="true" />
-                <span><span className="block font-medium">{t}</span><span className="block text-[15px] text-soi-muted">{d}</span></span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* ---------- Cómo funciona: los pasos y la animación con la UI real ---------- */}
-      <section className="mx-auto max-w-5xl px-5 py-16 sm:py-20" aria-labelledby="como">
-        <h2 id="como" className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Del video a tu vida</h2>
-        {/* En el teléfono la animación va antes de los pasos; en escritorio, a la derecha. */}
-        <div className="mt-8 grid items-center gap-10 lg:grid-cols-[1fr_auto] lg:gap-12">
-          <HowItWorksFilm script={FILM} className="lg:order-last" trackAs="landing" />
-          <div>
-            <ol className="flex flex-col gap-3">
-              {STEPS.map((s) => (
-                <li key={s.n} className="rounded-[20px] bg-white p-5 shadow-ring">
-                  <span className="nums text-sm font-medium text-soi-accent">{s.n}</span>
-                  <p className="mt-1 text-lg font-semibold">{s.t}</p>
-                  <p className="mt-1 text-[15px] text-soi-muted">{s.d}</p>
-                </li>
-              ))}
-            </ol>
-            <a href="#elige" className={buttonClass('primary', 'lg', 'mt-8 w-full sm:w-auto')}>Elegir mi reto</a>
-          </div>
+        {/* La animación «cómo funciona SOI», justo debajo del chat. */}
+        <div className="mx-auto flex max-w-5xl justify-center px-5 pb-16 sm:pb-20">
+          <HowItWorksFilm script={FILM} tone="dark" trackAs="landing" />
         </div>
       </section>
 
@@ -301,15 +152,6 @@ export default async function LandingPage() {
               <p className="px-5 pb-4 text-[15px] text-soi-muted">{f.a}</p>
             </details>
           ))}
-        </div>
-      </section>
-
-      {/* ---------- Cierre: elegir otra vez, abajo de todo ---------- */}
-      <section className="bg-soi-ink px-5 py-16 text-white sm:py-20" aria-labelledby="cierre">
-        <div className="mx-auto max-w-xl">
-          <h2 id="cierre" className="text-balance text-center text-3xl font-black uppercase leading-tight tracking-tight sm:text-5xl">Tu día 1 empieza hoy.</h2>
-          <p className="mx-auto mt-3 max-w-md text-center text-white/75">Elige al autor de tu video. Si al terminar el día 1 no sientes nada distinto, no pierdes nada.</p>
-          <div className="mt-8"><AuthorPicker offers={OFFERS} where="cierre" /></div>
         </div>
       </section>
 
