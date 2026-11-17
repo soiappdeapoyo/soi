@@ -278,6 +278,7 @@ Cuentas separadas de SOI (`app_role = 'persons'`): practican conversaciones (cit
 ## 🔐 Autenticación (Google)
 
 - `/login`: solo **Continuar con Google** (`signInWithOAuth`). El enlace mágico se quitó (fallaba al abrirse en otro navegador).
+- **Dentro de TikTok, Instagram o Facebook** (`src/lib/in-app-browser.ts` + `InAppNotice` en `LoginForm`): Google bloquea o rompe el login en su navegador interno (60 días: 115 empezaron con Google desde TikTok y entraron 2; desde otro navegador, 78 de 92). Antes del botón: «Abrir en Chrome» (intent, Android) / «Abrir en Safari» (`x-safari-https`, iOS 17+), los pasos a mano y copiar el enlace; Google queda como «Intentar con Google aquí». Embudo `cta_click` `inapp:<app>:visto|abrir|copiar`.
 - `/auth/callback`: intercambia el código → `next`, o `/chat?nueva=1` si es nuevo de verdad, o `/hoy` (ver Loop principal). **Sin onboarding obligatorio**: el agente descubre el perfil conversando (bloque DESCUBRIMIENTO del prompt) y marca `onboarding_completed` con `updateProfile`. `/onboarding` (8 espejos) queda como opcional.
 - `/auth/signout` (POST).
 - `src/lib/supabase/middleware.ts` protege `PROTECTED_PREFIXES` y redirige a `/login?next=`.
