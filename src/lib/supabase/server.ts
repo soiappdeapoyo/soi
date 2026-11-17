@@ -17,7 +17,7 @@ export async function createServerClient() {
           try {
             toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
           } catch {
-            // Server Component: el middleware refresca la sesión.
+            // Server Component: no puede escribir cookies; la sesión la renueva el middleware (src/lib/supabase/middleware.ts).
           }
         },
       },
