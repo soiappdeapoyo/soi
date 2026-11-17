@@ -17,22 +17,24 @@ export const VOICE_GAP_TURNS = 3;
 
 export type CoachPlan = 'trial' | 'plus' | 'free';
 
-export type CoachSlot = 'manana' | 'noche';
-/** La noche: a las 21:00 locales (cerrar el día). */
+export type CoachSlot = 'manana' | 'mediodia' | 'noche';
+/** Media tarde (solo con intensidad alta) y noche (cerrar el día), en hora local. */
+export const MIDDAY_AT = 14 * 60;
 export const NIGHT_AT = 21 * 60;
 const DEFAULT_MORNING = 9 * 60;
 
 /**
- * Siempre dos mensajes al día: en la mañana (su hora de recordatorio si es de mañana, si no 09:00) y en la noche
- * (21:00). Devuelve cuál toca ahora (dentro de la ventana del programador) o null.
+ * Los momentos posibles del día: mañana (su hora de recordatorio si es de mañana; si no, 09:00), media tarde (14:00)
+ * y noche (21:00). Cuáles se usan lo decide la intensidad (`intensity`).
  */
 export function coachSlots(reminderTime: string | null): { slot: CoachSlot; at: number }[] {
   const m = reminderTime?.match(/^(\d{1,2}):(\d{2})/);
   const chosen = m ? Number(m[1]) * 60 + Number(m[2]) : null;
   const morning = chosen != null && chosen >= 5 * 60 && chosen < 12 * 60 ? chosen : DEFAULT_MORNING;
-  return [{ slot: 'manana', at: morning }, { slot: 'noche', at: NIGHT_AT }];
+  return [{ slot: 'manana', at: morning }, { slot: 'mediodia', at: MIDDAY_AT }, { slot: 'noche', at: NIGHT_AT }];
 }
 
+/** Cuál toca ahora (dentro de la ventana del programador) o null. */
 export function coachSlotNow(localMinutes: number, reminderTime: string | null, windowMin = 15): CoachSlot | null {
   for (const s of coachSlots(reminderTime)) {
     const diff = (localMinutes - s.at + 24 * 60) % (24 * 60);
@@ -44,18 +46,46 @@ export function coachSlotNow(localMinutes: number, reminderTime: string | null, 
 /** Si acaba de platicar con SOI (menos de esto), ese mensaje no se manda: no se interrumpe una plática. */
 export const BUSY_MS = 90 * 60_000;
 
-/** Mensajes de SOI seguidos sin respuesta (del más reciente hacia atrás) → cada cuántos días escribe. */
-export function cadenceDays(unansweredStreak: number): number {
-  if (unansweredStreak >= 14) return 7;
-  if (unansweredStreak >= 6) return 3;
-  if (unansweredStreak >= 3) return 2;
-  return 1;
+/**
+ * La intensidad se adapta a la persona (lista del más reciente al más viejo: ¿contestó cada mensaje de SOI?):
+ * - normal: al empezar (y con interacción media) → mañana y noche.
+ * - alta: contesta casi siempre (3 de los últimos 4+) → suma uno a media tarde.
+ * - baja: contesta poco → solo en la mañana.
+ * - pausa: el último quedó sin respuesta → NO escribe uno nuevo hasta que pase su espera (`backoffDays`).
+ */
+export type Intensity = 'pausa' | 'baja' | 'normal' | 'alta';
+
+export const SLOTS_BY_INTENSITY: Record<Intensity, CoachSlot[]> = {
+  alta: ['manana', 'mediodia', 'noche'],
+  normal: ['manana', 'noche'],
+  baja: ['manana'],
+  pausa: ['manana'],
+};
+
+export function intensity(replied: boolean[]): Intensity {
+  if (!replied.length) return 'normal';
+  if (!replied[0]) return 'pausa';
+  const recent = replied.slice(0, 6);
+  const rate = recent.filter(Boolean).length / recent.length;
+  if (recent.length >= 4 && rate >= 0.75) return 'alta';
+  if (recent.length < 3 || rate >= 0.4) return 'normal';
+  return 'baja';
 }
 
-/** ¿Toca escribir hoy? `daysSinceLast` = días locales desde el último mensaje que SOI le escribió (null = nunca). */
-export function shouldWriteToday(i: { unansweredStreak: number; daysSinceLast: number | null }): boolean {
-  if (i.daysSinceLast == null) return true;
-  return i.daysSinceLast >= cadenceDays(i.unansweredStreak);
+/** Sin respuesta: cuántos días espera antes de intentar otra vez (1, 2, 4 y luego una vez por semana). */
+export function backoffDays(unanswered: number): number {
+  if (unanswered <= 1) return 1;
+  if (unanswered === 2) return 2;
+  if (unanswered === 3) return 4;
+  return 7;
+}
+
+/** ¿Escribe en este momento del día? `daysSinceLast` = días locales desde su último mensaje (null = nunca). */
+export function shouldSend(i: { slot: CoachSlot; replied: boolean[]; daysSinceLast: number | null }): boolean {
+  const level = intensity(i.replied);
+  if (!SLOTS_BY_INTENSITY[level].includes(i.slot)) return false;
+  if (level !== 'pausa') return true;
+  return i.daysSinceLast != null && i.daysSinceLast >= backoffDays(unansweredStreak(i.replied));
 }
 
 /** Cuántos mensajes de SOI seguidos quedaron sin respuesta (lista del más reciente al más viejo). */
@@ -248,7 +278,7 @@ export function ruleMessage(i: { name: string; seed: number; recent: string[]; a
   const greet = `${hi}${i.name ? ` ${i.name}` : ''}, ${how}`;
   if (i.crisisRecent) return `${greet} Me quedé pensando en ti. Aquí sigo, sin prisa, para cuando quieras platicar.`;
   const line = pick(night ? NIGHT_LINES : MOTIVATION, i.seed >> 2, i.recent);
-  const q = i.about && !night ? `${i.about}` : pick(night ? NIGHT_Q : QUESTIONS, i.seed >> 3, i.recent);
+  const q = i.about && i.slot !== 'noche' && i.slot !== 'mediodia' ? `${i.about}` : pick(night ? NIGHT_Q : QUESTIONS, i.seed >> 3, i.recent);
   return `${greet} ${line} ${q}`.replace(/\s+/g, ' ').trim();
 }
 

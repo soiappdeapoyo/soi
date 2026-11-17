@@ -1,20 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
-  asksForMoment, cadenceDays, coachSlotNow, chatVoiceNote, closeness, daySeed, isEditRequest, learnStyle, proactiveVoice, pushBody,
-  responsiveBoost, ruleMessage, shouldWriteToday, unansweredStreak, validCoachMessage, VOICE_NOTES_PER_DAY,
+  asksForMoment, backoffDays, coachSlotNow, intensity, shouldSend, chatVoiceNote, closeness, daySeed, isEditRequest, learnStyle, proactiveVoice, pushBody,
+  responsiveBoost, ruleMessage, unansweredStreak, validCoachMessage, VOICE_NOTES_PER_DAY,
 } from '@/lib/coach/proactive';
 import { staleIds, withoutArchived, type StaleCandidate } from '@/lib/moments/stale';
 
-describe('SOI te escribe primero: ritmo', () => {
-  it('escribe a diario y menos si no le contestan (nunca reclama)', () => {
-    expect(cadenceDays(0)).toBe(1);
-    expect(cadenceDays(3)).toBe(2);
-    expect(cadenceDays(6)).toBe(3);
-    expect(cadenceDays(20)).toBe(7);
-    expect(shouldWriteToday({ unansweredStreak: 0, daysSinceLast: null })).toBe(true);
-    expect(shouldWriteToday({ unansweredStreak: 0, daysSinceLast: 1 })).toBe(true);
-    expect(shouldWriteToday({ unansweredStreak: 4, daysSinceLast: 1 })).toBe(false);
-    expect(shouldWriteToday({ unansweredStreak: 4, daysSinceLast: 2 })).toBe(true);
+describe('SOI te escribe primero: intensidad que se adapta', () => {
+  it('empieza con mañana y noche', () => {
+    expect(intensity([])).toBe('normal');
+    expect(shouldSend({ slot: 'manana', replied: [], daysSinceLast: null })).toBe(true);
+    expect(shouldSend({ slot: 'noche', replied: [], daysSinceLast: null })).toBe(true);
+    expect(shouldSend({ slot: 'mediodia', replied: [], daysSinceLast: null })).toBe(false);
+  });
+  it('sin respuesta no escribe uno nuevo; reintenta cada vez más espaciado y solo en la mañana', () => {
+    expect(intensity([false, true])).toBe('pausa');
+    expect(shouldSend({ slot: 'noche', replied: [false], daysSinceLast: 0 })).toBe(false);
+    expect(shouldSend({ slot: 'manana', replied: [false], daysSinceLast: 0 })).toBe(false);
+    expect(shouldSend({ slot: 'manana', replied: [false], daysSinceLast: 1 })).toBe(true);
+    expect(shouldSend({ slot: 'manana', replied: [false, false, false], daysSinceLast: 3 })).toBe(false);
+    expect(shouldSend({ slot: 'manana', replied: [false, false, false], daysSinceLast: 4 })).toBe(true);
+    expect(backoffDays(1)).toBe(1);
+    expect(backoffDays(2)).toBe(2);
+    expect(backoffDays(9)).toBe(7);
+  });
+  it('con interacción manda más; con poca, reduce', () => {
+    expect(intensity([true, true, true, false, true])).toBe('alta');
+    expect(shouldSend({ slot: 'mediodia', replied: [true, true, true, true], daysSinceLast: 0 })).toBe(true);
+    expect(intensity([true, false, false, false, false, false])).toBe('baja');
+    expect(shouldSend({ slot: 'noche', replied: [true, false, false, false, false, false], daysSinceLast: 0 })).toBe(false);
+    expect(shouldSend({ slot: 'manana', replied: [true, false, false, false, false, false], daysSinceLast: 1 })).toBe(true);
   });
   it('cuenta los sin respuesta desde el más reciente', () => {
     expect(unansweredStreak([false, false, true, false])).toBe(2);
@@ -106,13 +120,14 @@ describe('Moments: pedir, cambiar y no saturar', () => {
   });
 });
 
-describe('siempre mañana y noche', () => {
+describe('momentos del día', () => {
   it('la mañana a su hora (si es de mañana) o a las 09:00, la noche a las 21:00', () => {
     expect(coachSlotNow(9 * 60 + 3, null)).toBe('manana');
     expect(coachSlotNow(7 * 60 + 30, '07:30')).toBe('manana');
     expect(coachSlotNow(9 * 60, '18:00')).toBe('manana');
     expect(coachSlotNow(21 * 60 + 10, null)).toBe('noche');
-    expect(coachSlotNow(15 * 60, null)).toBeNull();
+    expect(coachSlotNow(14 * 60 + 5, null)).toBe('mediodia');
+    expect(coachSlotNow(16 * 60, null)).toBeNull();
   });
   it('la noche cierra el día (sin la pregunta de la mañana)', () => {
     const m = ruleMessage({ name: 'Ana', seed: 5, recent: [], slot: 'noche', about: 'Hoy me acordé de tu meta: «x». ¿Cómo la sientes?' });

@@ -8,9 +8,9 @@ import { pickHook, type Hook } from '@/lib/opener-hooks';
 import { loadDayPlan, partOfDay, playHref, PART_LABEL } from '@/lib/day-plan';
 import { effectivePlan, type AccessProfile } from '@/lib/billing/access-rules';
 import { sendPushResult } from '@/lib/push/send';
-import { hourInTz, startOfTodayISO, todayISO } from '@/lib/utils';
+import { dateInTz, hourInTz, startOfTodayISO, todayISO } from '@/lib/utils';
 import {
-  BUSY_MS, CLOSENESS_GUIDE, closeness, daySeed, learnStyle, proactiveVoice, pushBody, responsiveBoost, ruleMessage,
+  BUSY_MS, CLOSENESS_GUIDE, closeness, daySeed, intensity, shouldSend, learnStyle, proactiveVoice, pushBody, responsiveBoost, ruleMessage,
   stylePrompt, validCoachMessage, type CoachPlan, type CoachSlot, type CoachStyle, type Occasion,
 } from './proactive';
 
@@ -47,24 +47,30 @@ export async function voiceUsage(db: SupabaseClient, userId: string, timeZone: s
 
 type Sent = { conversationId: string; text: string; hook: string; at: string; replied: boolean };
 
-/** Lo que SOI ya le escribió (últimos 14) y si la persona contestó cada uno. */
+/**
+ * Lo que SOI ya le escribió (últimos 14) y si hubo interacción después de cada uno: que la persona le escribiera a
+ * SOI (en esa u otra conversación) antes del siguiente mensaje de SOI o de 2 días.
+ */
 async function coachHistory(db: SupabaseClient, userId: string): Promise<Sent[]> {
   const { data: msgs } = await db.from('messages').select('conversation_id, content, meta, created_at').eq('user_id', userId)
     .eq('role', 'assistant').eq('meta->>proactive', 'true').order('created_at', { ascending: false }).limit(14);
   const rows = msgs ?? [];
   if (!rows.length) return [];
-  const convs = [...new Set(rows.map((r) => r.conversation_id as string))];
-  const { data: replies } = await db.from('messages').select('conversation_id, created_at').eq('user_id', userId).eq('role', 'user')
-    .in('conversation_id', convs).order('created_at', { ascending: false }).limit(300);
-  return rows.map((r) => ({
-    conversationId: r.conversation_id as string,
-    text: String(r.content ?? ''),
-    hook: String((r.meta as { hook?: string } | null)?.hook ?? 'checkin'),
-    at: r.created_at as string,
-    // Contestó si escribió en esa conversación después de este mensaje (y antes de 2 días).
-    replied: (replies ?? []).some((x) => x.conversation_id === r.conversation_id && Date.parse(x.created_at as string) > Date.parse(r.created_at as string)
-      && Date.parse(x.created_at as string) - Date.parse(r.created_at as string) < 2 * DAY),
-  }));
+  const oldest = rows[rows.length - 1]!.created_at as string;
+  const { data: mine } = await db.from('messages').select('created_at').eq('user_id', userId).eq('role', 'user')
+    .gte('created_at', oldest).order('created_at', { ascending: false }).limit(500);
+  const times = (mine ?? []).map((x) => Date.parse(x.created_at as string));
+  return rows.map((r, i) => {
+    const at = Date.parse(r.created_at as string);
+    const until = Math.min(i > 0 ? Date.parse(rows[i - 1]!.created_at as string) : Infinity, at + 2 * DAY);
+    return {
+      conversationId: r.conversation_id as string,
+      text: String(r.content ?? ''),
+      hook: String((r.meta as { hook?: string } | null)?.hook ?? 'checkin'),
+      at: r.created_at as string,
+      replied: times.some((t) => t > at && t <= until),
+    };
+  });
 }
 
 /** Algo concreto que nombrar (por reglas, con sus palabras) cuando no hay IA. */
@@ -84,6 +90,7 @@ const Written = z.object({ text: z.string().min(12).max(420) });
 
 /** La IA escribe el mensaje como un amigo o amiga. null si no hay IA o no pasa la validación. */
 const SLOT_GUIDE: Record<CoachSlot, string> = {
+  mediodia: 'ES UN MENSAJE CORTO A MEDIA TARDE (ya platican seguido): una frase ligera de cómo va su día o una pausa para respirar; 1 o 2 frases, sin tareas.',
   manana: 'ES EL MENSAJE DE LA MAÑANA: buenos días con energía tranquila; que empiece su día sintiéndose acompañada y con ganas.',
   noche: 'ES EL MENSAJE DE LA NOCHE: cierra el día con cariño; pregúntale cómo le fue o qué fue lo mejor del día, invítala a soltar lo que pesó y deséale buen descanso. Nada de tareas ni planes para mañana.',
 };
@@ -125,6 +132,11 @@ export async function sendCoachMessage(db: SupabaseClient, p: CoachProfile, now 
   ]);
   if (lastMine?.created_at && now.getTime() - Date.parse(lastMine.created_at as string) < BUSY_MS) return { result: 'skip' };
   const last = history[0];
+  // La intensidad se adapta: con interacción escribe más; sin respuesta, no escribe otro hasta su espera.
+  const replied = history.map((h) => h.replied);
+  const daysSinceLast = last ? Math.round((Date.parse(`${todayISO(tz)}T12:00:00Z`) - Date.parse(`${dateInTz(last.at, tz)}T12:00:00Z`)) / DAY) : null;
+  if (!shouldSend({ slot, replied, daysSinceLast })) return { result: 'skip' };
+  const level = intensity(replied);
 
   const plan = coachPlan(p, now);
   const [{ count: crisisCount }, { data: myTexts }, { count: totalMine }, voice, { data: known }, dayPlan, { data: recentRuns }, hooks] = await Promise.all([
@@ -185,7 +197,7 @@ export async function sendCoachMessage(db: SupabaseClient, p: CoachProfile, now 
   }
   await db.from('messages').insert({
     conversation_id: conversationId, user_id: p.user_id, role: 'assistant', content: text, agent_category: 'general', provider: written ? 'coach-ai' : 'coach-rules',
-    meta: { proactive: true, slot, hook: hook.key, voice: withVoice, closeness: close, ...(suggest && slot === 'manana' ? { suggest } : {}) },
+    meta: { proactive: true, slot, intensity: level, hook: hook.key, voice: withVoice, closeness: close, ...(suggest && slot === 'manana' ? { suggest } : {}) },
   });
 
   if (!p.push_subscription) return { result: 'sent', conversationId };

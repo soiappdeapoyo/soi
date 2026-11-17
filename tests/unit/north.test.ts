@@ -15,7 +15,7 @@ describe('norte del día', () => {
       { enemy: 'duda', occurred_at: '2026-10-01T10:00:00Z' },
       { enemy: 'miedo', occurred_at: '2026-10-05T10:00:00Z' },
     ])?.id).toBe('miedo');
-  });
+  }, 20_000); // el import dinámico es pesado y, con toda la suite en paralelo, pasaba de 5 s
 });
 
 describe('Cierre del día (Moment oficial)', () => {
