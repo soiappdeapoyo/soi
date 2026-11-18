@@ -6,6 +6,7 @@ import { detectCrisis } from '@/lib/ai/crisis';
 import { getCrisisResources } from '@/config/crisis-resources';
 import { normalizePath } from '@/lib/analytics/nav';
 import { cleanText, deviceFrom } from '@/lib/feedback';
+import { extendedTrialEnd, meaningfulFeedback, rewardEligible, TRIAL_REWARD_DAYS, TRIAL_TOTAL_DAYS } from '@/lib/trial-reward';
 
 const Body = z.object({
   rating: z.number().int().min(1).max(4).nullable().optional(),
@@ -54,5 +55,19 @@ export async function POST(req: Request) {
   }
   // Ya dio su opinión: la burbuja no se le abrirá sola después.
   await db.from('user_profiles').update({ feedback_prompted_at: new Date().toISOString() }).eq('user_id', user.id).is('feedback_prompted_at', null);
-  return Response.json({ ok: true, crisis, resources: crisis ? getCrisisResources(profile?.country) : undefined });
+  // «Usa SOI un mes gratis»: su prueba terminó y escribió su opinión → 7 días más (hasta juntar 28). La condición sobre
+  // los días ganados evita sumarlos dos veces si llegan dos opiniones a la vez.
+  let reward: { days: number; total: number } | null = null;
+  if (profile && rewardEligible(profile) && meaningfulFeedback(liked, disliked)) {
+    const prev = profile.feedback_reward_days ?? 0;
+    const { data: upd } = await db.from('user_profiles').update({
+      plan: 'trial', trial_ends_at: extendedTrialEnd(profile.trial_ends_at), is_paywalled: false,
+      feedback_reward_days: prev + TRIAL_REWARD_DAYS, updated_at: new Date().toISOString(),
+    }).eq('user_id', user.id).eq('feedback_reward_days', prev).neq('plan', 'soi_plus').select('user_id');
+    if (upd?.length) {
+      reward = { days: TRIAL_REWARD_DAYS, total: TRIAL_REWARD_DAYS + prev + TRIAL_REWARD_DAYS };
+      await db.from('user_notifications').update({ read_at: new Date().toISOString() }).eq('user_id', user.id).eq('kind', 'trial_feedback').is('read_at', null);
+    }
+  }
+  return Response.json({ ok: true, crisis, resources: crisis ? getCrisisResources(profile?.country) : undefined, reward, maxDays: TRIAL_TOTAL_DAYS });
 }

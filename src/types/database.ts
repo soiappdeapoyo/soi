@@ -34,6 +34,8 @@ export type UserProfile = {
   /** Cuándo vio o saltó la introducción de bienvenida (null = mostrarla). */
   tour_seen_at?: string | null;
   feedback_prompted_at?: string | null;
+  /** Días de prueba ganados con su opinión (7 por opinión, máx. 21). Solo servidor. */
+  feedback_reward_days?: number | null;
   /** Tipo de cuenta (0041): 'soi' o 'persons' (el gimnasio de conversación de /persons). */
   app_role?: 'soi' | 'persons';
   country: string;

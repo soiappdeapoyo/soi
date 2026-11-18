@@ -4,6 +4,7 @@ import { Plus, Settings, Flame, Shield } from 'lucide-react';
 import { AGENTS, PRACTICE_AGENTS } from '@/config/agents';
 import { CREATE_LINKS, MY_LIFE, PRIMARY_TABS } from '@/config/navigation';
 import { UnreadBadge } from '@/components/chat/unread-badge';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { Icon } from '@/components/ui/icon';
 import { buttonClass } from '@/components/ui/button';
 import { NavLink } from './nav-link';
@@ -34,9 +35,13 @@ export function SidebarContent({ data, compact = false, hidePrimary = false }: {
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 text-soi-ink">
-      <Link href="/hoy" className={cn('press px-2.5 pt-1 text-lg font-medium tracking-tight', compact && 'px-0 text-center')} aria-label="SOI, inicio">
-        SOI.
-      </Link>
+      <div className={cn('flex items-center justify-between', compact && 'flex-col gap-1')}>
+        <Link href="/hoy" className={cn('press px-2.5 pt-1 text-lg font-medium tracking-tight', compact && 'px-0 text-center')} aria-label="SOI, inicio">
+          SOI.
+        </Link>
+        {/* En el drawer del teléfono la campanita ya está en el header. */}
+        {!hidePrimary && <NotificationBell className="-my-1.5" />}
+      </div>
 
       <Link
         href="/chat?nueva=1"

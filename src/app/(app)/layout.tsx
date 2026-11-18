@@ -12,6 +12,9 @@ import { Suspense } from 'react';
 import { ReminderListener } from '@/components/pwa/reminder-listener';
 import { WelcomeTour } from '@/components/onboarding/welcome-tour';
 import { FeedbackBubble } from '@/components/feedback/feedback-bubble';
+import { NotificationsSync } from '@/components/notifications/notification-bell';
+import { ensureRewardNotification, unreadNotifications } from '@/lib/notifications-server';
+import { rewardEligible } from '@/lib/trial-reward';
 import { UnreadSync } from '@/components/chat/unread-badge';
 import { unreadCount } from '@/lib/coach/proactive-server';
 
@@ -19,7 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { supabase, user } = await getSessionUser();
   if (!user) redirect('/login');
 
-  const [profile, { data: conversations }, consent, unread] = await Promise.all([
+  const [profile, { data: conversations }, consent, unread, notifications] = await Promise.all([
     getProfile(user.id),
     supabase.from('conversations').select('id, title')
       .eq('user_id', user.id).eq('is_archived', false)
@@ -27,6 +30,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     getConsentState(user.id),
     // Mensajes de SOI sin leer: la burbuja de la pestaña SOI.
     unreadCount(supabase, user.id).catch(() => 0),
+    // La campanita (y, si su prueba terminó, «Usa SOI un mes gratis» antes de contar).
+    getProfile(user.id)
+      .then((p) => (p?.app_role === 'persons' ? undefined : ensureRewardNotification(user.id, p)))
+      .then(() => unreadNotifications(user.id)).catch(() => 0),
   ]);
   // Sin consentimiento legal vigente: un cuadro pequeño dentro de la app, una sola vez (ya no en el login).
   const needsConsent = consent.state !== 'ok';
@@ -49,12 +56,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Suspense fallback={null}><NavTracker /></Suspense>
       <ReminderListener />
       <UnreadSync initial={unread} />
+      <NotificationsSync initial={notifications} />
       {needsConsent ? <ConsentGate kind="soi" updated={consent.state === 'updated'} /> : (
         <>
           {/* Introducción de bienvenida: la primera vez y desde Ajustes (?tour=1). */}
           <Suspense fallback={null}><WelcomeTour seenAt={profile?.tour_seen_at ?? null} /></Suspense>
           {/* Tu opinión: burbuja discreta; se abre sola una vez, cuando ya tiene opinión (después de la bienvenida). */}
-          <Suspense fallback={null}><FeedbackBubble canAutoPrompt={!profile?.feedback_prompted_at && Boolean(profile?.tour_seen_at)} /></Suspense>
+          <Suspense fallback={null}><FeedbackBubble canAutoPrompt={!profile?.feedback_prompted_at && Boolean(profile?.tour_seen_at)} reward={rewardEligible(profile)} /></Suspense>
         </>
       )}
       <TimezoneSync stored={profile?.timezone ?? null} auto={profile?.timezone_auto ?? true} />

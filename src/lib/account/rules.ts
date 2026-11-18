@@ -25,6 +25,7 @@ export const USER_TABLES: Record<string, readonly string[]> = {
   challenge_enrollments: ['user_id'],
   day_plans: ['user_id'],
   app_feedback: ['user_id'],
+  user_notifications: ['user_id'],
   daily_routines: ['user_id'],
   ritual_logs: ['user_id'],
   library_items: ['user_id'],

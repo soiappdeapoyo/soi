@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Drawer } from 'vaul';
 import { Menu, X } from 'lucide-react';
 import { SidebarContent, type SidebarData } from './sidebar-content';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 
 /**
  * Header móvil (logo + menú) y drawer con lo secundario (<768px). La navegación principal vive en la barra inferior.
@@ -22,9 +23,12 @@ export function MobileNav({ data }: { data: SidebarData }) {
     <Drawer.Root open={open} onOpenChange={setOpen} direction="right">
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-soi-canvas/90 pl-4 pr-1 shadow-[0_1px_0_rgb(0_0_0/0.06)] backdrop-blur md:hidden">
         <Link href="/hoy" className="press text-xl font-medium tracking-tight" aria-label="SOI, inicio">SOI.</Link>
-        <Drawer.Trigger aria-label="Más opciones" className="press flex h-11 w-11 items-center justify-center rounded-lg hover:bg-black/[0.04]">
-          <Menu className="h-6 w-6" aria-hidden="true" />
-        </Drawer.Trigger>
+        <div className="flex items-center">
+          <NotificationBell />
+          <Drawer.Trigger aria-label="Más opciones" className="press flex h-11 w-11 items-center justify-center rounded-lg hover:bg-black/[0.04]">
+            <Menu className="h-6 w-6" aria-hidden="true" />
+          </Drawer.Trigger>
+        </div>
       </header>
 
       <Drawer.Portal>
