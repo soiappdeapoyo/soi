@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { authFailureMessage } from '@/lib/auth-errors';
 import { trackFunnel } from '@/lib/analytics/funnel-client';
-import { ConsentCheck } from '@/components/legal/consent-check';
 import { InAppNotice } from '@/components/auth/in-app-notice';
 
 function GoogleLogo() {
@@ -26,10 +25,6 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   const next = params.get('next') ?? (role === 'persons' ? '/persons' : '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(params.get('reintentar') === '1' ? null : authFailureMessage(params.get('error')));
-  // Consentimiento en la misma pantalla: una casilla sin marcar; el botón no se apaga, pero sin ella no avanza.
-  const [accepted, setAccepted] = useState(false);
-  const [missing, setMissing] = useState(false);
-  const check = useRef<HTMLInputElement>(null);
   // Dentro de TikTok o Instagram Google bloquea el login: primero abrir en el navegador; Google queda como segunda opción.
   const [inApp, setInApp] = useState(false);
 
@@ -40,8 +35,6 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
     const q = new URLSearchParams();
     if (retry) q.set('intento', '2');
     if (next) q.set('next', next);
-    // Marcó la casilla: el callback registra la constancia sin otra pantalla.
-    q.set('legal', '1');
     if (role) q.set('rol', role);
     // Invitación de /persons: el código del link viaja hasta el registro.
     const ref = params.get('ref');
@@ -50,13 +43,12 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
     return `${window.location.origin}/auth/callback${qs ? `?${qs}` : ''}`;
   };
 
-  // Se cortó el inicio (PKCE) y ya había marcado la casilla: se reintenta solo, una vez, sin que tenga que hacer nada.
+  // Se cortó el inicio (PKCE): se reintenta solo, una vez, sin que tenga que hacer nada.
   const retrying = params.get('error') === 'interrupted' && params.get('reintentar') === '1';
   const started = useRef(false);
   useEffect(() => {
     if (!retrying || started.current) return;
     started.current = true;
-    setAccepted(true);
     void google(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retrying]);
@@ -64,7 +56,6 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   async function google(retry = false) {
     // Un solo inicio a la vez: un segundo toque reemplazaría la verificación del primero y fallaría.
     if (loading) return;
-    if (!accepted && !retry) { setMissing(true); check.current?.focus(); return; }
     setLoading(true);
     setError(null);
     trackFunnel('auth_start', retry ? 'google:reintento' : 'google');
@@ -78,8 +69,6 @@ export function LoginForm({ role }: { role?: 'persons' } = {}) {
   return (
     <div className="flex flex-col gap-4">
       <InAppNotice onDetect={setInApp} />
-      <ConsentCheck ref={check} kind={role ?? 'soi'} checked={accepted} missing={missing}
-        onChange={(v) => { setAccepted(v); if (v) setMissing(false); }} />
       <Button onClick={() => google()} variant={inApp ? 'ghost' : 'outline'} size="lg" disabled={loading} className="w-full">
         <GoogleLogo /> {loading ? (retrying ? 'Reconectando con Google…' : 'Conectando…') : inApp ? 'Intentar con Google aquí' : 'Continuar con Google'}
       </Button>

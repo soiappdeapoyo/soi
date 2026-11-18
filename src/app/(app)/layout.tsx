@@ -6,6 +6,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { AnalyticsProvider } from '@/components/providers/analytics';
 import { TimezoneSync } from '@/components/layout/timezone-sync';
 import { getConsentState } from '@/lib/consent';
+import { ConsentGate } from '@/components/legal/consent-gate';
 import { NavTracker } from '@/components/analytics/nav-tracker';
 import { Suspense } from 'react';
 import { ReminderListener } from '@/components/pwa/reminder-listener';
@@ -27,8 +28,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // Mensajes de SOI sin leer: la burbuja de la pestaña SOI.
     unreadCount(supabase, user.id).catch(() => 0),
   ]);
-  // Sin consentimiento legal vigente (términos, aviso de privacidad y mayoría de edad), primero eso.
-  if (consent.state !== 'ok') redirect('/consentimiento');
+  // Sin consentimiento legal vigente: un cuadro pequeño dentro de la app, una sola vez (ya no en el login).
+  const needsConsent = consent.state !== 'ok';
   // Las cuentas de /persons son otro tipo de usuario: no ven SOI.
   if (profile?.app_role === 'persons') redirect('/persons');
 
@@ -48,10 +49,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Suspense fallback={null}><NavTracker /></Suspense>
       <ReminderListener />
       <UnreadSync initial={unread} />
-      {/* Introducción de bienvenida: la primera vez y desde Ajustes (?tour=1). */}
-      <Suspense fallback={null}><WelcomeTour seenAt={profile?.tour_seen_at ?? null} /></Suspense>
-      {/* Tu opinión: burbuja discreta; se abre sola una vez, cuando ya tiene opinión (después de la bienvenida). */}
-      <Suspense fallback={null}><FeedbackBubble canAutoPrompt={!profile?.feedback_prompted_at && Boolean(profile?.tour_seen_at)} /></Suspense>
+      {needsConsent ? <ConsentGate kind="soi" updated={consent.state === 'updated'} /> : (
+        <>
+          {/* Introducción de bienvenida: la primera vez y desde Ajustes (?tour=1). */}
+          <Suspense fallback={null}><WelcomeTour seenAt={profile?.tour_seen_at ?? null} /></Suspense>
+          {/* Tu opinión: burbuja discreta; se abre sola una vez, cuando ya tiene opinión (después de la bienvenida). */}
+          <Suspense fallback={null}><FeedbackBubble canAutoPrompt={!profile?.feedback_prompted_at && Boolean(profile?.tour_seen_at)} /></Suspense>
+        </>
+      )}
       <TimezoneSync stored={profile?.timezone ?? null} auto={profile?.timezone_auto ?? true} />
       {children}
     </AppShell>

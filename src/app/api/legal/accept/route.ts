@@ -6,8 +6,8 @@ import { CONSENT_STATEMENTS, recordAcceptance } from '@/lib/consent';
 const Body = z.object({ accept: z.literal(true) });
 
 /**
- * Registra la aceptación cuando cambian los términos o el aviso (la casilla y «Continuar»). Al entrar por
- * primera vez se registra en /auth/callback, sin esta pantalla.
+ * Registra la aceptación desde el cuadro de la app (`ConsentGate`, la primera vez o si cambian los términos o el
+ * aviso) y desde /consentimiento (enlaces viejos).
  */
 export async function POST(req: Request) {
   const { user } = await getSessionUser();

@@ -3,9 +3,9 @@ import { unstable_cache } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
 
 /**
- * Consentimiento legal sin ventana aparte: una casilla (sin marcar de inicio) encima del botón de entrar. Nombra
- * los datos sensibles de cada app (consentimiento expreso, LFPDPPP). Al entrar se registra la constancia. Si se
- * publica una versión nueva de los términos o del aviso, se vuelve a pedir con la misma casilla (`/consentimiento`).
+ * Consentimiento legal una sola vez, dentro de la app: un cuadro pequeño (`ConsentGate`) con una casilla sin marcar
+ * que nombra los datos sensibles de cada app (consentimiento expreso, LFPDPPP) y «Aceptar» → constancia
+ * (`/api/legal/accept`). El login ya no lo pide. Vuelve solo si se publica una versión nueva de los términos o del aviso.
  */
 
 export { CONSENT_STATEMENTS, type ConsentKind } from '@/lib/consent-text';

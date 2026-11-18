@@ -4,6 +4,7 @@ import { after } from 'next/server';
 import { ipCountry, rememberGeoCountry } from '@/lib/geo-country';
 import { getPersonsSession } from '@/lib/persons/server';
 import { getConsentState } from '@/lib/consent';
+import { ConsentGate } from '@/components/legal/consent-gate';
 import { PersonsNotifier } from '@/components/persons/notifier';
 import { AnalyticsProvider } from '@/components/providers/analytics';
 import { buttonClass } from '@/components/ui/button';
@@ -30,13 +31,14 @@ export default async function PersonsAppLayout({ children }: { children: React.R
     const code = ipCountry(await headers());
     after(() => rememberGeoCountry(s.userId, code, { setCountry: s.profile.app_role === 'persons' }));
   }
+  // Consentimiento: un cuadro pequeño dentro de la app, una sola vez.
   const consent = await getConsentState(s.userId);
-  if (consent.state !== 'ok') redirect('/consentimiento?next=/persons');
 
   return (
     <div className="min-h-dvh overflow-x-clip bg-[#F0F2F5] md:py-4">
       <AnalyticsProvider userId={s.userId} />
       <PersonsNotifier />
+      {consent.state !== 'ok' && <ConsentGate kind="persons" updated={consent.state === 'updated'} />}
       <div className="relative mx-auto min-h-dvh w-full max-w-3xl overflow-x-clip bg-white md:min-h-[calc(100dvh-2rem)] md:overflow-hidden md:rounded-2xl md:shadow-soft">{children}</div>
     </div>
   );

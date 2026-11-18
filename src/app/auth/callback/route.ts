@@ -1,7 +1,6 @@
 import { NextResponse, after } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@/lib/supabase/server';
-import { CONSENT_PARAM, CONSENT_STATEMENTS, getConsentState, recordAcceptance } from '@/lib/consent';
 import { isBrandNew } from '@/lib/journey';
 import { authFailureReason } from '@/lib/auth-errors';
 import { createAdminClient } from '@/lib/supabase/server';
@@ -24,9 +23,9 @@ export async function GET(request: Request) {
     const url = new URL(personsSignup ? '/persons/entrar' : '/login', origin);
     url.searchParams.set('error', reason);
     if (safeNext) url.searchParams.set('next', safeNext);
-    // Se cortó el PKCE (otra pestaña, otro navegador, doble toque) y ya había marcado la casilla: /login reintenta
+    // Se cortó el PKCE (otra pestaña, otro navegador, doble toque): /login reintenta
     // solo, una vez (el segundo intento llega con `intento=2` y ya no se repite).
-    if (reason === 'interrupted' && searchParams.get(CONSENT_PARAM) === '1' && !searchParams.get('intento')) {
+    if (reason === 'interrupted' && !searchParams.get('intento')) {
       url.searchParams.set('reintentar', '1');
       if (searchParams.get('ref')) url.searchParams.set('ref', searchParams.get('ref')!);
     }
@@ -106,25 +105,12 @@ export async function GET(request: Request) {
     : [];
 
   // Sin formulario previo: SOI conoce a la persona conversando desde el primer mensaje.
-  // El consentimiento legal se registra al entrar (casilla junto al botón), y luego a donde iba.
   // Primera vez de verdad (sin mensajes ni Moments): su primer paso es contarle a SOI cómo llega, no un Hoy vacío.
   const dest = role === 'persons'
     ? (safeNext?.startsWith('/persons') ? safeNext : '/persons')
     : safeNext?.startsWith('/persons') && !isAdminEmail(u.email) ? '/persons'
     : safeNext ?? (claimed.length || (await isBrandNewUser(supabase, u.id)) ? '/chat?nueva=1' : '/hoy');
-  // Sin ventana aparte: marcó la casilla encima del botón de entrar, así que la constancia se guarda aquí (con el
-  // texto de la pantalla por la que entró). Si no viene de ahí (un enlace viejo) o no se pudo guardar, /consentimiento.
-  const { state } = await getConsentState(u.id);
-  if (state !== 'ok') {
-    const recorded = searchParams.get(CONSENT_PARAM) === '1' && await recordAcceptance({
-      userId: u.id,
-      email: u.email ?? null,
-      displayName: (u.user_metadata?.full_name as string | undefined) ?? (u.user_metadata?.name as string | undefined) ?? null,
-      statement: CONSENT_STATEMENTS[personsSignup ? 'persons' : 'soi'],
-      headers: request.headers,
-    });
-    if (!recorded) return NextResponse.redirect(`${origin}/consentimiento?next=${encodeURIComponent(dest)}`);
-  }
+  // El consentimiento legal ya no se pide aquí: la app lo pide una sola vez con un cuadro pequeño (`ConsentGate`).
   return NextResponse.redirect(`${origin}${dest}`);
 }
 
