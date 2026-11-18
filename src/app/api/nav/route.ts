@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createAdminClient, getSessionUser } from '@/lib/supabase/server';
+import { createAdminClient, getSessionUserPassive } from '@/lib/supabase/server';
 import { isAdminEmail } from '@/lib/admin/auth';
 import { normalizePath } from '@/lib/analytics/nav';
 
@@ -14,7 +14,8 @@ const Body = z.object({
 
 /** Guarda la navegación (pantallas en orden) para /panel/analytics. Sin cuentas demo ni administradores. */
 export async function POST(req: Request) {
-  const { user } = await getSessionUser();
+  // Sale con sendBeacon al dejar la app: nunca renueva la sesión (la respuesta puede no llegar y el token se perdería).
+  const { user } = await getSessionUserPassive();
   if (!user) return new Response(null, { status: 204 });
   if (isAdminEmail(user.email) || /\.demo@soi\.app$/i.test(user.email ?? '')) return new Response(null, { status: 204 });
   const parsed = Body.safeParse(await req.json().catch(() => null));

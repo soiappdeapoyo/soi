@@ -57,6 +57,16 @@ export async function updateSession(request: NextRequest) {
     return r;
   };
 
+  // Con la sesión viva, /login lleva adentro: antes mostraba el botón de Google y la persona volvía a entrar (otra
+  // sesión) creyendo que la app la había sacado.
+  if (signedIn && path === '/login') {
+    const next = request.nextUrl.searchParams.get('next') ?? '';
+    const url = request.nextUrl.clone();
+    url.pathname = next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/login') ? next.split('?')[0]! : '/hoy';
+    url.search = next.includes('?') ? `?${next.split('?').slice(1).join('?')}` : '';
+    return redirectTo(url);
+  }
+
   // /persons es otro tipo de cuenta, con su propia pantalla de entrada.
   if (!signedIn && (path === '/persons' || path.startsWith('/persons/')) && path !== '/persons/entrar') {
     const url = request.nextUrl.clone();

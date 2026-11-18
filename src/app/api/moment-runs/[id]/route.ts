@@ -1,5 +1,5 @@
 import { z } from 'zod/v3';
-import { getSessionUser } from '@/lib/supabase/server';
+import { getSessionUser, getSessionUserPassive } from '@/lib/supabase/server';
 
 const Body = z.object({
   outputs: z.record(z.unknown()).optional(),
@@ -15,8 +15,9 @@ const Body = z.object({
 /** Guarda lo que la persona escribe o marca en cada bloque y su avance (se puede retomar si cierra la app). */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { supabase, user } = await getSessionUser();
-  if (!user) return new Response('No autorizado', { status: 401 });
+  // Al pasar a segundo plano (x-soi-bg) la respuesta puede no llegar: ahí no se renueva la sesión.
+  const { supabase, user } = req.headers.get('x-soi-bg') === '1' ? await getSessionUserPassive() : await getSessionUser();
+  if (!user || !supabase) return new Response('No autorizado', { status: 401 });
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success || JSON.stringify(parsed.data.outputs ?? {}).length > 20_000) return new Response('Datos inválidos', { status: 400 });
   const { outputs, progress } = parsed.data;

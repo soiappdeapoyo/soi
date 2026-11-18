@@ -125,25 +125,26 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
     void import('@/lib/voice/tts').then(({ setGuideVoice }) => setGuideVoice(voice)).catch(() => {});
   }, [voice]);
 
-  const saveOutputs = useCallback((id: string | null, data: Record<string, BlockOutput>) => {
+  // bg = la app pasa a segundo plano: la respuesta puede no llegar, así que el servidor no renueva la sesión ahí.
+  const saveOutputs = useCallback((id: string | null, data: Record<string, BlockOutput>, bg = false) => {
     if (!id) return;
-    fetch(`/api/moment-runs/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outputs: data }) }).catch(() => {});
+    fetch(`/api/moment-runs/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(bg ? { 'x-soi-bg': '1' } : {}) }, body: JSON.stringify({ outputs: data }), keepalive: bg }).catch(() => {});
   }, []);
 
   // Avance (paso, segundos que quedaban, %): se guarda al cambiar de paso, al pausar, cada 15 s y si algo interrumpe.
   const live = useRef({ runId, phase, index, remaining, running });
   live.current = { runId, phase, index, remaining, running };
   const lastSaved = useRef('');
-  const saveProgress = useCallback(() => {
+  const saveProgress = useCallback((bg = false) => {
     const { runId: id, phase: ph, index: i, remaining: r } = live.current;
     const b = blocks[i];
     if (!id || ph !== 'run' || !b) return;
     const body = JSON.stringify({ progress: { index: i, blockId: b.id.slice(0, 64), remaining: Math.max(0, Math.round(r)), pct: runProgress(blocks, i, r) } });
     if (body === lastSaved.current) return; // pausar y cambiar de paso a la vez no lo guarda dos veces
     lastSaved.current = body;
-    fetch(`/api/moment-runs/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+    fetch(`/api/moment-runs/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(bg ? { 'x-soi-bg': '1' } : {}) }, body, keepalive: true }).catch(() => {});
   }, [blocks]);
-  const flush = useCallback(() => { saveOutputs(live.current.runId, outputsRef.current); saveProgress(); }, [saveOutputs, saveProgress]);
+  const flush = useCallback((bg = false) => { saveOutputs(live.current.runId, outputsRef.current, bg); saveProgress(bg); }, [saveOutputs, saveProgress]);
 
   const goTo = useCallback((n: number) => {
     saveOutputs(runId, outputsRef.current);
@@ -182,9 +183,9 @@ export function MomentPlayer({ moment, blocks, locked, challenge, ttsAllowed, vo
       if (live.current.running) setInterrupted(true);
       setRunning(false);
       void import('@/lib/voice/tts').then(({ stopSpeaking }) => stopSpeaking()).catch(() => {});
-      flush();
+      flush(true);
     };
-    const onPageHide = () => { if (live.current.phase === 'run') flush(); };
+    const onPageHide = () => { if (live.current.phase === 'run') flush(true); };
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', onPageHide);
     return () => { document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', onPageHide); };

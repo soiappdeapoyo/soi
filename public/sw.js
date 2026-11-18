@@ -1,11 +1,12 @@
 /* SOI Service Worker — recordatorios (push con alarma) + caché mínima offline */
-const CACHE = 'soi-v4';
+const CACHE = 'soi-v5';
+const OFFLINE_HTML = '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SOI · Sin conexión</title><style>body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;background:#fff;color:#111;text-align:center;padding:24px}@media (prefers-color-scheme:dark){body{background:#111;color:#f4f4f4}}button{margin-top:16px;padding:12px 22px;border-radius:999px;border:0;background:#111;color:#fff;font-size:16px}@media (prefers-color-scheme:dark){button{background:#f4f4f4;color:#111}}</style></head><body><main><p style="font-size:28px;font-weight:600;margin:0">SOI.</p><p>Sin conexión por ahora. Tu sesión sigue abierta.</p><button onclick="location.reload()">Reintentar</button></main></body></html>';
 /* El saludo hablado del último aviso tocado: la app lo lee al abrirse (/__soi/saludo) y lo dice en voz alta. */
 const GREETING_CACHE = 'soi-greeting';
 const GREETING_URL = '/__soi/saludo';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/icon.svg'])));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/icon.svg'])));
   self.skipWaiting();
 });
 
@@ -17,7 +18,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || new URL(e.request.url).pathname.startsWith('/api/')) return;
   if (e.request.mode === 'navigate') {
-    e.respondWith(fetch(e.request).catch(() => caches.match('/')));
+    // Sin conexión: un aviso con «Reintentar». Antes salía la landing guardada y parecía que SOI te había sacado.
+    e.respondWith(fetch(e.request).catch(() => new Response(OFFLINE_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })));
   }
 });
 
